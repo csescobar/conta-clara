@@ -5,7 +5,7 @@ Backlog inicial da primeira versão. Concluir dependências antes de iniciar uma
 ## 1. Fundação e experiência
 
 - [x] [Estruturar React/TypeScript e API Node](https://github.com/csescobar/conta-clara/issues/1) — dependências: nenhuma.
-- [ ] [Definir tokens e componentes do design system](https://github.com/csescobar/conta-clara/issues/2) — dependências: #1.
+- [x] [Definir tokens e componentes do design system](https://github.com/csescobar/conta-clara/issues/2) — dependências: #1.
 - [ ] [Construir navegação responsiva e telas com dados fictícios](https://github.com/csescobar/conta-clara/issues/3) — dependências: #2.
 
 ## 2. Persistência e acesso

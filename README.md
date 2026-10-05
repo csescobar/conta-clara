@@ -42,6 +42,8 @@ O build fica em `dist/client`; `npm start` serve o build e a API na porta `3001`
 
 Vitest executa testes de unidade e interface com React Testing Library em jsdom; Supertest verifica rotas HTTP do Express sem iniciar um servidor de rede. Playwright será usado nas histórias de fluxos completos do navegador, incluindo instalação/offline. Testes que dependem de persistência usarão um Postgres descartável no Docker. Cada história declara cenários específicos e executa os checks pertinentes antes de ser concluída.
 
+Consulte [docs/design-system.md](docs/design-system.md) para tokens, acessibilidade e componentes visuais.
+
 ## Planejamento e contribuição
 
 Veja [ROADMAP.md](ROADMAP.md), [issues](https://github.com/csescobar/conta-clara/issues), [CONTRIBUTING.md](CONTRIBUTING.md) e [AGENTS.md](AGENTS.md). Contas bancárias, faturas, parcelamentos e acesso remoto ficam fora da primeira versão.
