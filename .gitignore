@@ -1,0 +1,29 @@
+# Credenciais e configuração privada
+.env
+.env.*
+!.env.example
+secrets/
+credentials/
+*.pem
+*.key
+rclone.conf
+# Dados financeiros e backups
+data/
+backups/
+imports/
+exports/
+*.dump
+*.backup
+*.sql.gz
+*.xlsx
+*.xls
+*.csv
+*.sqlite*
+# Dependências e artefatos
+node_modules/
+dist/
+build/
+coverage/
+.cache/
+*.log
+.DS_Store
