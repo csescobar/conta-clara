@@ -18,9 +18,29 @@ Cada pessoa terá seu login e acesso aos mesmos dados financeiros do seu espaço
 
 Interface em português, valores em reais, datas brasileiras e operação em America/Sao_Paulo. Postgres será a fonte de verdade após importação inicial; não haverá sincronização contínua com Google Sheets.
 
-## Estado e instalação
+## Desenvolvimento
 
-Não há comandos de instalação da aplicação nesta etapa. Eles serão adicionados nas histórias de fundação e operação. Não é necessário fornecer credenciais ou dados financeiros para contribuir agora.
+Requisitos: Node.js 24 LTS e npm. A API e a interface são servidas na mesma origem em produção; no desenvolvimento, Vite encaminha `/api` para o Express.
+
+```sh
+npm ci
+npm run dev
+```
+
+A interface de desenvolvimento abre em `http://localhost:5173`; o endpoint de saúde da API fica disponível em `http://localhost:3001/api/health`.
+
+```sh
+npm run typecheck
+npm test
+npm run build
+npm start
+```
+
+O build fica em `dist/client`; `npm start` serve o build e a API na porta `3001` por padrão. `PORT` altera a porta do servidor. Ainda não há funcionalidades financeiras nem conexão ao Postgres.
+
+## Testes
+
+Vitest executa testes de unidade e interface com React Testing Library em jsdom; Supertest verifica rotas HTTP do Express sem iniciar um servidor de rede. Playwright será usado nas histórias de fluxos completos do navegador, incluindo instalação/offline. Testes que dependem de persistência usarão um Postgres descartável no Docker. Cada história declara cenários específicos e executa os checks pertinentes antes de ser concluída.
 
 ## Planejamento e contribuição
 

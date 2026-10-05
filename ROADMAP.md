@@ -1,10 +1,10 @@
 # Roadmap — Conta Clara
 
-Backlog inicial da primeira versão. Concluir dependências antes de iniciar uma história. Todas as funcionalidades estão planejadas, ainda não implementadas.
+Backlog inicial da primeira versão. Concluir dependências antes de iniciar uma história. Os checkboxes marcam histórias publicadas e concluídas.
 
 ## 1. Fundação e experiência
 
-- [ ] [Estruturar React/TypeScript e API Node](https://github.com/csescobar/conta-clara/issues/1) — dependências: nenhuma.
+- [x] [Estruturar React/TypeScript e API Node](https://github.com/csescobar/conta-clara/issues/1) — dependências: nenhuma.
 - [ ] [Definir tokens e componentes do design system](https://github.com/csescobar/conta-clara/issues/2) — dependências: #1.
 - [ ] [Construir navegação responsiva e telas com dados fictícios](https://github.com/csescobar/conta-clara/issues/3) — dependências: #2.
 
