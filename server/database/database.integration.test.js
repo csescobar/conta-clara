@@ -10,11 +10,14 @@ describe.skipIf(!testDatabaseUrl)('PostgreSQL schema integration', () => {
   let pool;
 
   beforeAll(async () => {
+    const databaseName = new URL(testDatabaseUrl).pathname.slice(1);
+    if (!/_test$/.test(databaseName)) throw new Error('TEST_DATABASE_URL deve apontar para um banco descartável com sufixo _test.');
     pool = createPool(testDatabaseUrl);
     await migrate(pool);
   });
 
   afterAll(async () => {
+    if (pool) await pool.query('TRUNCATE users CASCADE');
     await pool?.end();
   });
 
@@ -39,9 +42,8 @@ describe.skipIf(!testDatabaseUrl)('PostgreSQL schema integration', () => {
     await migrate(pool);
     const status = await migrationStatus(pool);
 
-    expect(status).toHaveLength(1);
-    expect(status[0].status).toBe('applied');
-    expect(status[0].name).toBe('001_initial_schema.sql');
+    expect(status.find(({ name }) => name === '001_initial_schema.sql')?.status).toBe('applied');
+    expect(status.find(({ name }) => name === '002_auth_sessions.sql')?.status).toBe('applied');
   });
 
   it('rejects cross-space categories, invalid money, and non-month competence dates', async () => {

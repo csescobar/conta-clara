@@ -20,14 +20,17 @@ Interface em português, valores em reais, datas brasileiras e operação em Ame
 
 ## Desenvolvimento
 
-Requisitos: Node.js 24 LTS e npm. A API e a interface são servidas na mesma origem em produção; no desenvolvimento, Vite encaminha `/api` para o Express.
+Requisitos: Node.js 24 LTS, npm e PostgreSQL. Configure uma base local conforme [docs/database.md](docs/database.md). A API e a interface são servidas na mesma origem em produção; no desenvolvimento, Vite encaminha `/api` para o Express.
 
 ```sh
 npm ci
+cp .env.example .env
+# Defina DATABASE_URL para a base Conta Clara e aplique as migrações:
+npm run db:migrate
 npm run dev
 ```
 
-A interface de desenvolvimento abre em `http://localhost:5173`; o endpoint de saúde da API fica disponível em `http://localhost:3001/api/health`.
+A interface abre em `http://localhost:5173`; o endpoint de saúde da API fica em `http://localhost:3001/api/health`. No primeiro acesso, crie o administrador inicial. O servidor de desenvolvimento escuta apenas em `127.0.0.1`; para acesso por outro dispositivo, aguarde a configuração de HTTPS local da issue #20.
 
 ```sh
 npm run typecheck
@@ -36,11 +39,11 @@ npm run build
 npm start
 ```
 
-O build fica em `dist/client`; `npm start` serve o build e a API na porta `3001` por padrão. `PORT` altera a porta do servidor. As rotas financeiras e a ligação do pool Postgres à API serão feitas nas histórias seguintes.
+O build fica em `dist/client`; `npm start` serve o build e a API na porta `3001` por padrão. `PORT` altera a porta e `HOST` define a interface de rede. A autenticação usa hash scrypt, cookie de sessão HttpOnly e proteção CSRF; `COOKIE_SECURE=true` deve ser usado quando a aplicação estiver atrás de HTTPS.
 
 ## Testes
 
-Vitest executa testes de unidade e interface com React Testing Library em jsdom; Supertest verifica rotas HTTP do Express sem iniciar um servidor de rede. Playwright será usado nas histórias de fluxos completos do navegador, incluindo instalação/offline. Testes que dependem de persistência usarão um Postgres descartável no Docker. Cada história declara cenários específicos e executa os checks pertinentes antes de ser concluída.
+Vitest executa testes de unidade e interface com React Testing Library em jsdom; Supertest verifica rotas HTTP do Express sem iniciar um servidor de rede. Playwright será usado nas histórias de fluxos completos do navegador, incluindo instalação/offline. Testes que dependem de persistência usam uma base Postgres descartável configurada em `.env.test`; `npm run test:db` aplica migrações e limpa as tabelas de aplicação da base de teste antes dos cenários de autenticação. Use apenas uma base vazia com sufixo `_test`. Cada história declara cenários específicos e executa os checks pertinentes antes de ser concluída.
 
 Consulte [docs/design-system.md](docs/design-system.md) para tokens, acessibilidade e componentes visuais.
 

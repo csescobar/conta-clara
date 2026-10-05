@@ -1,11 +1,29 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 
+const signedInState = {
+  initialized: true,
+  user: { id: 'demo-user', name: 'Pessoa de exemplo', email: 'demo@example.test', role: 'admin', spaceId: 'demo-space' },
+  csrfToken: 'csrf-demo',
+};
+
+async function renderSignedInApp() {
+  render(<App />);
+  await screen.findByRole('heading', { name: 'Visão geral' });
+}
+
+beforeEach(() => {
+  window.history.replaceState({}, '', '/');
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => signedInState }));
+});
+
+afterEach(() => vi.unstubAllGlobals());
+
 describe('application navigation and preview screens', () => {
-  it('shows the monthly dashboard with fictional financial examples', () => {
-    render(<App />);
+  it('shows the monthly dashboard with fictional financial examples', async () => {
+    await renderSignedInApp();
 
     expect(screen.getByRole('heading', { name: 'Visão geral' })).toBeInTheDocument();
     expect(screen.getByText('Outubro de 2026')).toBeInTheDocument();
@@ -15,7 +33,7 @@ describe('application navigation and preview screens', () => {
 
   it('navigates to the transaction preview from the main navigation', async () => {
     const user = userEvent.setup();
-    render(<App />);
+    await renderSignedInApp();
 
     const mainNav = screen.getByRole('navigation', { name: /^Navegação principal$/ });
     await user.click(within(mainNav).getByRole('link', { name: 'Lançamentos' }));
@@ -25,7 +43,7 @@ describe('application navigation and preview screens', () => {
 
   it('makes the mobile navigation and the inactive demo form clear', async () => {
     const user = userEvent.setup();
-    render(<App />);
+    await renderSignedInApp();
 
     expect(screen.getByRole('navigation', { name: /^Navegação principal móvel$/ })).toBeInTheDocument();
     const mobileNav = screen.getByRole('navigation', { name: /^Navegação principal móvel$/ });
@@ -42,7 +60,7 @@ describe('application navigation and preview screens', () => {
 
   it('opens the shared settings preview without implying that settings are persisted', async () => {
     const user = userEvent.setup();
-    render(<App />);
+    await renderSignedInApp();
     const mainNav = screen.getByRole('navigation', { name: /^Navegação principal$/ });
 
     await user.click(within(mainNav).getByRole('link', { name: 'Configurações' }));

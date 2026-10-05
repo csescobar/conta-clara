@@ -16,7 +16,16 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/api': process.env.API_PROXY_TARGET ?? 'http://127.0.0.1:3001',
+      '/api': {
+        target: process.env.API_PROXY_TARGET ?? 'http://127.0.0.1:3001',
+        changeOrigin: false,
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyRequest, request) => {
+            // Preserve the browser-visible host so the API can validate Origin for CSRF.
+            if (request.headers.host) proxyRequest.setHeader('host', request.headers.host);
+          });
+        },
+      },
     },
   },
 });

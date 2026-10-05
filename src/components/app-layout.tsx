@@ -1,5 +1,8 @@
-import { ArrowLeftRight, House, Repeat2, Settings, WalletCards } from 'lucide-react';
-import { Link, NavLink, Outlet } from 'react-router-dom';
+import { ArrowLeftRight, House, LogOut, Repeat2, Settings, WalletCards } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { Link, NavLink } from 'react-router-dom';
+import { Button } from './ui/button';
+import type { AuthUser } from '../auth/auth-page';
 import { cn } from '../lib/utils';
 
 const links = [
@@ -40,23 +43,24 @@ function Navigation({ mobile = false }: { mobile?: boolean }) {
   );
 }
 
-export function AppLayout() {
+export function AppLayout({ user, onLogout, notice, children }: { user: AuthUser; onLogout: () => void; notice?: string; children: ReactNode }) {
   return (
     <div className="min-h-screen lg:flex">
       <a href="#main-content" className="sr-only z-50 rounded-lg bg-card px-4 py-3 font-medium text-primary focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Pular para o conteúdo principal</a>
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-border bg-card px-5 py-7 lg:flex">
         <Brand />
         <div className="mt-10"><p className="mb-3 px-3 text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Menu</p><Navigation /></div>
-        <div className="mt-auto rounded-2xl bg-secondary p-4"><p className="text-sm font-semibold">Prévia da aplicação</p><p className="mt-1 text-xs leading-5 text-muted-foreground">Os valores e lançamentos desta tela são exemplos fictícios.</p></div>
+        <div className="mt-auto grid gap-3 rounded-2xl bg-secondary p-4"><div><p className="truncate text-sm font-semibold">{user.name}</p><p className="truncate text-xs text-muted-foreground">{user.email}</p></div><Button type="button" variant="outline" size="sm" onClick={onLogout}><LogOut aria-hidden="true" className="size-4" />Sair</Button></div>
       </aside>
 
       <div className="min-w-0 flex-1">
         <header className="flex min-h-16 items-center justify-between border-b border-border bg-card px-4 sm:px-8 lg:hidden">
           <Brand />
-          <span className="rounded-full bg-accent px-2.5 py-1 text-[0.68rem] font-semibold text-accent-foreground">DEMO</span>
+          <Button type="button" variant="ghost" size="icon" aria-label="Sair de Conta Clara" onClick={onLogout}><LogOut aria-hidden="true" className="size-5" /></Button>
         </header>
         <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-6xl px-4 pb-28 pt-7 sm:px-8 sm:pt-10 lg:px-10 lg:pb-12">
-          <Outlet />
+          {notice && <p role="alert" className="mb-5 rounded-xl bg-[#fdecec] px-4 py-3 text-sm font-medium text-destructive">{notice}</p>}
+          {children}
         </main>
       </div>
 

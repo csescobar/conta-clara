@@ -48,11 +48,11 @@ Revise permissões antes de habilitar as rotas da aplicação. Os papéis precis
 
 ## Teste de integração
 
-Os testes de banco aceitam somente `TEST_DATABASE_URL`, nunca reaproveitam a URL de runtime como fallback. Aponte essa variável para uma base descartável e vazia; a suíte cria esquema e linhas de exemplo, e não apaga objetos de uma base existente.
+Os testes de banco aceitam somente `TEST_DATABASE_URL`, nunca reaproveitam a URL de runtime como fallback. Aponte essa variável para uma base descartável com nome terminado em `_test`. A suíte cria o esquema e linhas fictícias; antes dos cenários de autenticação, `TRUNCATE users CASCADE` limpa os registros das tabelas da aplicação. Não aponte para uma base de desenvolvimento ou produção.
 
 ```sh
 cp .env.test.example .env.test
-# Defina TEST_DATABASE_URL para uma base de teste descartável.
+# Crie uma base separada, por exemplo conta_clara_test, e defina a URL acima.
 npm run test:db
 ```
 
