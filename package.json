@@ -11,9 +11,12 @@
     "dev:api": "node --watch server/index.js",
     "dev:web": "vite --host 0.0.0.0",
     "test": "vitest run",
+    "test:db": "node --env-file-if-exists=.env.test node_modules/vitest/vitest.mjs run server/database/database.integration.test.js",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "build": "vite build",
+    "db:migrate": "node --env-file-if-exists=.env scripts/migrate.js",
+    "db:status": "node --env-file-if-exists=.env scripts/migrate.js --status",
     "start": "node server/index.js"
   },
   "dependencies": {
@@ -22,6 +25,7 @@
     "clsx": "^2.1.1",
     "express": "^5.1.0",
     "lucide-react": "^1.52.0",
+    "pg": "^8.23.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.18.4",
@@ -33,6 +37,7 @@
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",
     "@types/node": "^24.10.0",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@types/supertest": "^6.0.3",
