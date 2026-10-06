@@ -38,7 +38,7 @@ Backlog inicial da primeira versão. Concluir dependências antes de iniciar uma
 
 ## 6. Operação e publicação
 
-- [ ] [Configurar Docker e HTTPS local](https://github.com/csescobar/conta-clara/issues/20) — dependências: #19; guia em [docs/docker-local-https.md](docs/docker-local-https.md).
+- [x] [Configurar Docker e HTTPS local](https://github.com/csescobar/conta-clara/issues/20) — dependências: #19; guia em [docs/docker-local-https.md](docs/docker-local-https.md).
 - [ ] [Automatizar backups criptografados no Google Drive](https://github.com/csescobar/conta-clara/issues/21) — dependências: #20.
 - [ ] [Validar restauração dos backups](https://github.com/csescobar/conta-clara/issues/22) — dependências: #21.
 - [ ] [Concluir testes integrados e documentação de instalação](https://github.com/csescobar/conta-clara/issues/23) — dependências: #14, #15, #16, #22.

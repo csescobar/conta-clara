@@ -1,6 +1,6 @@
 # Docker e HTTPS na rede local
 
-O Compose adiciona somente dois serviços: a API/interface Conta Clara e o proxy Caddy. O PostgreSQL continua sendo o container já existente; nenhum banco, porta ou volume dele é criado ou removido pelo projeto. A rede do Postgres é declarada como externa. A API se conecta a ela sem publicar sua porta, enquanto Caddy e API se comunicam por uma rede privada deste Compose.
+O Compose principal adiciona somente dois serviços: a API/interface Conta Clara e o proxy Caddy. O PostgreSQL roda separadamente numa rede user-defined externa; pode ser uma instância já existente ou um container dedicado como no exemplo abaixo. O Compose principal não administra o container nem o volume do banco. A API se conecta à rede externa sem publicar sua porta, enquanto Caddy e API se comunicam por uma rede privada deste Compose.
 
 ## Preparar a rede e as credenciais
 
@@ -12,6 +12,28 @@ docker network connect conta-clara-postgres <nome-do-container-postgres>
 ```
 
 Copie `deploy/compose.env.example` para `.env`. Configure `POSTGRES_NETWORK` com essa rede, e ajuste as duas URLs para o nome do serviço ou alias DNS do Postgres nessa rede, a base Conta Clara e os papéis próprios descritos em [docs/database.md](database.md). Senhas com caracteres reservados em uma URL precisam estar codificadas para URL. Não use a URL do banco de testes nem credenciais do usuário `postgres`.
+
+### Criar um Postgres dedicado quando não houver uma instância disponível
+
+Se já existe um Postgres adequado, pule esta seção. Para criar um container isolado do projeto, use a rede externa configurada em `.env` e um volume nomeado. O arquivo `.env.postgres` contém somente a senha administrativa local; mantenha-o com permissão restrita e fora do Git.
+
+```sh
+cp deploy/postgres.env.example .env.postgres
+chmod 600 .env.postgres
+openssl rand -hex 32
+# Cole o valor gerado em POSTGRES_PASSWORD dentro de .env.postgres.
+docker network inspect conta-clara-postgres >/dev/null 2>&1 || docker network create conta-clara-postgres
+docker volume create conta-clara-postgres-data
+docker run -d --name conta-clara-postgres --restart unless-stopped \
+  --network conta-clara-postgres --network-alias postgres \
+  --env-file .env.postgres \
+  --mount type=volume,source=conta-clara-postgres-data,target=/var/lib/postgresql \
+  --health-cmd='pg_isready -U postgres -d postgres' \
+  --health-interval=10s --health-timeout=5s --health-retries=6 \
+  postgres:18-alpine
+```
+
+O volume em `/var/lib/postgresql` preserva os dados dessa imagem PostgreSQL 18. O comando não publica a porta 5432. Depois que o container ficar saudável, crie a base e os papéis de migração/runtime conforme [docs/database.md](database.md), configure as URLs no `.env` principal e continue com a migração e o Compose da aplicação.
 
 Defina `LAN_HOST` como `localhost` para acessar só no computador. Para acessar pelo celular, prefira reservar um IP estável no roteador para o computador que hospeda a aplicação e informe esse IP tanto em `LAN_HOST` quanto em `LAN_BIND_ADDRESS`. O bind padrão `127.0.0.1` limita o serviço ao próprio computador. `HTTPS_PORT` vale `8443` por padrão para evitar conflito com serviços que já usam 443; mantenha-o acima de 1023, pois a imagem Caddy remove a capacidade de bind privilegiado.
 
@@ -51,7 +73,7 @@ Para verificar HTTPS no computador do servidor, com o certificado instalado no s
 curl --cacert local-certs/caddy-root.crt --resolve "${LAN_HOST}:${HTTPS_PORT}:127.0.0.1" "https://${LAN_HOST}:${HTTPS_PORT}/api/health"
 ```
 
-Uma resposta JSON com `"status":"ok"` confirma o proxy, o certificado para o nome configurado e a API. A verificação física no celular deve ser feita na mesma rede Wi-Fi, depois de instalar a raiz; o teste `curl` local não substitui esse passo.
+Uma resposta JSON com `"status":"ok"` confirma o proxy, o certificado para o nome configurado e a API. A raiz também precisa ser instalada no trust store do computador; em Debian/Ubuntu, o teste final é executar o `curl` sem `--cacert`. Cada celular precisa confiar separadamente na raiz antes de acessar a PWA pela mesma rede Wi-Fi.
 
 ## Persistência, reinício e rede
 
@@ -71,4 +93,4 @@ O Compose define health checks para a API e para a validade do Caddyfile; Caddy 
 
 O Dockerfile usa build multi-stage: instala dependências, gera `dist/client` e copia para a imagem final apenas o runtime, migrations, servidor e build web. `.dockerignore` impede que credenciais, dependências e dados locais entrem no contexto de build. `compose.yaml` não define nem administra Postgres.
 
-No ambiente de desenvolvimento, `docker compose config --quiet`, o build multi-stage, a tarefa `migrate` (oito migrações), health checks da API/Caddy, `/api/health` e `/api/auth/state` passaram com um Postgres descartável na rede externa. Depois de reiniciar os containers, a raiz exportada permaneceu idêntica e `/api/health` respondeu por HTTPS com essa raiz. A porta da API não foi publicada no host. Instalação e uso em dispositivo físico dependem de transferir e confiar a raiz em cada aparelho; precisam ser conferidos no celular da casa antes de encerrar a issue. Sem configurar essa confiança, o HTTPS existe, mas o navegador continua mostrando certificado não confiável e pode bloquear os recursos de instalação/offline da PWA.
+`docker compose config --quiet`, o build multi-stage, as oito migrações, health checks, `/api/health` e `/api/auth/state` passaram. O teste inicial usou um Postgres descartável; a instalação local também foi verificada com um container Postgres dedicado, volume persistente e sem porta publicada. Após reiniciar os serviços, a raiz exportada permaneceu idêntica. No Ubuntu, o certificado foi instalado no trust store e o endpoint respondeu por HTTPS sem `--cacert`. O usuário confirmou a instalação e o acesso à PWA em um celular. A API não publica porta no host; somente o HTTPS do Caddy fica acessível na rede LAN. A CA privada deve ser preservada em `caddy_data` e confiada separadamente em cada dispositivo; remover esse volume gera uma nova raiz que precisa ser instalada novamente.
