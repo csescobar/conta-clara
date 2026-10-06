@@ -1,4 +1,5 @@
 import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ActivityPage } from './activity-page';
 
@@ -58,5 +59,30 @@ describe('shared activity history', () => {
     expect(items[2]).toHaveTextContent(/Previsto: R\$[\s\u00a0]*120,00 → R\$[\s\u00a0]*125,00/);
     expect(items[3]).toHaveTextContent(/Ana.*cadastrou despesa.*Conta de luz/i);
     expect(screen.queryAllByRole('button')).toHaveLength(0);
+  });
+
+  it('loads older history pages without duplicating or replacing recent events', async () => {
+    const event = (id: string, description: string) => ({
+      id, entry_id: `entry-${id}`, actor_user_id: 'member-id', actor_name: 'Ana', action: 'created',
+      entry_kind: 'expense', entry_description: description, occurred_at: '2026-10-05T13:15:00.000Z',
+      details: { after: { ...baseSnapshot, description } },
+    });
+    const fetchMock = vi.fn().mockImplementation(async (input: string) => {
+      if (input === '/api/activity') return jsonResponse({ events: [event('2', 'Evento recente')], hasMore: true, nextOffset: 1 });
+      if (input === '/api/activity?offset=1') return jsonResponse({ events: [event('1', 'Evento anterior')], hasMore: false, nextOffset: 2 });
+      throw new Error(`Unexpected request: ${input}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    render(<ActivityPage />);
+
+    expect(await screen.findByText(/Evento recente/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Carregar atividades anteriores' }));
+    const items = await screen.findAllByRole('listitem');
+    expect(items).toHaveLength(2);
+    expect(items[0]).toHaveTextContent(/Evento recente/);
+    expect(items[1]).toHaveTextContent(/Evento anterior/);
+    expect(screen.queryByRole('button', { name: 'Carregar atividades anteriores' })).not.toBeInTheDocument();
+    expect(fetchMock.mock.calls.map(([input]) => input)).toEqual(['/api/activity', '/api/activity?offset=1']);
   });
 });

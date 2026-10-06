@@ -237,8 +237,11 @@ describe.skipIf(!testDatabaseUrl)('financial entry routes with PostgreSQL', () =
       expect.objectContaining({ entry_id: overdueExpense.body.entry.id, actor_user_id: admin.id, action: 'unconfirmed' }),
       expect.objectContaining({ entry_id: income.body.entry.id, actor_user_id: member.id, action: 'deleted' }),
     ]));
+    expect(adminActivity.body.hasMore).toBe(false);
+    expect(adminActivity.body.nextOffset).toBe(adminActivity.body.events.length);
     await sessionRequest('get', '/api/activity', otherSpace.sessionToken, memberState.body.csrfToken).expect(200)
       .expect(({ body }) => expect(body.events).toEqual([]));
+    await sessionRequest('get', '/api/activity?offset=invalid', adminSession, adminState.body.csrfToken).expect(400);
     await sessionRequest('post', '/api/activity', memberSession, memberState.body.csrfToken).expect(404);
     await expect(pool.query('UPDATE financial_entry_audit SET entry_description = $1 WHERE id = $2', ['Tampered', adminActivity.body.events[0].id]))
       .rejects.toMatchObject({ code: '55000' });
@@ -250,5 +253,18 @@ describe.skipIf(!testDatabaseUrl)('financial entry routes with PostgreSQL', () =
     expect(afterDeactivation.body.events.find(({ entry_id, action }) => entry_id === expense.body.entry.id && action === 'created'))
       .toMatchObject({ actor_user_id: member.id, actor_name: 'Membro lançamentos' });
     await sessionRequest('get', '/api/activity', memberSession, memberState.body.csrfToken).expect(401);
+    await pool.query(`
+      INSERT INTO financial_entry_audit (
+        space_id, entry_id, actor_user_id, actor_display_name, action, entry_kind, entry_description
+      )
+      SELECT $1, gen_random_uuid(), $2, 'Admin lançamentos', 'created', 'expense', 'Evento de paginação'
+      FROM generate_series(1, 101)
+    `, [admin.spaceId, admin.id]);
+    const firstActivityPage = await sessionRequest('get', '/api/activity', adminSession, adminState.body.csrfToken).expect(200);
+    expect(firstActivityPage.body).toMatchObject({ hasMore: true, nextOffset: 100 });
+    expect(firstActivityPage.body.events).toHaveLength(100);
+    const secondActivityPage = await sessionRequest('get', '/api/activity?offset=100', adminSession, adminState.body.csrfToken).expect(200);
+    expect(secondActivityPage.body).toMatchObject({ hasMore: false, nextOffset: adminActivity.body.events.length + 101 });
+    expect(secondActivityPage.body.events).toHaveLength(adminActivity.body.events.length + 1);
   });
 });
