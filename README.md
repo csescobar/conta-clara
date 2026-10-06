@@ -1,6 +1,6 @@
 # Conta Clara
 
-Controle financeiro familiar local, com finanças compartilhadas e uso pelo computador e celular. A aplicação web está em desenvolvimento: a fundação React/API, autenticação, convites, gestão de membros, cadastros compartilhados, registro e confirmação de lançamentos, histórico de alterações, recorrências mensais, painel com gráficos previsto versus realizado, importação revisada de planilha e exportação CSV já funcionam; PWA e sincronização seguem no roadmap.
+Controle financeiro familiar local, com finanças compartilhadas e uso pelo computador e celular. A aplicação web está em desenvolvimento: a fundação React/API, autenticação, convites, gestão de membros, cadastros compartilhados, registro e confirmação de lançamentos, histórico de alterações, recorrências mensais, painel com gráficos previsto versus realizado, importação revisada de planilha, exportação CSV e instalação da PWA com interface offline já funcionam; consulta offline de finanças e sincronização seguem no roadmap.
 
 ## Proposta
 
@@ -48,6 +48,8 @@ Vitest executa testes de unidade e interface com React Testing Library e `user-e
 Para o formato de arquivo aceito, interpretação de datas, categorias e limites da importação, consulte [docs/spreadsheet-import.md](docs/spreadsheet-import.md).
 
 Para os filtros, formato e segurança do arquivo CSV, consulte [docs/csv-export.md](docs/csv-export.md).
+
+Para instalação, cache e limites do modo offline, consulte [docs/pwa.md](docs/pwa.md).
 
 Consulte [docs/design-system.md](docs/design-system.md) para tokens, acessibilidade e componentes visuais.
 
