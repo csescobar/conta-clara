@@ -10,6 +10,7 @@ import { createEntriesRouter } from './routes/entries.js';
 import { createMembersRouter } from './routes/members.js';
 import { createRecurrencesRouter } from './routes/recurrences.js';
 import { createDashboardRouter } from './routes/dashboard.js';
+import { createImportsRouter } from './routes/imports.js';
 
 const clientDist = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -19,12 +20,13 @@ const clientDist = path.resolve(
 export function createApp({ pool, secureCookies = process.env.COOKIE_SECURE === 'true', loginLimit = 10 } = {}) {
   const app = express();
   app.disable('x-powered-by');
-  app.use(express.json({ limit: '16kb' }));
   app.get('/api/health', (_request, response) => {
     response.json({ status: 'ok' });
   });
   if (pool) {
     const csrfSecret = randomBytes(32);
+    app.use('/api/imports', createImportsRouter({ pool, secureCookies, csrfSecret }));
+    app.use(express.json({ limit: '16kb' }));
     app.use('/api/auth', createAuthRouter({ pool, secureCookies, loginLimit, secret: csrfSecret }));
     app.use('/api/activity', createActivityRouter({ pool, secureCookies }));
     app.use('/api/catalog', createCatalogRouter({ pool, secureCookies, csrfSecret }));
@@ -32,6 +34,8 @@ export function createApp({ pool, secureCookies = process.env.COOKIE_SECURE === 
     app.use('/api/members', createMembersRouter({ pool, secureCookies, csrfSecret }));
     app.use('/api/recurrences', createRecurrencesRouter({ pool, secureCookies, csrfSecret }));
     app.use('/api/dashboard', createDashboardRouter({ pool, secureCookies }));
+  } else {
+    app.use(express.json({ limit: '16kb' }));
   }
 
   if (fs.existsSync(clientDist)) {
@@ -42,8 +46,9 @@ export function createApp({ pool, secureCookies = process.env.COOKIE_SECURE === 
   }
 
   app.use((error, _request, response, _next) => {
-    console.error(`API request failed${error.code ? ` (${error.code})` : ''}`);
-    response.status(500).json({ error: 'Ocorreu um erro. Tente novamente.' });
+    if (error.type !== 'entity.too.large' && error.type !== 'entity.parse.failed') console.error(`API request failed${error.code ? ` (${error.code})` : ''}`);
+    const status = error.type === 'entity.too.large' ? 413 : error.type === 'entity.parse.failed' ? 400 : 500;
+    response.status(status).json({ error: status === 413 ? 'A solicitação excede o limite de 4 MB.' : status === 400 ? 'O corpo da solicitação não contém JSON válido.' : 'Ocorreu um erro. Tente novamente.' });
   });
   return app;
 }

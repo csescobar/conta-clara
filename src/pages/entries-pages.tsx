@@ -1,5 +1,5 @@
 import { useCallback, useContext, useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { ArrowDownLeft, ArrowUpRight, CalendarDays, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, CalendarDays, Pencil, Plus, RefreshCw, Trash2, Upload } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AuthContext } from '../auth/auth-gate';
 import { StatusBadge } from '../components/ui/badge';
@@ -168,7 +168,7 @@ export function TransactionsPage() {
   }
 
   return <>
-    <PageHeader eyebrow="Movimentações" title="Lançamentos" description="Acompanhe receitas, despesas e aportes do espaço compartilhado." action={<Button asChild><Link to="/lancamentos/novo"><Plus aria-hidden="true" className="size-4" />Adicionar lançamento</Link></Button>} />
+    <PageHeader eyebrow="Movimentações" title="Lançamentos" description="Acompanhe receitas, despesas e aportes do espaço compartilhado." action={<div className="flex flex-wrap gap-2"><Button asChild variant="outline"><Link to="/importar"><Upload aria-hidden="true" className="size-4" />Importar planilha</Link></Button><Button asChild><Link to="/lancamentos/novo"><Plus aria-hidden="true" className="size-4" />Adicionar lançamento</Link></Button></div>} />
     {error && <p role="alert" className="mb-4 rounded-xl bg-[#fdecec] px-4 py-3 text-sm font-medium text-destructive">{error}</p>}
     <section className="grid gap-4">
       <Card>
