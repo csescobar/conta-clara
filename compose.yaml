@@ -1,0 +1,114 @@
+name: conta-clara
+
+services:
+  app:
+    image: conta-clara:local
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: "3001"
+      COOKIE_SECURE: "true"
+      DATABASE_URL: ${DATABASE_URL:?Defina DATABASE_URL no arquivo .env}
+    networks:
+      application:
+        aliases:
+          - app
+      postgres: {}
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3001/api/health').then(response => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 45s
+
+  caddy:
+    image: conta-clara-caddy:local
+    build:
+      context: .
+      dockerfile: Caddy.Dockerfile
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      LAN_HOST: ${LAN_HOST:-localhost}
+      HTTPS_PORT: ${HTTPS_PORT:-8443}
+    ports:
+      - ${LAN_BIND_ADDRESS:-127.0.0.1}:${HTTPS_PORT:-8443}:${HTTPS_PORT:-8443}
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    networks:
+      - application
+    healthcheck:
+      test:
+        - CMD
+        - caddy
+        - validate
+        - --config
+        - /etc/caddy/Caddyfile
+        - --adapter
+        - caddyfile
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  migrate:
+    image: conta-clara:local
+    profiles:
+      - tools
+    build:
+      context: .
+      dockerfile: Dockerfile
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Defina DATABASE_URL no arquivo .env}
+      MIGRATION_DATABASE_URL: ${MIGRATION_DATABASE_URL:-${DATABASE_URL}}
+    command:
+      - node
+      - scripts/migrate.js
+    networks:
+      - postgres
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+networks:
+  application:
+  postgres:
+    external: true
+    name: ${POSTGRES_NETWORK:?Defina POSTGRES_NETWORK no arquivo .env}

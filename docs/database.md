@@ -2,6 +2,8 @@
 
 A API usa uma instância PostgreSQL existente e exige `DATABASE_URL`. Nenhum banco é criado automaticamente na inicialização. Configure `.env` a partir de `.env.example`, mantendo esse arquivo fora do Git. Se a API rodar em outro container, use o nome do serviço e uma rede Docker comum; `localhost` dentro do container aponta para o próprio container.
 
+No Compose, `deploy/compose.env.example` inclui variáveis adicionais de host e rede local. A rede do PostgreSQL é externa e deve existir antes de iniciar os serviços. A URL privilegiada `MIGRATION_DATABASE_URL` é usada pelo serviço temporário `migrate`; a API recebe somente a URL de runtime.
+
 ## Papéis recomendados
 
 Crie uma base `conta_clara` e credenciais exclusivas para o projeto. Para instalações duradouras, separe um papel proprietário de migrações (pode criar tabelas) do papel da aplicação (pode ler e alterar registros, sem alterar o esquema). Guarde as senhas em um gerenciador local de segredos ou em `.env`. Nunca use o usuário superusuário Postgres na aplicação.

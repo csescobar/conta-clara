@@ -8,6 +8,7 @@ credentials/
 *.pem
 *.key
 rclone.conf
+local-certs/
 # Dados financeiros e backups
 data/
 backups/

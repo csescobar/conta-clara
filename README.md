@@ -13,7 +13,7 @@ Cada pessoa terá seu login e acesso aos mesmos dados financeiros do seu espaço
 - React, TypeScript e Vite; shadcn/ui, Tailwind CSS e Recharts.
 - Node.js 24 LTS, Express e Postgres; migrações SQL versionadas.
 - Manifesto PWA, service worker e IndexedDB.
-- Docker Compose e Caddy com HTTPS local.
+- Docker Compose e Caddy com HTTPS local por CA privada.
 - pg_dump e rclone crypt para backups privados no Google Drive.
 
 Interface em português, valores em reais, datas brasileiras e operação em America/Sao_Paulo. Postgres será a fonte de verdade após importação inicial; não haverá sincronização contínua com Google Sheets.
@@ -54,6 +54,8 @@ Para instalação e cache da interface, consulte [docs/pwa.md](docs/pwa.md); [do
 Consulte [docs/design-system.md](docs/design-system.md) para tokens, acessibilidade e componentes visuais.
 
 Para configurar o banco e executar migrações, consulte [docs/database.md](docs/database.md).
+
+Para executar com Docker, integrar o Postgres existente e confiar o certificado HTTPS nos dispositivos da rede local, consulte [docs/docker-local-https.md](docs/docker-local-https.md).
 
 ## Planejamento e contribuição
 

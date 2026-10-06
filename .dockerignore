@@ -1,0 +1,17 @@
+.git
+.env
+.env.*
+node_modules
+dist
+coverage
+local-certs
+backups
+data
+imports
+exports
+*.dump
+*.backup
+*.sql.gz
+*.xlsx
+*.xls
+*.csv

@@ -1,0 +1,10 @@
+{
+	admin off
+	auto_https disable_redirects
+	skip_install_trust
+}
+
+https://{$LAN_HOST}:{$HTTPS_PORT} {
+	tls internal
+	reverse_proxy app:3001
+}
