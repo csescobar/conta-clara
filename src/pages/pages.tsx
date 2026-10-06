@@ -1,56 +1,120 @@
 import { useCallback, useContext, useEffect, useState, type FormEvent } from 'react';
-import { ArrowDownLeft, ArrowUpRight, CalendarDays, ChevronRight, Copy, Mail, Plus, RefreshCw, ShieldCheck, UsersRound } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Copy, Mail, Plus, RefreshCw, ShieldCheck, UsersRound } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AuthContext } from '../auth/auth-gate';
 import { StatusBadge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
+import { EmptyState, LoadingState } from '../components/ui/feedback';
 import { FormField, Input } from '../components/ui/input';
-import { MoneyValue } from '../components/ui/money-value';
+import { currentMonthInputValue, formatBrazilianDate } from '../lib/finance';
 import { CatalogSettings } from './catalog-settings';
 import { PageHeader } from './page-header';
 
-const transactions = [
-  { id: 1, title: 'Salário', category: 'Renda', date: '5 out', cents: 780000, kind: 'income' as const, status: 'paid' as const },
-  { id: 2, title: 'Aluguel', category: 'Moradia', date: '5 out', cents: -180000, kind: 'expense' as const, status: 'paid' as const },
-  { id: 3, title: 'Internet Giga Mais', category: 'Moradia', date: '10 out', cents: -9990, kind: 'expense' as const, status: 'pending' as const },
-  { id: 4, title: 'Aporte mensal', category: 'Investimentos', date: '12 out', cents: -50000, kind: 'investment' as const, status: 'pending' as const },
-];
+type DashboardSummary = { incomeCents: string; expenseCents: string; investmentCents: string; resultCents: string };
+type DashboardEntry = { id: string; description: string; competence_on: string; due_on: string; planned_cents: string };
+type DashboardData = {
+  month: string;
+  planned: DashboardSummary;
+  realized: DashboardSummary;
+  upcoming: { count: number; entries: DashboardEntry[] };
+  overdue: { count: number; entries: DashboardEntry[] };
+};
+type DashboardApiResponse = DashboardData & { error?: string };
 
-function SummaryCard({ title, cents, detail, tone = 'default' }: { title: string; cents: number; detail: string; tone?: 'default' | 'positive' }) {
-  return <Card><CardContent className="grid gap-3 p-4 sm:p-5"><p className="text-sm font-medium text-muted-foreground">{title}</p><p className="text-2xl font-semibold tracking-tight sm:text-[1.75rem]"><MoneyValue cents={cents} /></p><p className={`text-xs leading-5 ${tone === 'positive' ? 'text-success' : 'text-muted-foreground'}`}>{detail}</p></CardContent></Card>;
+function formatCents(cents: string) {
+  const value = BigInt(cents);
+  const absolute = value < 0n ? -value : value;
+  const whole = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 }).format(absolute / 100n);
+  const fraction = (absolute % 100n).toString().padStart(2, '0');
+  return `${value < 0n ? '-R$' : 'R$'}\u00a0${whole},${fraction}`;
 }
 
-function TransactionRows({ compact = false }: { compact?: boolean }) {
-  return <div className="divide-y divide-border">
-    {transactions.slice(0, compact ? 3 : undefined).map((item) => {
-      const Icon = item.kind === 'income' ? ArrowDownLeft : item.kind === 'investment' ? RefreshCw : ArrowUpRight;
-      return <div key={item.id} className="flex min-w-0 items-center gap-3 py-3.5 first:pt-0 last:pb-0 sm:gap-4">
-        <span className={`grid size-10 shrink-0 place-items-center rounded-xl ${item.kind === 'income' ? 'bg-[#e8f5ed] text-success' : item.kind === 'investment' ? 'bg-accent text-accent-foreground' : 'bg-muted text-muted-foreground'}`}><Icon aria-hidden="true" className="size-[18px]" /></span>
-        <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{item.title}</p><p className="mt-0.5 text-xs text-muted-foreground">{item.category} · {item.date}</p></div>
-        <div className="grid shrink-0 justify-items-end gap-1"><p className={`text-sm font-semibold tabular-nums ${item.kind === 'income' ? 'text-success' : 'text-foreground'}`}><MoneyValue cents={item.cents} /></p>{!compact && <StatusBadge status={item.status} />}</div>
-      </div>;
-    })}
-  </div>;
+function monthHeading(value: string) {
+  const [year, month] = value.split('-').map(Number);
+  const label = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' })
+    .format(new Date(Date.UTC(year, month - 1, 1)));
+  return `${label.slice(0, 1).toLocaleUpperCase('pt-BR')}${label.slice(1)}`;
+}
+
+function moveMonth(value: string, offset: number) {
+  const [year, month] = value.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1 + offset, 1)).toISOString().slice(0, 7);
+}
+
+function DashboardMetric({ title, cents, description }: { title: string; cents: string; description: string }) {
+  const negative = BigInt(cents) < 0n;
+  return <Card><CardContent className="grid gap-3 p-4 sm:p-5"><p className="text-sm font-medium text-muted-foreground">{title}</p><p className={`text-2xl font-semibold tracking-tight tabular-nums sm:text-[1.75rem] ${negative ? 'text-destructive' : 'text-success'}`}>{formatCents(cents)}</p><p className="text-xs leading-5 text-muted-foreground">{description}</p></CardContent></Card>;
+}
+
+function DashboardEntryList({ entries, overdue = false }: { entries: DashboardEntry[]; overdue?: boolean }) {
+  return <ul className="divide-y divide-border">{entries.map((entry) => <li key={entry.id} className="flex min-w-0 items-center gap-3 py-3 first:pt-0 last:pb-0 sm:gap-4">
+    <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{entry.description}</p><p className={`mt-0.5 text-xs ${overdue ? 'text-destructive' : 'text-muted-foreground'}`}>Vence em {formatBrazilianDate(entry.due_on)}</p></div>
+    <div className="grid shrink-0 justify-items-end gap-1"><p className="text-sm font-semibold tabular-nums">{formatCents(entry.planned_cents)}</p>{overdue && <StatusBadge status="late" />}</div>
+  </li>)}</ul>;
 }
 
 export function DashboardPage() {
+  const [month, setMonth] = useState(currentMonthInputValue());
+  const [dashboard, setDashboard] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError('');
+    fetch(`/api/dashboard?month=${month}`, { credentials: 'same-origin', cache: 'no-store' })
+      .then(async (response) => {
+        const result = await response.json() as DashboardApiResponse;
+        if (!response.ok) throw new Error(result.error ?? 'Não foi possível carregar o painel.');
+        if (active) setDashboard(result);
+      })
+      .catch((loadError: unknown) => {
+        if (active) setError(loadError instanceof Error ? loadError.message : 'Não foi possível carregar o painel.');
+      })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [month]);
+
+  const heading = monthHeading(month);
   return <>
-    <PageHeader eyebrow="Outubro de 2026" title="Visão geral" description="Aqui está um resumo das finanças da família neste mês." action={<Button asChild><Link to="/lancamentos/novo"><Plus aria-hidden="true" className="size-4" />Adicionar lançamento</Link></Button>} />
-    <section aria-label="Resumo do mês" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <SummaryCard title="Saldo previsto" cents={238212} detail="Receitas menos despesas e aportes" tone="positive" />
-      <SummaryCard title="Receitas confirmadas" cents={780000} detail="1 entrada neste mês" />
-      <SummaryCard title="Despesas pagas" cents={346247} detail="8 pagamentos confirmados" />
-      <SummaryCard title="Contas em aberto" cents={145541} detail="3 vencem nos próximos 7 dias" />
-    </section>
-    <div className="mt-5 grid gap-4 xl:grid-cols-[1.35fr_1fr]">
-      <Card><CardHeader className="flex-row items-start justify-between gap-3"><div className="grid gap-1"><CardTitle>Próximas contas</CardTitle><CardDescription>Veja o que vence em breve.</CardDescription></div><CalendarDays aria-hidden="true" className="mt-0.5 size-5 text-muted-foreground" /></CardHeader><CardContent className="grid gap-1">
-        {[{ name: 'Internet Giga Mais', date: '10 de outubro', cents: 9990, status: 'pending' as const }, { name: 'Energia Light', date: '10 de outubro', cents: 7249, status: 'pending' as const }, { name: 'Cartão Santander', date: '14 de outubro', cents: 128302, status: 'pending' as const }].map((bill) => <div key={bill.name} className="flex min-w-0 items-center gap-3 border-b border-border py-3 last:border-0 last:pb-0"><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{bill.name}</p><p className="mt-0.5 text-xs text-muted-foreground">Vence em {bill.date}</p></div><div className="grid shrink-0 justify-items-end gap-1"><p className="text-sm font-semibold tabular-nums"><MoneyValue cents={bill.cents} /></p><StatusBadge status={bill.status} /></div></div>)}
-        <Link to="/lancamentos" className="mt-3 inline-flex w-fit items-center gap-1 text-sm font-semibold text-primary hover:underline focus-visible:rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Ver todos os lançamentos<ChevronRight aria-hidden="true" className="size-4" /></Link>
-      </CardContent></Card>
-      <Card><CardHeader><CardTitle>Movimentações recentes</CardTitle><CardDescription>Entradas, despesas e aportes de exemplo.</CardDescription></CardHeader><CardContent><TransactionRows compact /></CardContent></Card>
-    </div>
-    <p className="mt-5 rounded-xl border border-border bg-card px-4 py-3 text-xs leading-5 text-muted-foreground">Esta é uma demonstração com dados fictícios. Nenhum valor foi salvo.</p>
+    <PageHeader eyebrow={heading} title="Visão geral" description="Compare o previsto por competência com os valores efetivamente realizados." action={<div className="flex flex-wrap items-center gap-2"><div className="flex items-center gap-2"><Button type="button" size="icon" variant="outline" aria-label="Mês anterior" onClick={() => setMonth((value) => moveMonth(value, -1))}><ChevronLeft aria-hidden="true" className="size-4" /></Button><Input aria-label="Mês do painel" type="month" required className="w-[10.5rem]" value={month} onChange={(event) => { if (/^\d{4}-(0[1-9]|1[0-2])$/.test(event.target.value)) setMonth(event.target.value); }} /><Button type="button" size="icon" variant="outline" aria-label="Próximo mês" onClick={() => setMonth((value) => moveMonth(value, 1))}><ChevronRight aria-hidden="true" className="size-4" /></Button></div><Button asChild><Link to="/lancamentos/novo"><Plus aria-hidden="true" className="size-4" />Adicionar lançamento</Link></Button></div>} />
+    {error && <p role="alert" className="mb-4 rounded-xl bg-[#fdecec] px-4 py-3 text-sm font-medium text-destructive">{error}</p>}
+    {loading && !dashboard ? <LoadingState label="Carregando painel financeiro" /> : dashboard && <div aria-busy={loading}>
+      <section aria-label={`Resumo de ${heading}`} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <DashboardMetric title="Resultado previsto" cents={dashboard.planned.resultCents} description="Receitas − despesas − aportes por competência" />
+        <DashboardMetric title="Resultado realizado" cents={dashboard.realized.resultCents} description="Pagamentos e recebimentos pela data efetiva" />
+        <DashboardMetric title="Aportes previstos" cents={dashboard.planned.investmentCents} description="Separados das despesas do período" />
+        <DashboardMetric title="Aportes realizados" cents={dashboard.realized.investmentCents} description="Confirmados neste mês" />
+      </section>
+      <Card className="mt-4">
+        <CardHeader><CardTitle>Previsto e realizado</CardTitle><CardDescription>O previsto usa a competência do lançamento; o realizado usa o mês em que o pagamento ou recebimento ocorreu.</CardDescription></CardHeader>
+        <CardContent className="overflow-x-auto">
+          <table className="w-full min-w-[28rem] border-collapse text-sm">
+            <caption className="sr-only">Valores previstos e realizados em {heading}</caption>
+            <thead><tr className="border-b border-border text-left text-xs text-muted-foreground"><th scope="col" className="py-3 pr-4 font-medium">Movimentação</th><th scope="col" className="px-4 py-3 text-right font-medium">Previsto</th><th scope="col" className="py-3 pl-4 text-right font-medium">Realizado</th></tr></thead>
+            <tbody>
+              {([
+                ['Receitas', dashboard.planned.incomeCents, dashboard.realized.incomeCents],
+                ['Despesas', dashboard.planned.expenseCents, dashboard.realized.expenseCents],
+                ['Aportes', dashboard.planned.investmentCents, dashboard.realized.investmentCents],
+              ] as const).map(([label, planned, realized]) => <tr key={label} className="border-b border-border last:border-0"><th scope="row" className="py-3 pr-4 text-left font-medium">{label}</th><td className="px-4 py-3 text-right tabular-nums">{formatCents(planned)}</td><td className="py-3 pl-4 text-right tabular-nums">{formatCents(realized)}</td></tr>)}
+              <tr className="bg-muted/40"><th scope="row" className="py-3 pr-4 text-left font-semibold">Resultado do período</th><td className="px-4 py-3 text-right font-semibold tabular-nums">{formatCents(dashboard.planned.resultCents)}</td><td className="py-3 pl-4 text-right font-semibold tabular-nums">{formatCents(dashboard.realized.resultCents)}</td></tr>
+            </tbody>
+          </table>
+        </CardContent>
+      </Card>
+      <section aria-label="Contas a acompanhar" className="mt-4 grid gap-4 lg:grid-cols-2">
+        <Card><CardHeader className="flex-row items-start justify-between gap-3"><div><CardTitle>Próximas contas</CardTitle><CardDescription>{dashboard.upcoming.count} despesas em aberto com vencimento nos próximos 7 dias</CardDescription></div><CalendarDays aria-hidden="true" className="mt-0.5 size-5 text-muted-foreground" /></CardHeader><CardContent>
+          {dashboard.upcoming.entries.length ? <><DashboardEntryList entries={dashboard.upcoming.entries} />{dashboard.upcoming.count > dashboard.upcoming.entries.length && <p className="mt-3 text-xs text-muted-foreground">Mostrando {dashboard.upcoming.entries.length} de {dashboard.upcoming.count}. <Link to="/lancamentos" className="font-semibold text-primary hover:underline">Ver lançamentos</Link></p>}</> : <EmptyState title="Nenhuma conta próxima" description="Não há despesas em aberto vencendo nos próximos 7 dias." />}
+        </CardContent></Card>
+        <Card><CardHeader><CardTitle>Contas atrasadas</CardTitle><CardDescription>{dashboard.overdue.count} despesas em aberto com vencimento anterior a hoje</CardDescription></CardHeader><CardContent>
+          {dashboard.overdue.entries.length ? <><DashboardEntryList entries={dashboard.overdue.entries} overdue />{dashboard.overdue.count > dashboard.overdue.entries.length && <p className="mt-3 text-xs text-muted-foreground">Mostrando {dashboard.overdue.entries.length} de {dashboard.overdue.count}. <Link to="/lancamentos" className="font-semibold text-primary hover:underline">Ver lançamentos</Link></p>}</> : <EmptyState title="Nenhuma conta atrasada" description="Todas as despesas vencidas deste espaço foram resolvidas." />}
+        </CardContent></Card>
+      </section>
+      <p className="mt-4 rounded-xl border border-border bg-card px-4 py-3 text-xs leading-5 text-muted-foreground">O resultado do período resume lançamentos previstos ou realizados. Não representa o saldo de uma conta bancária.</p>
+    </div>}
   </>;
 }
 

@@ -2,6 +2,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
+import { currentMonthInputValue } from './lib/finance';
 
 const signedInState = {
   initialized: true,
@@ -9,17 +10,24 @@ const signedInState = {
   csrfToken: 'csrf-demo',
 };
 const demoMember = { id: 'demo-user', name: 'Pessoa de exemplo', email: 'demo@example.test', role: 'admin', is_active: true };
+const demoDashboard = {
+  month: `${currentMonthInputValue()}-01`,
+  planned: { incomeCents: '780000', expenseCents: '346247', investmentCents: '50000', resultCents: '383753' },
+  realized: { incomeCents: '780000', expenseCents: '346247', investmentCents: '50000', resultCents: '383753' },
+  upcoming: { count: 0, entries: [] }, overdue: { count: 0, entries: [] },
+};
 
 async function renderSignedInApp() {
   render(<App />);
   await screen.findByRole('heading', { name: 'Visão geral' });
+  await screen.findByRole('table', { name: /Valores previstos e realizados/ });
 }
 
 beforeEach(() => {
   window.history.replaceState({}, '', '/');
   vi.stubGlobal('fetch', vi.fn().mockImplementation(async (input: string | URL | Request) => {
     const path = String(input);
-    const body = path === '/api/auth/state' ? signedInState : path === '/api/members' ? { members: [demoMember] } : path === '/api/members/invitations' ? { invitations: [] } : {};
+    const body = path === '/api/auth/state' ? signedInState : path.startsWith('/api/dashboard?') ? demoDashboard : path === '/api/members' ? { members: [demoMember] } : path === '/api/members/invitations' ? { invitations: [] } : {};
     return { ok: true, json: async () => body };
   }));
 });
@@ -27,13 +35,13 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('application navigation and preview screens', () => {
-  it('shows the monthly dashboard with fictional financial examples', async () => {
+  it('shows the monthly dashboard with data from its summary endpoint', async () => {
     await renderSignedInApp();
 
     expect(screen.getByRole('heading', { name: 'Visão geral' })).toBeInTheDocument();
-    expect(screen.getByText('Outubro de 2026')).toBeInTheDocument();
+    expect(screen.getByLabelText('Mês do painel')).toHaveValue(currentMonthInputValue());
     expect(screen.getAllByText(/7\.800,00/)).toHaveLength(2);
-    expect(screen.getByText(/dados fictícios/i)).toBeInTheDocument();
+    expect(screen.getByText(/não representa o saldo de uma conta bancária/i)).toBeInTheDocument();
   });
 
   it('opens the saved transaction list from the main navigation', async () => {

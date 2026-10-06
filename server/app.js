@@ -9,6 +9,7 @@ import { createCatalogRouter } from './routes/catalog.js';
 import { createEntriesRouter } from './routes/entries.js';
 import { createMembersRouter } from './routes/members.js';
 import { createRecurrencesRouter } from './routes/recurrences.js';
+import { createDashboardRouter } from './routes/dashboard.js';
 
 const clientDist = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -30,6 +31,7 @@ export function createApp({ pool, secureCookies = process.env.COOKIE_SECURE === 
     app.use('/api/entries', createEntriesRouter({ pool, secureCookies, csrfSecret }));
     app.use('/api/members', createMembersRouter({ pool, secureCookies, csrfSecret }));
     app.use('/api/recurrences', createRecurrencesRouter({ pool, secureCookies, csrfSecret }));
+    app.use('/api/dashboard', createDashboardRouter({ pool, secureCookies }));
   }
 
   if (fs.existsSync(clientDist)) {
