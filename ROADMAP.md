@@ -21,7 +21,7 @@ Backlog inicial da primeira versão. Concluir dependências antes de iniciar uma
 - [x] [Cadastrar receitas, despesas e aportes](https://github.com/csescobar/conta-clara/issues/9) — dependências: #8.
 - [x] [Confirmar pagamentos e recebimentos](https://github.com/csescobar/conta-clara/issues/10) — dependências: #9.
 - [x] [Registrar autoria das alterações](https://github.com/csescobar/conta-clara/issues/11) — dependências: #10.
-- [ ] [Gerar recorrências mensais](https://github.com/csescobar/conta-clara/issues/12) — dependências: #11.
+- [x] [Gerar recorrências mensais](https://github.com/csescobar/conta-clara/issues/12) — dependências: #11.
 
 ## 4. Visão e migração
 
