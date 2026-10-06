@@ -10,7 +10,7 @@ O manifesto e o service worker habilitam a instalação do Conta Clara como apli
 
 ## Limites do modo offline
 
-O primeiro acesso precisa estar online para instalar o service worker e baixar a interface. Respostas de `/api` nunca entram no cache HTTP do service worker. Depois que a identidade foi verificada e páginas foram consultadas, uma cópia dos dados selecionados pode ser lida e alterada offline pelo armazenamento separado em IndexedDB. Ao abrir a PWA offline, o shell é mostrado e a aplicação tenta restaurar a última identidade verificada no aparelho. A fila permanece local: a sincronização automática e o tratamento de conflitos fazem parte da issue [#19](https://github.com/csescobar/conta-clara/issues/19). Veja [docs/offline-storage.md](offline-storage.md) para prazo de acesso, descarte de alterações e demais limites.
+O primeiro acesso precisa estar online para instalar o service worker e baixar a interface. Respostas de `/api` nunca entram no cache HTTP do service worker. Depois que a identidade foi verificada e páginas foram consultadas, uma cópia dos dados selecionados pode ser lida e alterada offline pelo armazenamento separado em IndexedDB. Ao abrir a PWA offline, o shell é mostrado e a aplicação tenta restaurar a última identidade verificada no aparelho. Ao autenticar e reconectar, a fila sincroniza ao abrir, focar a aplicação ou pela ação manual; o navegador não usa Background Sync. Veja [docs/offline-storage.md](offline-storage.md) para prazo de acesso e descarte, e [docs/synchronization.md](synchronization.md) para idempotência e conflitos.
 
 ## Atualização e limpeza
 

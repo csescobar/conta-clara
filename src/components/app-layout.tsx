@@ -1,10 +1,11 @@
-import { ArrowLeftRight, History, House, LogOut, Repeat2, Settings, WalletCards } from 'lucide-react';
+import { ArrowLeftRight, History, House, LogOut, RefreshCw, Repeat2, Settings, WalletCards } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 import { Button } from './ui/button';
 import type { AuthUser } from '../auth/auth-page';
 import { cn } from '../lib/utils';
 import { useOfflineWorkspace } from '../offline/offline-context';
+import { formatBrazilianMoney, formatBrazilianMonth } from '../lib/finance';
 
 const links = [
   { to: '/', label: 'Visão geral', Icon: House, end: true },
@@ -45,7 +46,7 @@ function Navigation({ mobile = false }: { mobile?: boolean }) {
   );
 }
 
-export function AppLayout({ user, onLogout, notice, children }: { user: AuthUser; onLogout: () => void; notice?: string; children: ReactNode }) {
+export function AppLayout({ user, csrfToken, onLogout, notice, children }: { user: AuthUser; csrfToken: string; onLogout: () => void; notice?: string; children: ReactNode }) {
   const offline = useOfflineWorkspace();
   const lastUpdated = offline?.lastSyncedAt
     ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Sao_Paulo' }).format(new Date(offline.lastSyncedAt))
@@ -56,9 +57,12 @@ export function AppLayout({ user, onLogout, notice, children }: { user: AuthUser
       ? 'Preparando os dados offline deste usuário…'
       : !offline.online
         ? `Sem conexão de rede${offline.pendingCount ? ` · ${offline.pendingCount} ${offline.pendingCount === 1 ? 'alteração pendente' : 'alterações pendentes'}` : ''}.`
+        : offline.syncing
+          ? `Sincronizando ${offline.pendingCount} ${offline.pendingCount === 1 ? 'alteração' : 'alterações'}…`
         : offline.pendingCount
           ? `Rede conectada · ${offline.pendingCount} ${offline.pendingCount === 1 ? 'alteração aguarda' : 'alterações aguardam'} sincronização.`
           : 'Rede conectada · nenhuma alteração pendente.';
+  const conflicts = offline?.operations.filter((operation) => operation.conflict) ?? [];
 
   return (
     <div className="min-h-screen lg:flex">
@@ -79,7 +83,30 @@ export function AppLayout({ user, onLogout, notice, children }: { user: AuthUser
           {offline && <div role="status" aria-live="polite" className={`mb-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-xl border px-4 py-2.5 text-xs leading-5 ${offline.online && offline.pendingCount === 0 ? 'border-border bg-card text-muted-foreground' : 'border-amber-200 bg-amber-50 text-amber-950'}`}>
             <span>{offlineMessage}</span>
             {lastUpdated && <span>Última atualização online: <time dateTime={offline.lastSyncedAt ?? undefined}>{lastUpdated}</time></span>}
+            {offline.pendingCount > 0 && <Button type="button" size="sm" variant="outline" disabled={typeof navigator !== 'undefined' && !navigator.onLine || offline.syncing || !csrfToken} onClick={() => { offline.setOnline(true); void offline.sync(csrfToken); }}><RefreshCw aria-hidden="true" className={`size-3.5 ${offline.syncing ? 'animate-spin' : ''}`} />Sincronizar agora</Button>}
           </div>}
+          {offline && conflicts.length > 0 && <section aria-labelledby="sync-conflicts-heading" className="mb-5 grid gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+            <div><h2 id="sync-conflicts-heading" className="font-semibold">Escolha como resolver {conflicts.length === 1 ? 'este conflito' : 'estes conflitos'}</h2><p className="mt-1 text-xs leading-5">Uma alteração feita em outro aparelho chegou enquanto você estava offline. Compare as versões e escolha qual manter.</p></div>
+            {conflicts.map((operation) => {
+              const localEntry = offline.entries.find((entry) => entry.id === operation.entryId);
+              const serverEntry = operation.conflict!.serverEntry;
+              const entryName = localEntry?.description ?? serverEntry?.description ?? 'Lançamento removido';
+              const summarize = (entry: NonNullable<typeof serverEntry>) => `${entry.description} · ${formatBrazilianMoney(entry.planned_cents)} · ${formatBrazilianMonth(entry.competence_on)}`;
+              const serverDescription = serverEntry
+                ? summarize(serverEntry)
+                : operation.conflict!.reason === 'id_collision' ? 'Outro lançamento usa este identificador.' : 'O lançamento foi removido do servidor.';
+              const localDescription = operation.kind === 'delete' ? 'Excluir lançamento' : localEntry ? summarize(localEntry) : 'Versão local indisponível';
+              return <article key={operation.operationId} className="grid gap-2 rounded-xl border border-amber-200 bg-white/70 p-3">
+                <h3 className="font-medium">{entryName}</h3>
+                <div className="grid gap-1 text-xs sm:grid-cols-2"><p><strong>Sua versão:</strong> {localDescription}</p><p><strong>Servidor:</strong> {serverDescription}</p></div>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" size="sm" variant="outline" disabled={offline.syncing} onClick={() => void offline.resolveConflict(operation.operationId, 'local').then(() => typeof navigator !== 'undefined' && navigator.onLine && csrfToken ? offline.sync(csrfToken) : undefined)}>{serverEntry ? 'Usar versão local' : operation.kind === 'delete' ? 'Manter exclusão local' : 'Recriar minha versão'}</Button>
+                  <Button type="button" size="sm" variant="outline" disabled={offline.syncing} onClick={() => void offline.resolveConflict(operation.operationId, 'server').then(() => typeof navigator !== 'undefined' && navigator.onLine && csrfToken ? offline.sync(csrfToken) : undefined)}>{serverEntry ? 'Usar versão do servidor' : 'Descartar versão local'}</Button>
+                </div>
+              </article>;
+            })}
+          </section>}
+          {offline?.syncError && <p role="alert" className="mb-5 rounded-xl bg-[#fdecec] px-4 py-3 text-sm font-medium text-destructive">{offline.syncError}</p>}
           {children}
         </main>
       </div>

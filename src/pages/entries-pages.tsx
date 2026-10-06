@@ -19,7 +19,7 @@ type Category = { id: string; name: string; kind: EntryKind; expense_class: 'fix
 type PaymentMethod = { id: string; name: string; archived_at: string | null };
 type Entry = OfflineEntry;
 
-type ApiResponse = { error?: string; entries?: Entry[]; entry?: Entry; categories?: Category[]; paymentMethods?: PaymentMethod[] };
+type ApiResponse = { error?: string; entries?: Entry[]; entry?: Entry; categories?: Category[]; paymentMethods?: PaymentMethod[]; conflict?: boolean; serverEntry?: Entry | null };
 const kindLabels: Record<EntryKind, string> = { income: 'Receita', expense: 'Despesa', investment: 'Aporte' };
 const statusLabels: Record<EntryStatus, string> = { pending: 'Em aberto', late: 'Atrasado', paid: 'Pago' };
 const emptyOfflineSnapshot: OfflineWorkspaceSnapshot = { entries: [], categories: [], paymentMethods: [], operations: [], lastSyncedAt: null };
@@ -38,6 +38,7 @@ export function TransactionsPage() {
   const offline = useOfflineWorkspace();
   const offlineRef = useRef(offline);
   offlineRef.current = offline;
+  const offlineOperationKey = offline?.operations.map((operation) => `${operation.operationId}:${operation.conflict?.reason ?? ''}`).join('|') ?? '';
   const [month, setMonth] = useState(currentMonthInputValue());
   const [categoryId, setCategoryId] = useState('');
   const [status, setStatus] = useState('');
@@ -122,7 +123,7 @@ export function TransactionsPage() {
     return () => { active = false; };
   }, [offline?.online, offline?.ready]);
 
-  useEffect(() => { void loadEntries(); }, [loadEntries, offline?.online, offline?.ready]);
+  useEffect(() => { void loadEntries(); }, [loadEntries, offline?.online, offline?.pendingCount, offline?.ready, offlineOperationKey]);
 
   async function deleteEntry(entry: Entry) {
     if (!window.confirm(`Excluir “${entry.description}”? Esta ação não pode ser desfeita.`)) return;
@@ -131,7 +132,7 @@ export function TransactionsPage() {
     const currentOffline = offlineRef.current;
     const queueDelete = async () => {
       if (!currentOffline?.supported) throw new Error('O armazenamento offline não está disponível neste navegador.');
-      await currentOffline.queueDelete(entry.id);
+      await currentOffline.queueDelete(entry);
       setEntries((current) => current.filter((item) => item.id !== entry.id));
     };
     try {
@@ -142,11 +143,15 @@ export function TransactionsPage() {
       const response = await fetch(`/api/entries/${entry.id}`, {
         method: 'DELETE',
         credentials: 'same-origin',
-        headers: { 'X-CSRF-Token': auth?.csrfToken ?? '' },
+        headers: { 'X-CSRF-Token': auth?.csrfToken ?? '', 'X-Entry-Version': String(entry.version ?? 1) },
       });
       const result = await readApi(response);
       if (!response.ok) {
         if (currentOffline && isAuthenticationFailure(response)) currentOffline.invalidateSession();
+        if (response.status === 409 && result.conflict && currentOffline?.supported) {
+          await queueDelete();
+          return;
+        }
         throw new Error(result.error ?? 'Não foi possível excluir o lançamento.');
       }
       await currentOffline?.removeCachedEntry(entry.id);
@@ -190,7 +195,7 @@ export function TransactionsPage() {
       const response = await fetch(`/api/entries/${entry.id}/confirm`, {
         method: 'POST',
         credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': auth?.csrfToken ?? '' },
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': auth?.csrfToken ?? '', 'X-Entry-Version': String(entry.version ?? 1) },
         body: JSON.stringify({ actualCents, realizedOn }),
       });
       const result = await readApi(response);
@@ -216,7 +221,7 @@ export function TransactionsPage() {
       const response = await fetch(`/api/entries/${entry.id}/confirm`, {
         method: 'DELETE',
         credentials: 'same-origin',
-        headers: { 'X-CSRF-Token': auth?.csrfToken ?? '' },
+        headers: { 'X-CSRF-Token': auth?.csrfToken ?? '', 'X-Entry-Version': String(entry.version ?? 1) },
       });
       const result = await readApi(response);
       if (!response.ok) {
@@ -232,7 +237,7 @@ export function TransactionsPage() {
     }
   }
 
-  const confirmationBlocked = Boolean(offline && (!offline.online || offline.pendingCount > 0));
+  const confirmationBlocked = Boolean(offline && (!offline.online || offline.pendingCount > 0 || offline.syncing));
 
   return <>
     <PageHeader eyebrow="Movimentações" title="Lançamentos" description="Acompanhe receitas, despesas e aportes do espaço compartilhado." action={<div className="flex flex-wrap gap-2"><Button type="button" variant="outline" disabled={loading || entries.length === 0} onClick={() => downloadCsv(serializeEntriesCsv(entries), entriesCsvFilename(month))}><Download aria-hidden="true" className="size-4" />Exportar CSV</Button><Button asChild variant="outline"><Link to="/importar"><Upload aria-hidden="true" className="size-4" />Importar planilha</Link></Button><Button asChild><Link to="/lancamentos/novo"><Plus aria-hidden="true" className="size-4" />Adicionar lançamento</Link></Button></div>} />
@@ -256,7 +261,7 @@ export function TransactionsPage() {
               <span className={`grid size-10 shrink-0 place-items-center rounded-xl ${entry.kind === 'income' ? 'bg-[#e8f5ed] text-success' : entry.kind === 'investment' ? 'bg-accent text-accent-foreground' : 'bg-muted text-muted-foreground'}`}><Icon aria-hidden="true" className="size-[18px]" /></span>
               <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{entry.description}</p><p className="mt-0.5 text-xs leading-5 text-muted-foreground">{kindLabels[entry.kind]} · {entry.category_name ?? 'Sem categoria'} · Competência {formatBrazilianMonth(entry.competence_on)} · Vencimento {formatBrazilianDate(entry.due_on)}{entry.realized_on ? ` · Realizado ${formatBrazilianDate(entry.realized_on)}` : ''}{pendingOperation && <span className="ml-1 font-semibold text-amber-800">· Pendente neste aparelho</span>}</p></div>
               <div className="grid shrink-0 justify-items-end gap-1"><p className={`text-sm font-semibold tabular-nums ${entry.kind === 'income' ? 'text-success' : 'text-foreground'}`}>{formatBrazilianMoney(entry.actual_cents ?? entry.planned_cents)}</p>{entry.actual_cents !== null && <p className="text-xs text-muted-foreground">Previsto {formatBrazilianMoney(entry.planned_cents)}</p>}<StatusBadge status={entry.status} aria-label={`Situação: ${statusLabels[entry.status]}`} /></div>
-              <div className="flex w-full flex-wrap justify-end gap-1 sm:w-auto">{entry.actual_cents === null ? <Button type="button" size="sm" variant="outline" disabled={busyEntryId === entry.id || confirmationBlocked} aria-label={`Confirmar ${entry.description}`} onClick={() => startConfirmation(entry)}><CalendarDays aria-hidden="true" className="size-4" />Confirmar</Button> : <Button type="button" size="sm" variant="ghost" disabled={busyEntryId === entry.id || confirmationBlocked} aria-label={`Desfazer confirmação ${entry.description}`} onClick={() => void undoConfirmation(entry)}>Desfazer confirmação</Button>}<Button asChild size="sm" variant="ghost"><Link aria-label={`Editar ${entry.description}`} to={`/lancamentos/${entry.id}/editar`}><Pencil aria-hidden="true" className="size-4" />Editar</Link></Button><Button type="button" size="sm" variant="ghost" disabled={busyEntryId === entry.id} aria-label={`Excluir ${entry.description}`} onClick={() => void deleteEntry(entry)}><Trash2 aria-hidden="true" className="size-4" />Excluir</Button></div>
+              <div className="flex w-full flex-wrap justify-end gap-1 sm:w-auto">{entry.actual_cents === null ? <Button type="button" size="sm" variant="outline" disabled={busyEntryId === entry.id || confirmationBlocked} aria-label={`Confirmar ${entry.description}`} onClick={() => startConfirmation(entry)}><CalendarDays aria-hidden="true" className="size-4" />Confirmar</Button> : <Button type="button" size="sm" variant="ghost" disabled={busyEntryId === entry.id || confirmationBlocked} aria-label={`Desfazer confirmação ${entry.description}`} onClick={() => void undoConfirmation(entry)}>Desfazer confirmação</Button>}{pendingOperation?.conflict ? <Button type="button" size="sm" variant="ghost" disabled aria-label={`Editar ${entry.description}`}><Pencil aria-hidden="true" className="size-4" />Editar</Button> : <Button asChild size="sm" variant="ghost"><Link aria-label={`Editar ${entry.description}`} to={`/lancamentos/${entry.id}/editar`}><Pencil aria-hidden="true" className="size-4" />Editar</Link></Button>}<Button type="button" size="sm" variant="ghost" disabled={busyEntryId === entry.id || offline?.syncing || Boolean(pendingOperation?.conflict)} aria-label={`Excluir ${entry.description}`} onClick={() => void deleteEntry(entry)}><Trash2 aria-hidden="true" className="size-4" />Excluir</Button></div>
               {confirmingEntryId === entry.id && <form aria-label={`Confirmar lançamento ${entry.description}`} onSubmit={(event) => void confirmEntry(event, entry)} className="grid w-full gap-3 rounded-xl border border-border bg-muted/40 p-3 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-end"><FormField id={`actual-amount-${entry.id}`} label="Valor realizado (R$)"><Input required inputMode="decimal" value={actualAmount} onChange={(event) => setActualAmount(event.target.value)} /></FormField><FormField id={`actual-date-${entry.id}`} label="Data de realização" hint="DD/MM/AAAA"><Input required inputMode="numeric" maxLength={10} value={actualDate} onChange={(event) => setActualDate(event.target.value)} /></FormField><Button type="submit" size="sm" disabled={busyEntryId === entry.id || confirmationBlocked}>{busyEntryId === entry.id ? 'Salvando…' : 'Salvar realização'}</Button><Button type="button" size="sm" variant="outline" onClick={() => setConfirmingEntryId('')}>Cancelar</Button></form>}
             </li>;
           })}</ul> : <EmptyState title="Nenhum lançamento encontrado" description="Ajuste os filtros ou adicione a primeira movimentação deste período." action={<Button asChild><Link to="/lancamentos/novo"><Plus aria-hidden="true" className="size-4" />Adicionar lançamento</Link></Button>} />}
@@ -271,6 +276,7 @@ export function NewTransactionPage() {
   const offline = useOfflineWorkspace();
   const offlineRef = useRef(offline);
   offlineRef.current = offline;
+  const offlineOperationKey = offline?.operations.map((operation) => `${operation.operationId}:${operation.conflict?.reason ?? ''}`).join('|') ?? '';
   const { id } = useParams();
   const navigate = useNavigate();
   const editing = Boolean(id);
@@ -287,11 +293,13 @@ export function NewTransactionPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [baseVersion, setBaseVersion] = useState<number | null>(null);
 
   useEffect(() => {
     let active = true;
     const currentOffline = offlineRef.current;
     function applyCachedForm(entry: Entry | undefined, cachedCategories: Category[], cachedMethods: PaymentMethod[]) {
+      setBaseVersion(entry?.version ?? null);
       setCategories(cachedCategories.filter((category) => !category.archived_at || category.id === entry?.category_id));
       setPaymentMethods(cachedMethods.filter((method) => !method.archived_at || method.id === entry?.payment_method_id));
       if (entry) {
@@ -357,7 +365,7 @@ export function NewTransactionPage() {
     }
     void loadForm();
     return () => { active = false; };
-  }, [id, offline?.online, offline?.ready]);
+  }, [id, offline?.online, offline?.ready, offlineOperationKey]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -387,6 +395,7 @@ export function NewTransactionPage() {
       plannedCents,
       paymentMethodId: paymentMethodId || null,
       notes: notes.trim() || null,
+      baseVersion: editing ? baseVersion ?? 1 : undefined,
     };
 
     async function saveOffline() {
@@ -419,6 +428,10 @@ export function NewTransactionPage() {
       const result = await readApi(response);
       if (!response.ok) {
         if (currentOffline && isAuthenticationFailure(response)) currentOffline.invalidateSession();
+        if (response.status === 409 && result.conflict && currentOffline?.supported) {
+          await saveOffline();
+          return;
+        }
         throw new Error(result.error ?? 'Não foi possível salvar o lançamento.');
       }
       if (result.entry) await currentOffline?.cacheEntries([result.entry]);
@@ -457,7 +470,7 @@ export function NewTransactionPage() {
         </div>
         <SelectField id="entry-payment-method" label="Forma de pagamento" value={paymentMethodId} onChange={setPaymentMethodId}><option value="">Não definida</option>{paymentMethods.map((method) => <option key={method.id} value={method.id}>{method.name}{method.archived_at ? ' (arquivada)' : ''}</option>)}</SelectField>
         <div className="grid gap-2"><label htmlFor="entry-notes" className="text-sm font-medium">Observações</label><textarea id="entry-notes" maxLength={2000} rows={3} className="w-full rounded-xl border border-input bg-card px-3.5 py-3 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20" value={notes} onChange={(event) => setNotes(event.target.value)} /></div>
-        <div className="flex flex-wrap gap-2"><Button type="submit" disabled={busy}><Plus aria-hidden="true" className="size-4" />{busy ? 'Salvando…' : editing ? 'Salvar alterações' : 'Salvar lançamento'}</Button><Button asChild type="button" variant="outline"><Link to="/lancamentos">Cancelar</Link></Button></div>
+        <div className="flex flex-wrap gap-2"><Button type="submit" disabled={busy || offline?.syncing}><Plus aria-hidden="true" className="size-4" />{busy ? 'Salvando…' : editing ? 'Salvar alterações' : 'Salvar lançamento'}</Button><Button asChild type="button" variant="outline"><Link to="/lancamentos">Cancelar</Link></Button></div>
       </form>
     </CardContent></Card>
   </>;

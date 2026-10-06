@@ -132,7 +132,7 @@ describe.skipIf(!testDatabaseUrl)('financial entry routes with PostgreSQL', () =
     expect(expense.body.entry).toMatchObject({
       kind: 'expense', description: 'Conta residencial', category_name: 'Casa', competence_on: '2026-10-01',
       due_on: '2026-10-10', planned_cents: '145600', payment_method_name: 'Pix', status: 'pending',
-      created_by_user_id: member.id, updated_by_user_id: member.id,
+      created_by_user_id: member.id, updated_by_user_id: member.id, version: 1,
     });
     const income = await sessionRequest('post', '/api/entries', adminSession, adminState.body.csrfToken, {
       kind: 'income', description: 'Salário', categoryId: incomeCategory.body.category.id,
@@ -190,6 +190,7 @@ describe.skipIf(!testDatabaseUrl)('financial entry routes with PostgreSQL', () =
     expect(confirmed.body.entry).toMatchObject({
       competence_on: '2026-10-01', due_on: '2000-01-01', planned_cents: '9900',
       actual_cents: '9700', realized_on: '2026-11-02', status: 'paid', updated_by_user_id: member.id,
+      version: 2,
     });
     await sessionRequest('post', `/api/entries/${overdueExpense.body.entry.id}/confirm`, adminSession, adminState.body.csrfToken, {
       actualCents: 9700, realizedOn: '2026-11-02',
@@ -201,6 +202,7 @@ describe.skipIf(!testDatabaseUrl)('financial entry routes with PostgreSQL', () =
     expect(undone.body.entry).toMatchObject({
       competence_on: '2026-10-01', planned_cents: '9900', actual_cents: null, realized_on: null,
       status: 'late', updated_by_user_id: admin.id,
+      version: 3,
     });
     await sessionRequest('delete', `/api/entries/${overdueExpense.body.entry.id}/confirm`, memberSession, memberState.body.csrfToken).expect(409);
     await sessionRequest('get', '/api/entries?month=2026-10&status=late', memberSession, memberState.body.csrfToken).expect(200)
@@ -209,9 +211,14 @@ describe.skipIf(!testDatabaseUrl)('financial entry routes with PostgreSQL', () =
     const updated = await sessionRequest('put', `/api/entries/${expense.body.entry.id}`, adminSession, adminState.body.csrfToken, {
       kind: 'expense', description: 'Moradia', categoryId: expenseCategory.body.category.id,
       competenceOn: '2026-10-01', dueOn: '2026-10-12', plannedCents: 150000,
-      paymentMethodId: paymentMethod.body.paymentMethod.id, notes: null,
+      paymentMethodId: paymentMethod.body.paymentMethod.id, notes: null, baseVersion: 1,
     }).expect(200);
-    expect(updated.body.entry).toMatchObject({ description: 'Moradia', due_on: '2026-10-12', planned_cents: '150000', updated_by_user_id: admin.id });
+    expect(updated.body.entry).toMatchObject({ description: 'Moradia', due_on: '2026-10-12', planned_cents: '150000', updated_by_user_id: admin.id, version: 2 });
+    await sessionRequest('put', `/api/entries/${expense.body.entry.id}`, memberSession, memberState.body.csrfToken, {
+      kind: 'expense', description: 'Edição antiga', categoryId: expenseCategory.body.category.id,
+      competenceOn: '2026-10-01', dueOn: '2026-10-12', plannedCents: 150000,
+      paymentMethodId: paymentMethod.body.paymentMethod.id, notes: null, baseVersion: 1,
+    }).expect(409).expect(({ body }) => expect(body).toMatchObject({ conflict: true, serverEntry: { version: 2, description: 'Moradia' } }));
     await sessionRequest('put', `/api/entries/${expense.body.entry.id}`, otherSpace.sessionToken, memberState.body.csrfToken, {
       kind: 'expense', description: 'Tentativa externa', categoryId: null,
       competenceOn: '2026-10-01', plannedCents: 1,

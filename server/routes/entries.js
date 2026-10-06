@@ -24,7 +24,7 @@ function parseOptionalId(value) {
   return isUuid(value) ? value : undefined;
 }
 
-function parseEntry(body) {
+export function parseEntry(body) {
   const kind = body?.kind;
   const description = typeof body?.description === 'string' ? body.description.trim() : '';
   const competenceOn = body?.competenceOn;
@@ -48,7 +48,7 @@ function parseRealization(body) {
   return { actualCents, realizedOn };
 }
 
-async function validateReferences(client, spaceId, entry, current = {}) {
+export async function validateReferences(client, spaceId, entry, current = {}) {
   if (entry.categoryId) {
     const category = await client.query(`
       SELECT kind FROM categories
@@ -69,14 +69,14 @@ async function validateReferences(client, spaceId, entry, current = {}) {
   return null;
 }
 
-async function selectEntry(client, spaceId, entryId) {
+export async function selectEntry(client, spaceId, entryId) {
   const result = await client.query(`
     SELECT e.id, e.kind, e.description, e.category_id, c.name AS category_name,
       e.competence_on::text AS competence_on, e.due_on::text AS due_on,
       e.planned_cents, e.actual_cents, e.realized_on::text AS realized_on,
       e.payment_method_id, pm.name AS payment_method_name, e.notes,
       e.recurrence_rule_id, e.recurrence_overridden,
-      e.created_by_user_id, e.updated_by_user_id, e.created_at, e.updated_at,
+      e.created_by_user_id, e.updated_by_user_id, e.version, e.created_at, e.updated_at,
       CASE
         WHEN e.actual_cents IS NOT NULL THEN 'paid'
         WHEN e.kind = 'expense' AND e.due_on < (now() AT TIME ZONE 'America/Sao_Paulo')::date THEN 'late'
@@ -88,6 +88,17 @@ async function selectEntry(client, spaceId, entryId) {
     WHERE e.id = $1 AND e.space_id = $2 AND NOT e.recurrence_skipped
   `, [entryId, spaceId]);
   return result.rows[0] ?? null;
+}
+
+function requestedBaseVersion(request) {
+  const value = request.body?.baseVersion ?? request.get('x-entry-version');
+  if (value === undefined) return null;
+  const version = typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : value;
+  return Number.isSafeInteger(version) && version > 0 ? version : undefined;
+}
+
+function versionConflict(response, entry) {
+  return response.status(409).json({ error: 'Este lançamento mudou em outro aparelho. Escolha qual versão manter.', conflict: true, serverEntry: entry });
 }
 
 export function createEntriesRouter({ pool, secureCookies = false, csrfSecret }) {
@@ -115,7 +126,7 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
           e.planned_cents, e.actual_cents, e.realized_on::text AS realized_on,
           e.payment_method_id, pm.name AS payment_method_name, e.notes,
           e.recurrence_rule_id, e.recurrence_overridden,
-          e.created_by_user_id, e.updated_by_user_id, e.created_at, e.updated_at,
+          e.created_by_user_id, e.updated_by_user_id, e.version, e.created_at, e.updated_at,
           CASE
             WHEN e.actual_cents IS NOT NULL THEN 'paid'
             WHEN e.kind = 'expense' AND e.due_on < (now() AT TIME ZONE 'America/Sao_Paulo')::date THEN 'late'
@@ -186,16 +197,22 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
     if (!isUuid(request.params.id)) return response.status(404).json({ error: 'Lançamento não encontrado.' });
     const entry = parseEntry(request.body);
     if (!entry) return response.status(400).json({ error: 'Confira o tipo, a descrição, as datas, o valor e os identificadores.' });
+    const baseVersion = requestedBaseVersion(request);
+    if (baseVersion === undefined) return response.status(400).json({ error: 'A versão-base do lançamento é inválida.' });
     let client;
     try {
       client = await pool.connect();
       await client.query('BEGIN');
-      const existing = await client.query('SELECT id, category_id, payment_method_id, recurrence_rule_id FROM financial_entries WHERE id = $1 AND space_id = $2 AND NOT recurrence_skipped FOR UPDATE', [request.params.id, request.auth.spaceId]);
+      const existing = await client.query('SELECT id, category_id, payment_method_id, recurrence_rule_id, version FROM financial_entries WHERE id = $1 AND space_id = $2 AND NOT recurrence_skipped FOR UPDATE', [request.params.id, request.auth.spaceId]);
       if (!existing.rows[0]) {
         await client.query('ROLLBACK');
         return response.status(404).json({ error: 'Lançamento não encontrado.' });
       }
       const before = await selectEntry(client, request.auth.spaceId, request.params.id);
+      if (baseVersion !== null && Number(existing.rows[0].version) !== baseVersion) {
+        await client.query('ROLLBACK');
+        return versionConflict(response, before);
+      }
       const referenceError = await validateReferences(client, request.auth.spaceId, entry, {
         categoryId: existing.rows[0].category_id,
         paymentMethodId: existing.rows[0].payment_method_id,
@@ -209,7 +226,7 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
           competence_on = $4, due_on = $5, planned_cents = $6,
           payment_method_id = $7, notes = $8,
           recurrence_overridden = CASE WHEN recurrence_rule_id IS NULL THEN recurrence_overridden ELSE true END,
-          updated_by_user_id = $9, updated_at = now()
+          updated_by_user_id = $9, updated_at = now(), version = version + 1
         WHERE id = $10 AND space_id = $11
       `, [entry.kind, entry.description, entry.categoryId, entry.competenceOn, entry.dueOn, entry.plannedCents, entry.paymentMethodId, entry.notes, request.auth.id, request.params.id, request.auth.spaceId]);
       const updated = await selectEntry(client, request.auth.spaceId, request.params.id);
@@ -232,19 +249,28 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
     try {
       client = await pool.connect();
       await client.query('BEGIN');
-      const existing = await client.query('SELECT actual_cents FROM financial_entries WHERE id = $1 AND space_id = $2 FOR UPDATE', [request.params.id, request.auth.spaceId]);
+      const existing = await client.query('SELECT actual_cents, version FROM financial_entries WHERE id = $1 AND space_id = $2 FOR UPDATE', [request.params.id, request.auth.spaceId]);
       if (!existing.rows[0]) {
         await client.query('ROLLBACK');
         return response.status(404).json({ error: 'Lançamento não encontrado.' });
+      }
+      const baseVersion = requestedBaseVersion(request);
+      if (baseVersion === undefined) {
+        await client.query('ROLLBACK');
+        return response.status(400).json({ error: 'A versão-base do lançamento é inválida.' });
+      }
+      const before = await selectEntry(client, request.auth.spaceId, request.params.id);
+      if (baseVersion !== null && Number(existing.rows[0].version) !== baseVersion) {
+        await client.query('ROLLBACK');
+        return versionConflict(response, before);
       }
       if (existing.rows[0].actual_cents !== null) {
         await client.query('ROLLBACK');
         return response.status(409).json({ error: 'Este lançamento já foi confirmado. Desfaça a confirmação antes de alterar o valor realizado.' });
       }
-      const before = await selectEntry(client, request.auth.spaceId, request.params.id);
       await client.query(`
         UPDATE financial_entries
-        SET actual_cents = $1, realized_on = $2, updated_by_user_id = $3, updated_at = now()
+        SET actual_cents = $1, realized_on = $2, updated_by_user_id = $3, updated_at = now(), version = version + 1
         WHERE id = $4 AND space_id = $5
       `, [realization.actualCents, realization.realizedOn, request.auth.id, request.params.id, request.auth.spaceId]);
       const confirmed = await selectEntry(client, request.auth.spaceId, request.params.id);
@@ -265,19 +291,28 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
     try {
       client = await pool.connect();
       await client.query('BEGIN');
-      const existing = await client.query('SELECT actual_cents FROM financial_entries WHERE id = $1 AND space_id = $2 FOR UPDATE', [request.params.id, request.auth.spaceId]);
+      const existing = await client.query('SELECT actual_cents, version FROM financial_entries WHERE id = $1 AND space_id = $2 FOR UPDATE', [request.params.id, request.auth.spaceId]);
       if (!existing.rows[0]) {
         await client.query('ROLLBACK');
         return response.status(404).json({ error: 'Lançamento não encontrado.' });
+      }
+      const baseVersion = requestedBaseVersion(request);
+      if (baseVersion === undefined) {
+        await client.query('ROLLBACK');
+        return response.status(400).json({ error: 'A versão-base do lançamento é inválida.' });
+      }
+      const before = await selectEntry(client, request.auth.spaceId, request.params.id);
+      if (baseVersion !== null && Number(existing.rows[0].version) !== baseVersion) {
+        await client.query('ROLLBACK');
+        return versionConflict(response, before);
       }
       if (existing.rows[0].actual_cents === null) {
         await client.query('ROLLBACK');
         return response.status(409).json({ error: 'Este lançamento ainda não foi confirmado.' });
       }
-      const before = await selectEntry(client, request.auth.spaceId, request.params.id);
       await client.query(`
         UPDATE financial_entries
-        SET actual_cents = NULL, realized_on = NULL, updated_by_user_id = $1, updated_at = now()
+        SET actual_cents = NULL, realized_on = NULL, updated_by_user_id = $1, updated_at = now(), version = version + 1
         WHERE id = $2 AND space_id = $3
       `, [request.auth.id, request.params.id, request.auth.spaceId]);
       const unconfirmed = await selectEntry(client, request.auth.spaceId, request.params.id);
@@ -298,15 +333,24 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
     try {
       client = await pool.connect();
       await client.query('BEGIN');
-      const existing = await client.query('SELECT id, recurrence_rule_id FROM financial_entries WHERE id = $1 AND space_id = $2 AND NOT recurrence_skipped FOR UPDATE', [request.params.id, request.auth.spaceId]);
+      const existing = await client.query('SELECT id, recurrence_rule_id, version FROM financial_entries WHERE id = $1 AND space_id = $2 AND NOT recurrence_skipped FOR UPDATE', [request.params.id, request.auth.spaceId]);
       if (!existing.rows[0]) {
         await client.query('ROLLBACK');
         return response.status(404).json({ error: 'Lançamento não encontrado.' });
       }
+      const baseVersion = requestedBaseVersion(request);
+      if (baseVersion === undefined) {
+        await client.query('ROLLBACK');
+        return response.status(400).json({ error: 'A versão-base do lançamento é inválida.' });
+      }
       const deleted = await selectEntry(client, request.auth.spaceId, request.params.id);
+      if (baseVersion !== null && Number(existing.rows[0].version) !== baseVersion) {
+        await client.query('ROLLBACK');
+        return versionConflict(response, deleted);
+      }
       await recordEntryAudit(client, { spaceId: request.auth.spaceId, actorUserId: request.auth.id, actorName: request.auth.name, entry: deleted, action: 'deleted', before: deleted });
       if (existing.rows[0].recurrence_rule_id) {
-        await client.query('UPDATE financial_entries SET recurrence_skipped = true, updated_by_user_id = $1, updated_at = now() WHERE id = $2 AND space_id = $3', [request.auth.id, request.params.id, request.auth.spaceId]);
+        await client.query('UPDATE financial_entries SET recurrence_skipped = true, updated_by_user_id = $1, updated_at = now(), version = version + 1 WHERE id = $2 AND space_id = $3', [request.auth.id, request.params.id, request.auth.spaceId]);
       } else {
         await client.query('DELETE FROM financial_entries WHERE id = $1 AND space_id = $2', [request.params.id, request.auth.spaceId]);
       }

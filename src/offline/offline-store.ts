@@ -17,10 +17,12 @@ export type OfflineEntry = {
   created_by_user_id: string;
   updated_by_user_id: string;
   status: 'pending' | 'late' | 'paid';
+  version?: number;
 };
 export type OfflineCategory = { id: string; name: string; kind: OfflineEntry['kind']; expense_class: 'fixed' | 'variable' | null; archived_at: string | null };
 export type OfflinePaymentMethod = { id: string; name: string; archived_at: string | null };
 export type OfflineOperationKind = 'create' | 'update' | 'delete';
+export type OfflineSyncConflict = { reason: 'version_mismatch' | 'server_deleted' | 'id_collision' | 'idempotency_key_reused'; serverEntry: OfflineEntry | null };
 export type OfflineOperation = {
   operationId: string;
   scope: string;
@@ -28,8 +30,10 @@ export type OfflineOperation = {
   spaceId: string;
   entryId: string;
   kind: OfflineOperationKind;
+  baseVersion: number | null;
   payload: Record<string, unknown> | null;
   queuedAt: string;
+  conflict?: OfflineSyncConflict;
 };
 export type OfflineWorkspaceSnapshot = {
   entries: OfflineEntry[];
@@ -49,7 +53,7 @@ type StoredDeviceSession = ScopedRecord & { user: OfflineUser; verifiedAt: strin
 type StoredDeviceLogout = ScopedRecord & { userId: string; spaceId: string; markedAt: string };
 
 const databaseName = 'conta-clara-offline';
-const databaseVersion = 1;
+const databaseVersion = 2;
 const deviceSessionKey = '@last-authenticated-user';
 const deviceLogoutKey = '@offline-logout';
 export const offlineSessionLeaseMs = 7 * 24 * 60 * 60 * 1000;
@@ -71,13 +75,34 @@ function openDatabase(): Promise<IDBDatabase> {
 
   databasePromise = new Promise((resolve, reject) => {
     const request = indexedDB.open(databaseName, databaseVersion);
-    request.onupgradeneeded = () => {
+    request.onupgradeneeded = (event) => {
       const database = request.result;
+      const transaction = request.transaction!;
       for (const name of storeNames) {
         const store = database.objectStoreNames.contains(name)
-          ? request.transaction!.objectStore(name)
+          ? transaction.objectStore(name)
           : database.createObjectStore(name, { keyPath: 'key' });
         if (!store.indexNames.contains('scope')) store.createIndex('scope', 'scope', { unique: false });
+      }
+      if (event.oldVersion < 2) {
+        const entries = transaction.objectStore('entries').openCursor();
+        entries.onsuccess = () => {
+          const cursor = entries.result;
+          if (!cursor) return;
+          const record = cursor.value as StoredEntry;
+          if (typeof record.entry.version !== 'number') cursor.update({ ...record, entry: { ...record.entry, version: 1 } } satisfies StoredEntry);
+          cursor.continue();
+        };
+        const operations = transaction.objectStore('operations').openCursor();
+        operations.onsuccess = () => {
+          const cursor = operations.result;
+          if (!cursor) return;
+          const record = cursor.value as StoredOperation;
+          if (typeof record.baseVersion === 'undefined') {
+            cursor.update({ ...record, baseVersion: record.kind === 'create' ? null : 1 } satisfies StoredOperation);
+          }
+          cursor.continue();
+        };
       }
     };
     request.onsuccess = () => {
@@ -201,6 +226,7 @@ export async function queueOfflineEntryChange(scope: OfflineScope, entry: Offlin
       entryId: entry.id,
       operationId: prior?.operationId ?? crypto.randomUUID(),
       kind: operationKind,
+      baseVersion: prior ? prior.baseVersion : operationKind === 'create' ? null : entry.version ?? 1,
       payload: entryPayload(entry),
       queuedAt: prior?.queuedAt ?? now,
     } satisfies StoredOperation);
@@ -209,27 +235,151 @@ export async function queueOfflineEntryChange(scope: OfflineScope, entry: Offlin
   await transactionDone(transaction);
 }
 
-export async function queueOfflineEntryDelete(scope: OfflineScope, entryId: string, now = new Date().toISOString()) {
+export async function queueOfflineEntryDelete(scope: OfflineScope, entry: OfflineEntry, now = new Date().toISOString()) {
   const database = await openDatabase();
   const scopeKey = offlineScopeKey(scope);
-  const key = recordKey(scope, entryId);
+  const key = recordKey(scope, entry.id);
   const transaction = database.transaction(['entries', 'operations'], 'readwrite');
   const operationStore = transaction.objectStore('operations');
   const previous = operationStore.get(key) as IDBRequest<StoredOperation | undefined>;
   previous.onsuccess = () => {
-    transaction.objectStore('entries').delete(key);
-    if (previous.result?.kind === 'create') operationStore.delete(key);
-    else operationStore.put({
+      transaction.objectStore('entries').delete(key);
+      if (previous.result?.kind === 'create') operationStore.delete(key);
+      else operationStore.put({
       key,
       scope: scopeKey,
       userId: scope.userId,
       spaceId: scope.spaceId,
-      entryId,
-      operationId: previous.result?.operationId ?? crypto.randomUUID(),
-      kind: 'delete',
-      payload: null,
+        entryId: entry.id,
+        operationId: previous.result?.operationId ?? crypto.randomUUID(),
+        kind: 'delete',
+        baseVersion: previous.result?.baseVersion ?? entry.version ?? 1,
+        payload: null,
       queuedAt: previous.result?.queuedAt ?? now,
     } satisfies StoredOperation);
+  };
+  await transactionDone(transaction);
+}
+
+export async function markOfflineConflict(scope: OfflineScope, sentOperation: OfflineOperation, conflict: OfflineSyncConflict) {
+  const database = await openDatabase();
+  const transaction = database.transaction(['operations'], 'readwrite');
+  const store = transaction.objectStore('operations');
+  const request = store.get(recordKey(scope, sentOperation.entryId)) as IDBRequest<StoredOperation | undefined>;
+  request.onsuccess = () => {
+    const current = request.result;
+    if (current?.operationId === sentOperation.operationId && current.baseVersion === sentOperation.baseVersion) store.put({ ...current, conflict } satisfies StoredOperation);
+  };
+  await transactionDone(transaction);
+}
+
+export type OfflineSyncResult = { entry?: OfflineEntry; deleted?: boolean };
+
+export async function acknowledgeOfflineOperation(scope: OfflineScope, sentOperation: OfflineOperation, result: OfflineSyncResult) {
+  const database = await openDatabase();
+  const scopeKey = offlineScopeKey(scope);
+  const key = recordKey(scope, sentOperation.entryId);
+  const transaction = database.transaction(['entries', 'operations', 'metadata'], 'readwrite');
+  const entryStore = transaction.objectStore('entries');
+  const operationStore = transaction.objectStore('operations');
+  const currentRequest = operationStore.get(key) as IDBRequest<StoredOperation | undefined>;
+  const localEntryRequest = entryStore.get(key) as IDBRequest<StoredEntry | undefined>;
+  let currentOperation: StoredOperation | undefined;
+  let localEntry: StoredEntry | undefined;
+  let completedReads = 0;
+  const finish = () => {
+    completedReads += 1;
+    if (completedReads < 2) return;
+    if (!currentOperation || currentOperation.operationId !== sentOperation.operationId) return;
+    const unchanged = currentOperation.kind === sentOperation.kind
+      && currentOperation.baseVersion === sentOperation.baseVersion
+      && JSON.stringify(currentOperation.payload) === JSON.stringify(sentOperation.payload);
+
+    if (unchanged) {
+      operationStore.delete(key);
+      if (result.deleted) entryStore.delete(key);
+      else if (result.entry) entryStore.put({ key, scope: scopeKey, entry: result.entry, isLocal: false } satisfies StoredEntry);
+    } else if (result.entry) {
+      if (currentOperation.kind === 'create') currentOperation.kind = 'update';
+      currentOperation.baseVersion = result.entry.version ?? 1;
+      currentOperation.operationId = crypto.randomUUID();
+      delete currentOperation.conflict;
+      operationStore.put(currentOperation);
+      if (localEntry) entryStore.put({ ...localEntry, entry: { ...localEntry.entry, version: result.entry.version ?? 1 }, isLocal: true } satisfies StoredEntry);
+    } else if (result.deleted && currentOperation.kind === 'delete') {
+      operationStore.delete(key);
+      entryStore.delete(key);
+    } else if (result.deleted && localEntry) {
+      const newEntryId = crypto.randomUUID();
+      const newKey = recordKey(scope, newEntryId);
+      entryStore.delete(key);
+      entryStore.put({ ...localEntry, key: newKey, entry: { ...localEntry.entry, id: newEntryId, version: undefined }, isLocal: true } satisfies StoredEntry);
+      operationStore.delete(key);
+      operationStore.put({ ...currentOperation, key: newKey, entryId: newEntryId, operationId: crypto.randomUUID(), kind: 'create', baseVersion: null, conflict: undefined } satisfies StoredOperation);
+    }
+    transaction.objectStore('metadata').put({ key: scopeKey, scope: scopeKey, lastSyncedAt: new Date().toISOString() } satisfies StoredMetadata);
+  };
+  currentRequest.onsuccess = () => { currentOperation = currentRequest.result; finish(); };
+  localEntryRequest.onsuccess = () => { localEntry = localEntryRequest.result; finish(); };
+  await transactionDone(transaction);
+}
+
+export async function resolveOfflineConflict(scope: OfflineScope, operationId: string, choice: 'local' | 'server') {
+  const database = await openDatabase();
+  const scopeKey = offlineScopeKey(scope);
+  const transaction = database.transaction(['entries', 'operations'], 'readwrite');
+  const entryStore = transaction.objectStore('entries');
+  const operationStore = transaction.objectStore('operations');
+  const operationsRequest = operationStore.index('scope').getAll(scopeKey) as IDBRequest<StoredOperation[]>;
+  operationsRequest.onsuccess = () => {
+    const operation = operationsRequest.result.find((item) => item.operationId === operationId && item.conflict);
+    if (!operation) return;
+    const key = recordKey(scope, operation.entryId);
+    const serverEntry = operation.conflict!.serverEntry;
+    if (choice === 'server') {
+      operationStore.delete(key);
+      if (serverEntry) entryStore.put({ key, scope: scopeKey, entry: serverEntry, isLocal: false } satisfies StoredEntry);
+      else entryStore.delete(key);
+      return;
+    }
+    if (operation.kind === 'delete' && !serverEntry && operation.conflict!.reason === 'server_deleted') {
+      operationStore.delete(key);
+      entryStore.delete(key);
+      return;
+    }
+    if (operation.kind === 'delete' && !serverEntry) {
+      operationStore.put({ ...operation, operationId: crypto.randomUUID(), conflict: undefined } satisfies StoredOperation);
+      return;
+    }
+    if (operation.kind === 'create' && serverEntry && operation.conflict!.reason === 'idempotency_key_reused') {
+      operationStore.put({ ...operation, operationId: crypto.randomUUID(), kind: 'update', baseVersion: serverEntry.version ?? 1, conflict: undefined } satisfies StoredOperation);
+      const localRequest = entryStore.get(key) as IDBRequest<StoredEntry | undefined>;
+      localRequest.onsuccess = () => {
+        if (localRequest.result) entryStore.put({ ...localRequest.result, entry: { ...localRequest.result.entry, version: serverEntry.version ?? 1 }, isLocal: true } satisfies StoredEntry);
+      };
+      return;
+    }
+    if (!serverEntry || operation.kind === 'create' || operation.conflict!.reason === 'id_collision') {
+      const localRequest = entryStore.get(key) as IDBRequest<StoredEntry | undefined>;
+      localRequest.onsuccess = () => {
+        if (!localRequest.result) return;
+        const newEntryId = crypto.randomUUID();
+        const newKey = recordKey(scope, newEntryId);
+        const entry = { ...localRequest.result.entry, id: newEntryId, version: undefined };
+        entryStore.delete(key);
+        entryStore.put({ key: newKey, scope: scopeKey, entry, isLocal: true } satisfies StoredEntry);
+        operationStore.delete(key);
+        operationStore.put({ ...operation, key: newKey, entryId: newEntryId, operationId: crypto.randomUUID(), kind: 'create', baseVersion: null, conflict: undefined } satisfies StoredOperation);
+      };
+      return;
+    }
+    operationStore.put({ ...operation, operationId: crypto.randomUUID(), baseVersion: serverEntry.version ?? 1, conflict: undefined } satisfies StoredOperation);
+    if (operation.kind !== 'delete') {
+      const localRequest = entryStore.get(key) as IDBRequest<StoredEntry | undefined>;
+      localRequest.onsuccess = () => {
+        if (localRequest.result) entryStore.put({ ...localRequest.result, entry: { ...localRequest.result.entry, version: serverEntry.version ?? 1 }, isLocal: true } satisfies StoredEntry);
+      };
+    }
   };
   await transactionDone(transaction);
 }

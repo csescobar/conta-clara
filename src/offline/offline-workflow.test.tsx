@@ -8,9 +8,11 @@ import { NewTransactionPage, TransactionsPage } from '../pages/entries-pages';
 import { currentMonthInputValue } from '../lib/finance';
 import { OfflineWorkspaceProvider } from './offline-context';
 import {
+  clearOfflineWorkspace,
   isOfflineLogoutMarked,
   loadRememberedOfflineUser,
   loadOfflineWorkspace,
+  markOfflineConflict,
   queueOfflineEntryChange,
   rememberOfflineUser,
   saveOfflineCatalogs,
@@ -125,6 +127,86 @@ describe('offline transaction workflow', () => {
     expect(snapshot.entries.find((item) => item.description === 'Nova conta de internet')?.created_by_user_id).toBe(scope.userId);
   });
 
+  it('retries a lost sync response with the same operation UUID and displays one server entry', async () => {
+    const scope: OfflineScope = { userId: 'offline-retry-user', spaceId: 'offline-retry-space' };
+    const syncedEntry = { ...entry('offline-retry-entry', 'Despesa sincronizada uma vez'), version: 1 };
+    await seed(scope, []);
+    await queueOfflineEntryChange(scope, syncedEntry, 'create');
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
+    const appliedEntries = new Map<string, OfflineEntry>();
+    let loseFirstResponse = true;
+    const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const path = String(input);
+      if (path === '/api/auth/state') return jsonResponse({ initialized: true, user: { ...authUser, id: scope.userId, spaceId: scope.spaceId }, csrfToken });
+      if (path === '/api/catalog/categories?includeArchived=true') return jsonResponse({ categories: [] });
+      if (path.startsWith('/api/entries?')) return jsonResponse({ entries: [...appliedEntries.values()] });
+      if (path === '/api/sync/operations') {
+        const operation = JSON.parse(String(init?.body)) as { operationId: string; entryId: string };
+        const serverEntry = { ...syncedEntry, id: operation.entryId };
+        appliedEntries.set(operation.entryId, serverEntry);
+        if (loseFirstResponse) {
+          loseFirstResponse = false;
+          throw new TypeError('response lost after commit');
+        }
+        return jsonResponse({ status: 'applied', operationId: operation.operationId, entry: serverEntry });
+      }
+      throw new Error(`Unexpected request ${path}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    render(<MemoryRouter><AuthGate><TransactionsPage /></AuthGate></MemoryRouter>);
+
+    await screen.findByText(/A conexão foi interrompida/);
+    const firstAttempt = fetchMock.mock.calls.find(([input]) => String(input) === '/api/sync/operations');
+    const firstOperationId = JSON.parse(String(firstAttempt?.[1]?.body)).operationId;
+    await user.click(screen.getByRole('button', { name: 'Sincronizar agora' }));
+
+    expect(await screen.findByText('Despesa sincronizada uma vez')).toBeInTheDocument();
+    await waitFor(async () => expect((await loadOfflineWorkspace(scope)).operations).toHaveLength(0));
+    const attempts = fetchMock.mock.calls.filter(([input]) => String(input) === '/api/sync/operations');
+    expect(attempts).toHaveLength(2);
+    expect(JSON.parse(String(attempts[1]?.[1]?.body)).operationId).toBe(firstOperationId);
+    expect(appliedEntries.size).toBe(1);
+  });
+
+  it('revalidates the session and syncs queued changes when connectivity returns', async () => {
+    const scope: OfflineScope = { userId: 'offline-reconnect-user', spaceId: 'offline-reconnect-space' };
+    const queuedEntry = entry('offline-reconnect-entry', 'Despesa sincronizada ao reconectar');
+    await seed(scope, []);
+    await queueOfflineEntryChange(scope, queuedEntry, 'create');
+    await rememberOfflineUser({ ...authUser, id: scope.userId, spaceId: scope.spaceId });
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
+    let stateReads = 0;
+    const applied = new Map<string, OfflineEntry>();
+    const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const path = String(input);
+      if (path === '/api/auth/state') {
+        stateReads += 1;
+        if (stateReads === 1) throw new TypeError('offline');
+        return jsonResponse({ initialized: true, user: { ...authUser, id: scope.userId, spaceId: scope.spaceId }, csrfToken });
+      }
+      if (path === '/api/sync/operations') {
+        const operation = JSON.parse(String(init?.body)) as { operationId: string; entryId: string };
+        const serverEntry = { ...queuedEntry, id: operation.entryId, version: 1 };
+        applied.set(operation.entryId, serverEntry);
+        return jsonResponse({ status: 'applied', operationId: operation.operationId, entry: serverEntry });
+      }
+      throw new Error(`Unexpected request ${path}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<MemoryRouter><AuthGate><p>Conteúdo privado</p></AuthGate></MemoryRouter>);
+
+    expect(await screen.findByText('Conteúdo privado')).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([input]) => String(input) === '/api/sync/operations')).toBe(false);
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
+    window.dispatchEvent(new Event('online'));
+
+    await waitFor(async () => expect((await loadOfflineWorkspace(scope)).operations).toHaveLength(0));
+    expect(stateReads).toBe(2);
+    expect(applied.size).toBe(1);
+    expect(fetchMock.mock.calls.filter(([input]) => String(input) === '/api/sync/operations')).toHaveLength(1);
+  });
+
   it('edits and deletes cached entries offline with a persistent final operation per entry', async () => {
     const scope = { userId: 'offline-edit-user', spaceId: 'offline-edit-space' };
     await seed(scope);
@@ -152,12 +234,15 @@ describe('offline transaction workflow', () => {
   it('requires explicit discard before logout and preserves another user’s local records', async () => {
     const scope: OfflineScope = { userId: authUser.id, spaceId: authUser.spaceId };
     const otherScope: OfflineScope = { userId: 'other-user', spaceId: authUser.spaceId };
+    await clearOfflineWorkspace(scope);
+    await clearOfflineWorkspace(otherScope);
     await seed(scope, []);
     await seed(otherScope, [entry('other-entry', 'Despesa de outra pessoa')]);
     await queueOfflineEntryChange(scope, entry('queued-entry', 'Nova despesa pendente'), 'create');
     Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
     const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
       if (String(input) === '/api/auth/state') return jsonResponse({ initialized: true, user: authUser, csrfToken });
+      if (String(input) === '/api/sync/operations') return jsonResponse({ error: 'API temporariamente indisponível.' }, 503);
       if (String(input) === '/api/auth/logout' && init?.method === 'POST') return { ok: true, status: 204 } as Response;
       throw new Error(`Unexpected request ${String(input)}`);
     });
@@ -170,7 +255,7 @@ describe('offline transaction workflow', () => {
     await screen.findByText('Conteúdo privado');
     await screen.findByText(/1 alteração aguarda sincronização/);
     await user.click(screen.getByRole('button', { name: 'Sair de Conta Clara' }));
-    expect(confirm).toHaveBeenCalledWith('Há 1 alteração sem sincronização. Sair e descartar essas alterações locais?');
+    await waitFor(() => expect(confirm).toHaveBeenCalledWith('Há 1 alteração sem sincronização. Sair e descartar essas alterações locais?'));
     expect(fetchMock).not.toHaveBeenCalledWith('/api/auth/logout', expect.anything());
     expect((await loadOfflineWorkspace(scope)).operations).toHaveLength(1);
 
@@ -210,8 +295,47 @@ describe('offline transaction workflow', () => {
     expect(screen.queryByText('Conteúdo privado')).not.toBeInTheDocument();
   });
 
+  it('presents local and server versions and applies the selected conflict resolution', async () => {
+    const localUser = { ...authUser, id: 'offline-conflict-user', spaceId: 'offline-conflict-space' };
+    const scope: OfflineScope = { userId: localUser.id, spaceId: localUser.spaceId };
+    const localOne = { ...entry('conflict-local-one', 'Alteração local um'), version: 2 };
+    const localTwo = { ...entry('conflict-local-two', 'Alteração local dois'), version: 4 };
+    const serverOne = { ...localOne, description: 'Versão do servidor um', version: 3 };
+    const serverTwo = { ...localTwo, description: 'Versão do servidor dois', version: 5 };
+    await seed(scope, [localOne, localTwo]);
+    await rememberOfflineUser(localUser);
+    await queueOfflineEntryChange(scope, localOne, 'update');
+    await queueOfflineEntryChange(scope, localTwo, 'update');
+    const before = await loadOfflineWorkspace(scope);
+    await markOfflineConflict(scope, before.operations[0]!, { reason: 'version_mismatch', serverEntry: serverOne });
+    await markOfflineConflict(scope, before.operations[1]!, { reason: 'version_mismatch', serverEntry: serverTwo });
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('offline'); }));
+    const user = userEvent.setup();
+    render(<MemoryRouter><AuthGate><p>Conteúdo privado</p></AuthGate></MemoryRouter>);
+
+    expect(await screen.findByRole('heading', { name: 'Escolha como resolver estes conflitos' })).toBeInTheDocument();
+    expect(screen.getByText(/Versão do servidor um/)).toBeInTheDocument();
+    const keepLocal = screen.getAllByRole('button', { name: 'Usar versão local' })[0]!;
+    keepLocal.focus();
+    await user.keyboard('{Enter}');
+    const afterLocalChoice = await loadOfflineWorkspace(scope);
+    expect(afterLocalChoice.operations).toHaveLength(2);
+    expect(afterLocalChoice.operations.find((operation) => operation.entryId === localOne.id)).toMatchObject({ baseVersion: 3, kind: 'update' });
+    expect(afterLocalChoice.operations.find((operation) => operation.entryId === localOne.id)?.conflict).toBeUndefined();
+    expect(afterLocalChoice.operations.find((operation) => operation.entryId === localOne.id)?.operationId).not.toBe(before.operations[0]?.operationId);
+    expect(await screen.findByRole('heading', { name: 'Escolha como resolver este conflito' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Usar versão do servidor' }));
+    await waitFor(async () => expect((await loadOfflineWorkspace(scope)).operations).toHaveLength(1));
+    const afterServerChoice = await loadOfflineWorkspace(scope);
+    expect(afterServerChoice.entries.find((item) => item.id === localOne.id)?.description).toBe('Alteração local um');
+    expect(afterServerChoice.entries.find((item) => item.id === localTwo.id)?.description).toBe('Versão do servidor dois');
+  });
+
   it('keeps queued writes when the server expires a session and waits for reauthentication', async () => {
     const scope: OfflineScope = { userId: authUser.id, spaceId: authUser.spaceId };
+    await clearOfflineWorkspace(scope);
     await seed(scope, []);
     await queueOfflineEntryChange(scope, entry('queued-expired', 'Edição aguardando login'), 'create');
     Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
@@ -221,8 +345,9 @@ describe('offline transaction workflow', () => {
         stateReads += 1;
         return jsonResponse({ initialized: true, user: stateReads === 1 ? authUser : null, csrfToken });
       }
+      if (String(input) === '/api/sync/operations') return jsonResponse({ error: 'Autenticação necessária.' }, 401);
       if (String(input) === '/api/catalog/categories?includeArchived=true') return jsonResponse({ categories: [] });
-      if (String(input).startsWith('/api/entries?')) return jsonResponse({ error: 'Autenticação necessária.' }, 401);
+      if (String(input).startsWith('/api/entries?')) return jsonResponse({ entries: [] });
       throw new Error(`Unexpected request ${String(input)}`);
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -231,6 +356,7 @@ describe('offline transaction workflow', () => {
     expect(await screen.findByRole('heading', { name: 'Boas-vindas de volta' })).toBeInTheDocument();
     expect(stateReads).toBe(2);
     expect((await loadOfflineWorkspace(scope)).operations).toMatchObject([expect.objectContaining({ entryId: 'queued-expired', kind: 'create' })]);
+    expect(fetchMock.mock.calls.filter(([input, init]) => init?.method === 'POST' && String(input) === '/api/sync/operations')).toHaveLength(1);
     expect(fetchMock.mock.calls.some(([input, init]) => init?.method === 'POST' && String(input).startsWith('/api/entries'))).toBe(false);
   });
 });

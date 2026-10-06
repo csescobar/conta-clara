@@ -1,11 +1,14 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
+  acknowledgeOfflineOperation,
   clearOfflineWorkspace,
   loadOfflineSnapshot,
   loadOfflineWorkspace,
+  markOfflineConflict,
   queueOfflineEntryChange,
   queueOfflineEntryDelete,
   removeCachedOfflineEntry,
+  resolveOfflineConflict,
   saveOfflineCatalogs,
   saveOfflineEntries,
   saveOfflineSnapshot,
@@ -22,13 +25,17 @@ export type OfflineWorkspace = OfflineWorkspaceSnapshot & {
   supported: boolean;
   storageError: string;
   pendingCount: number;
+  syncing: boolean;
+  syncError: string;
   refresh: () => Promise<OfflineWorkspaceSnapshot>;
   cacheEntries: (entries: OfflineEntry[]) => Promise<void>;
   cacheCatalogs: (categories: OfflineCategory[], paymentMethods: OfflinePaymentMethod[]) => Promise<void>;
   cacheSnapshot: (path: string, data: unknown) => Promise<void>;
   getSnapshot: <T>(path: string) => Promise<T | null>;
   queueChange: (entry: OfflineEntry, kind: 'create' | 'update') => Promise<void>;
-  queueDelete: (entryId: string) => Promise<void>;
+  queueDelete: (entry: OfflineEntry) => Promise<void>;
+  sync: (csrfToken: string) => Promise<void>;
+  resolveConflict: (operationId: string, choice: 'local' | 'server') => Promise<void>;
   removeCachedEntry: (entryId: string) => Promise<void>;
   clear: () => Promise<void>;
   setOnline: (online: boolean) => void;
@@ -45,6 +52,9 @@ export function OfflineWorkspaceProvider({ scope, children }: { scope: OfflineSc
   const [ready, setReady] = useState(false);
   const [supported, setSupported] = useState(true);
   const [storageError, setStorageError] = useState('');
+  const [syncing, setSyncing] = useState(false);
+  const [syncError, setSyncError] = useState('');
+  const syncPromise = useRef<Promise<void> | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -113,8 +123,88 @@ export function OfflineWorkspaceProvider({ scope, children }: { scope: OfflineSc
     await refresh();
   }, [refresh, stableScope]);
 
-  const queueDelete = useCallback(async (entryId: string) => {
-    await queueOfflineEntryDelete(stableScope, entryId);
+  const queueDelete = useCallback(async (entry: OfflineEntry) => {
+    await queueOfflineEntryDelete(stableScope, entry);
+    await refresh();
+  }, [refresh, stableScope]);
+
+  const invalidateSession = useCallback(() => {
+    window.dispatchEvent(new Event('conta-clara:session-expired'));
+  }, []);
+
+  const sync = useCallback((csrfToken: string) => {
+    if (!csrfToken || !supported || (typeof navigator !== 'undefined' && !navigator.onLine)) return Promise.resolve();
+    if (syncPromise.current) return syncPromise.current;
+    if (!online) setOnline(true);
+    const job = (async () => {
+      setSyncing(true);
+      setSyncError('');
+      const attempted = new Set<string>();
+      try {
+        for (let count = 0; count < 500; count += 1) {
+          const current = await loadOfflineWorkspace(stableScope);
+          const operation = current.operations.find((item) => !item.conflict && !attempted.has(item.operationId));
+          if (!operation) break;
+          attempted.add(operation.operationId);
+          const response = await fetch('/api/sync/operations', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({
+              operationId: operation.operationId,
+              entryId: operation.entryId,
+              kind: operation.kind,
+              baseVersion: operation.baseVersion,
+              payload: operation.payload,
+            }),
+          });
+          const result = await response.json().catch(() => ({})) as {
+            status?: string;
+            reason?: string;
+            error?: string;
+            entry?: OfflineEntry;
+            serverEntry?: OfflineEntry | null;
+            deleted?: boolean;
+          };
+          if (response.status === 401) {
+            invalidateSession();
+            break;
+          }
+          if (response.status === 409 && result.status === 'conflict') {
+            const reasons = new Set(['version_mismatch', 'server_deleted', 'id_collision', 'idempotency_key_reused']);
+            await markOfflineConflict(stableScope, operation, {
+              reason: reasons.has(result.reason ?? '') ? result.reason as 'version_mismatch' | 'server_deleted' | 'id_collision' | 'idempotency_key_reused' : 'version_mismatch',
+              serverEntry: result.serverEntry ?? null,
+            });
+            await refresh();
+            continue;
+          }
+          if (!response.ok || result.status !== 'applied') {
+            setSyncError(result.error ?? 'Não foi possível sincronizar as alterações. Elas continuam salvas neste aparelho.');
+            break;
+          }
+          await acknowledgeOfflineOperation(stableScope, operation, { entry: result.entry, deleted: result.deleted });
+          await refresh();
+        }
+      } catch (error) {
+        if (error instanceof TypeError) {
+          setOnline(false);
+          setSyncError('A conexão foi interrompida. As alterações continuam salvas neste aparelho.');
+        } else {
+          setSyncError(error instanceof Error ? error.message : 'Não foi possível sincronizar as alterações.');
+        }
+      } finally {
+        setSyncing(false);
+      }
+    })();
+    syncPromise.current = job;
+    void job.finally(() => { if (syncPromise.current === job) syncPromise.current = null; });
+    return job;
+  }, [invalidateSession, online, refresh, stableScope, supported]);
+
+  const resolveConflict = useCallback(async (operationId: string, choice: 'local' | 'server') => {
+    await resolveOfflineConflict(stableScope, operationId, choice);
+    setSyncError('');
     await refresh();
   }, [refresh, stableScope]);
 
@@ -134,10 +224,6 @@ export function OfflineWorkspaceProvider({ scope, children }: { scope: OfflineSc
     setSnapshot(emptySnapshot);
   }, [stableScope, supported]);
 
-  const invalidateSession = useCallback(() => {
-    window.dispatchEvent(new Event('conta-clara:session-expired'));
-  }, []);
-
   const value = useMemo<OfflineWorkspace>(() => ({
     ...snapshot,
     online,
@@ -145,6 +231,8 @@ export function OfflineWorkspaceProvider({ scope, children }: { scope: OfflineSc
     supported,
     storageError,
     pendingCount: snapshot.operations.length,
+    syncing,
+    syncError,
     refresh,
     cacheEntries,
     cacheCatalogs,
@@ -152,11 +240,13 @@ export function OfflineWorkspaceProvider({ scope, children }: { scope: OfflineSc
     getSnapshot,
     queueChange,
     queueDelete,
+    sync,
+    resolveConflict,
     removeCachedEntry,
     clear,
     setOnline,
     invalidateSession,
-  }), [snapshot, online, ready, supported, storageError, refresh, cacheEntries, cacheCatalogs, cacheSnapshot, getSnapshot, queueChange, queueDelete, removeCachedEntry, clear, invalidateSession]);
+  }), [snapshot, online, ready, supported, storageError, syncing, syncError, refresh, cacheEntries, cacheCatalogs, cacheSnapshot, getSnapshot, queueChange, queueDelete, sync, resolveConflict, removeCachedEntry, clear, invalidateSession]);
 
   return <OfflineWorkspaceContext.Provider value={value}>{children}</OfflineWorkspaceContext.Provider>;
 }
@@ -221,6 +311,7 @@ export function makeOfflineEntry(input: {
     created_by_user_id: previous?.created_by_user_id ?? input.userId,
     updated_by_user_id: input.userId,
     status: previous?.actual_cents !== null && previous?.actual_cents !== undefined ? 'paid' : input.dueOn && input.dueOn < today ? 'late' : 'pending',
+    version: previous?.version,
   };
 }
 

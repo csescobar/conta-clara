@@ -28,8 +28,24 @@ function AuthenticatedSession({ user, csrfToken, notice, onLogout, children }: {
   const offline = useOfflineWorkspace();
   const [localNotice, setLocalNotice] = useState('');
 
+  useEffect(() => {
+    if (offline?.ready && offline.online && csrfToken) void offline.sync(csrfToken);
+  }, [csrfToken, offline?.online, offline?.pendingCount, offline?.ready, offline?.sync]);
+
+  useEffect(() => {
+    const syncOnFocus = () => {
+      if (typeof navigator !== 'undefined' && navigator.onLine && csrfToken) {
+        offline?.setOnline(true);
+        void offline?.sync(csrfToken);
+      }
+    };
+    window.addEventListener('focus', syncOnFocus);
+    return () => window.removeEventListener('focus', syncOnFocus);
+  }, [csrfToken, offline?.setOnline, offline?.sync]);
+
   async function logout() {
     setLocalNotice('');
+    await offline?.sync(csrfToken);
     const currentWorkspace = await offline?.refresh();
     const pendingCount = currentWorkspace?.operations.length ?? 0;
     if (pendingCount && !window.confirm(`Há ${pendingCount} alteração${pendingCount === 1 ? '' : 'ões'} sem sincronização. Sair e descartar essas alterações locais?`)) return;
@@ -42,7 +58,7 @@ function AuthenticatedSession({ user, csrfToken, notice, onLogout, children }: {
     }
   }
 
-  return <AuthContext.Provider value={{ user, csrfToken }}><AppLayout user={user} onLogout={() => void logout()} notice={[notice, localNotice].filter(Boolean).join(' ')}>{children}</AppLayout></AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, csrfToken }}><AppLayout user={user} csrfToken={csrfToken} onLogout={() => void logout()} notice={[notice, localNotice].filter(Boolean).join(' ')}>{children}</AppLayout></AuthContext.Provider>;
 }
 
 export function AuthGate({ children }: { children?: ReactNode }) {

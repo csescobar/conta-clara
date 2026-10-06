@@ -14,7 +14,7 @@ O Conta Clara armazena uma cópia de alguns dados financeiros no IndexedDB do na
 
 A primeira consulta de cada página, mês e cadastro precisa acontecer com o servidor disponível. Os dados salvos são a cópia do que foi consultado; páginas, meses e lançamentos nunca carregados não ficam disponíveis offline. O navegador pode remover dados locais, e a PWA não oferece cópia de segurança dos dados do IndexedDB.
 
-A fila ainda não é enviada ao servidor. Reconexão, reautenticação e recarga não disparam alterações da fila; a sincronização e o tratamento de conflitos pertencem à issue [#19](https://github.com/csescobar/conta-clara/issues/19). A confirmação de pagamentos e recebimentos permanece desabilitada offline e enquanto houver operações pendentes.
+A fila é enviada ao servidor depois da autenticação, ao abrir ou focar a aplicação e ao reconectar; também há uma ação manual. Criações, edições e exclusões usam UUIDs e versões para impedir duplicações e sobrescritas silenciosas. A confirmação de pagamentos e recebimentos permanece desabilitada offline e enquanto houver operações pendentes. Consulte [docs/synchronization.md](synchronization.md) para conflitos, repetição segura e limites do envio.
 
 A identidade autenticada mais recente é guardada no aparelho para habilitar o acesso offline por até sete dias desde a última verificação bem-sucedida no servidor. Depois desse período, é necessário conectar-se e autenticar. O IndexedDB não é criptografado pela aplicação; qualquer pessoa com acesso ao mesmo perfil de navegador ou à conta local do sistema pode inspecionar esses dados. Use o modo offline apenas em aparelhos confiáveis e protegidos.
 

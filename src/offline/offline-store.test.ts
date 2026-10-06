@@ -2,12 +2,15 @@ import { IDBFactory } from 'fake-indexeddb';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   clearOfflineWorkspace,
+  acknowledgeOfflineOperation,
   loadRememberedOfflineUser,
   loadOfflineSnapshot,
   loadOfflineWorkspace,
+  markOfflineConflict,
   offlineScopeKey,
   queueOfflineEntryChange,
   queueOfflineEntryDelete,
+  resolveOfflineConflict,
   rememberOfflineUser,
   offlineSessionLeaseMs,
   saveOfflineCatalogs,
@@ -74,7 +77,7 @@ describe('scoped IndexedDB workspace', () => {
     expect(updated.operations[0]).toMatchObject({ operationId: initial?.operationId, kind: 'create', payload: expect.objectContaining({ description: 'Nome corrigido' }) });
     expect(updated.entries.find((item) => item.id === first.id)?.description).toBe('Nome corrigido');
 
-    await queueOfflineEntryDelete(scope, first.id);
+    await queueOfflineEntryDelete(scope, first);
     const deleted = await loadOfflineWorkspace(scope);
     expect(deleted.entries.some((item) => item.id === first.id)).toBe(false);
     expect(deleted.operations.some((operation) => operation.entryId === first.id)).toBe(false);
@@ -88,10 +91,68 @@ describe('scoped IndexedDB workspace', () => {
     await saveOfflineEntries(scope, [{ ...serverEntry, description: 'Resposta antiga do servidor' }]);
     expect((await loadOfflineWorkspace(scope)).entries.find((item) => item.id === serverEntry.id)?.description).toBe('Edição local');
 
-    await queueOfflineEntryDelete(scope, serverEntry.id);
+    await queueOfflineEntryDelete(scope, serverEntry);
     const deleted = await loadOfflineWorkspace(scope);
     expect(deleted.entries).toEqual([]);
     expect(deleted.operations).toMatchObject([expect.objectContaining({ entryId: serverEntry.id, kind: 'delete', payload: null })]);
+  });
+
+  it('rebases a resolved local conflict and replaces a server conflict choice', async () => {
+    const localScope = { userId: admin.userId, spaceId: 'resolve-local-fixture' };
+    const original = { ...entry('entry-conflict'), version: 2 };
+    await saveOfflineEntries(localScope, [original]);
+    await queueOfflineEntryChange(localScope, { ...original, description: 'Versão local fictícia' }, 'update');
+    const pending = (await loadOfflineWorkspace(localScope)).operations[0]!;
+    const server = { ...original, version: 3, description: 'Versão do servidor fictícia' };
+    await markOfflineConflict(localScope, pending, { reason: 'version_mismatch', serverEntry: server });
+    await resolveOfflineConflict(localScope, pending.operationId, 'local');
+    const localResult = await loadOfflineWorkspace(localScope);
+    expect(localResult.operations).toMatchObject([expect.objectContaining({ kind: 'update', baseVersion: 3, conflict: undefined, payload: expect.objectContaining({ description: 'Versão local fictícia' }) })]);
+    expect(localResult.operations[0]?.operationId).not.toBe(pending.operationId);
+    expect(localResult.entries[0]).toMatchObject({ version: 3, description: 'Versão local fictícia' });
+
+    const serverScope = { userId: admin.userId, spaceId: 'resolve-server-fixture' };
+    await saveOfflineEntries(serverScope, [original]);
+    await queueOfflineEntryChange(serverScope, { ...original, description: 'Alteração descartável' }, 'update');
+    const serverPending = (await loadOfflineWorkspace(serverScope)).operations[0]!;
+    await markOfflineConflict(serverScope, serverPending, { reason: 'version_mismatch', serverEntry: server });
+    await resolveOfflineConflict(serverScope, serverPending.operationId, 'server');
+    expect(await loadOfflineWorkspace(serverScope)).toMatchObject({ entries: [server], operations: [] });
+  });
+
+  it('turns an edited queued create into an update when its original request already reached the server', async () => {
+    const scope = { userId: admin.userId, spaceId: 'idempotency-edit-fixture' };
+    const local = entry('entry-already-created', 'Edição local após a resposta perdida');
+    await queueOfflineEntryChange(scope, local, 'create');
+    const pending = (await loadOfflineWorkspace(scope)).operations[0]!;
+    const server = { ...local, description: 'Primeira versão já criada', version: 1 };
+    await markOfflineConflict(scope, pending, { reason: 'idempotency_key_reused', serverEntry: server });
+
+    await resolveOfflineConflict(scope, pending.operationId, 'local');
+
+    const snapshot = await loadOfflineWorkspace(scope);
+    expect(snapshot.entries).toMatchObject([expect.objectContaining({ id: local.id, description: local.description, version: 1 })]);
+    expect(snapshot.operations).toMatchObject([expect.objectContaining({ kind: 'update', entryId: local.id, baseVersion: 1, payload: expect.objectContaining({ description: local.description }), conflict: undefined })]);
+    expect(snapshot.operations[0]?.operationId).not.toBe(pending.operationId);
+  });
+
+  it('acknowledges a sent version without losing a newer local edit made in another tab', async () => {
+    const scope = { userId: admin.userId, spaceId: 'acknowledge-fixture' };
+    const first = entry('entry-in-flight', 'Primeira versão local');
+    await queueOfflineEntryChange(scope, first, 'create');
+    const sent = (await loadOfflineWorkspace(scope)).operations[0]!;
+    await queueOfflineEntryChange(scope, { ...first, description: 'Edição feita durante o envio' }, 'update');
+    const applied = { ...first, version: 1, created_by_user_id: admin.userId, updated_by_user_id: admin.userId };
+    await acknowledgeOfflineOperation(scope, sent, { entry: applied });
+
+    const snapshot = await loadOfflineWorkspace(scope);
+    expect(snapshot.entries[0]).toMatchObject({ description: 'Edição feita durante o envio', version: 1 });
+    expect(snapshot.operations).toMatchObject([expect.objectContaining({ kind: 'update', baseVersion: 1, payload: expect.objectContaining({ description: 'Edição feita durante o envio' }) })]);
+    expect(snapshot.operations[0]).not.toHaveProperty('conflict');
+    expect(snapshot.operations[0]?.operationId).not.toBe(sent.operationId);
+
+    await acknowledgeOfflineOperation(scope, sent, { entry: applied });
+    expect((await loadOfflineWorkspace(scope)).operations).toHaveLength(1);
   });
 
   it('persists private dashboard snapshots and clears only the requested user workspace', async () => {

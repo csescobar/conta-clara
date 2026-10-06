@@ -1,6 +1,6 @@
 # Conta Clara
 
-Controle financeiro familiar local, com finanças compartilhadas e uso pelo computador e celular. A aplicação web está em desenvolvimento: a fundação React/API, autenticação, convites, gestão de membros, cadastros compartilhados, registro e confirmação de lançamentos, histórico de alterações, recorrências mensais, painel com gráficos previsto versus realizado, importação revisada de planilha, exportação CSV e instalação da PWA com interface offline já funcionam; consulta offline de finanças e sincronização seguem no roadmap.
+Controle financeiro familiar local, com finanças compartilhadas e uso pelo computador e celular. A aplicação web está em desenvolvimento: a fundação React/API, autenticação, convites, gestão de membros, cadastros compartilhados, registro e confirmação de lançamentos, histórico de alterações, recorrências mensais, painel com gráficos previsto versus realizado, importação revisada de planilha, exportação CSV e PWA com armazenamento e sincronização offline já funcionam.
 
 ## Proposta
 
@@ -49,7 +49,7 @@ Para o formato de arquivo aceito, interpretação de datas, categorias e limites
 
 Para os filtros, formato e segurança do arquivo CSV, consulte [docs/csv-export.md](docs/csv-export.md).
 
-Para instalação e cache da interface, consulte [docs/pwa.md](docs/pwa.md); [docs/offline-storage.md](docs/offline-storage.md) explica os dados locais, a fila e os limites de sincronização.
+Para instalação e cache da interface, consulte [docs/pwa.md](docs/pwa.md); [docs/offline-storage.md](docs/offline-storage.md) e [docs/synchronization.md](docs/synchronization.md) explicam os dados locais, a fila e os limites de sincronização.
 
 Consulte [docs/design-system.md](docs/design-system.md) para tokens, acessibilidade e componentes visuais.
 
