@@ -1,9 +1,11 @@
 import { createPool } from './database/connection.js';
 import { createApp } from './app.js';
+import { generateRecurrenceOccurrences } from './services/recurrences.js';
 
 const port = Number(process.env.PORT) || 3001;
 const host = process.env.HOST || '127.0.0.1';
 const pool = createPool();
+await generateRecurrenceOccurrences(pool);
 const app = createApp({ pool });
 const server = app.listen(port, host, () => {
   console.log(`Conta Clara API escutando em ${host}:${port}`);

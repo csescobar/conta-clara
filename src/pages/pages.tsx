@@ -54,16 +54,6 @@ export function DashboardPage() {
   </>;
 }
 
-export function RecurrencesPage() {
-  return <>
-    <PageHeader eyebrow="Planejamento" title="Recorrências" description="Contas que se repetem ajudam a preparar os próximos meses." action={<Button type="button" disabled><Plus aria-hidden="true" className="size-4" />Nova regra (em breve)</Button>} />
-    <section className="grid gap-3 md:grid-cols-2">
-      {[{ name: 'Aluguel', detail: 'Todo dia 5 · Moradia', cents: 180000 }, { name: 'Internet Giga Mais', detail: 'Todo dia 10 · Moradia', cents: 9990 }, { name: 'Faculdade', detail: 'Todo dia 20 · Educação', cents: 47785 }].map((rule) => <Card key={rule.name}><CardContent className="flex items-center gap-3 p-4 sm:p-5"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-secondary text-secondary-foreground"><RefreshCw aria-hidden="true" className="size-[18px]" /></span><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{rule.name}</p><p className="mt-0.5 text-xs text-muted-foreground">{rule.detail}</p></div><MoneyValue cents={rule.cents} className="shrink-0 text-sm font-semibold" /></CardContent></Card>)}
-    </section>
-    <p className="mt-5 rounded-xl border border-border bg-card px-4 py-3 text-xs leading-5 text-muted-foreground">Exemplos fictícios. As regras ainda não geram lançamentos.</p>
-  </>;
-}
-
 export function SettingsPage() {
   const auth = useContext(AuthContext);
   const isAdmin = auth?.user.role === 'admin';

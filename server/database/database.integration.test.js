@@ -47,6 +47,7 @@ describe.skipIf(!testDatabaseUrl)('PostgreSQL schema integration', () => {
     expect(status.find(({ name }) => name === '003_account_tokens.sql')?.status).toBe('applied');
     expect(status.find(({ name }) => name === '004_membership_deactivation.sql')?.status).toBe('applied');
     expect(status.find(({ name }) => name === '005_financial_entry_audit.sql')?.status).toBe('applied');
+    expect(status.find(({ name }) => name === '006_monthly_recurrences.sql')?.status).toBe('applied');
   });
 
   it('rejects cross-space categories, invalid money, and non-month competence dates', async () => {

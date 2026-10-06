@@ -1,5 +1,7 @@
 import express from 'express';
 import { requireAuth, requireCsrf } from './auth.js';
+import { recordEntryAudit } from '../services/financial-entry-audit.js';
+import { generateRecurrenceOccurrences } from '../services/recurrences.js';
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const entryKinds = new Set(['income', 'expense', 'investment']);
@@ -73,6 +75,7 @@ async function selectEntry(client, spaceId, entryId) {
       e.competence_on::text AS competence_on, e.due_on::text AS due_on,
       e.planned_cents, e.actual_cents, e.realized_on::text AS realized_on,
       e.payment_method_id, pm.name AS payment_method_name, e.notes,
+      e.recurrence_rule_id, e.recurrence_overridden,
       e.created_by_user_id, e.updated_by_user_id, e.created_at, e.updated_at,
       CASE
         WHEN e.actual_cents IS NOT NULL THEN 'paid'
@@ -82,37 +85,9 @@ async function selectEntry(client, spaceId, entryId) {
     FROM financial_entries e
     LEFT JOIN categories c ON c.space_id = e.space_id AND c.id = e.category_id
     LEFT JOIN payment_methods pm ON pm.space_id = e.space_id AND pm.id = e.payment_method_id
-    WHERE e.id = $1 AND e.space_id = $2
+    WHERE e.id = $1 AND e.space_id = $2 AND NOT e.recurrence_skipped
   `, [entryId, spaceId]);
   return result.rows[0] ?? null;
-}
-
-function auditSnapshot(entry) {
-  return {
-    kind: entry.kind,
-    description: entry.description,
-    categoryId: entry.category_id,
-    categoryName: entry.category_name,
-    competenceOn: entry.competence_on,
-    dueOn: entry.due_on,
-    plannedCents: entry.planned_cents,
-    actualCents: entry.actual_cents,
-    realizedOn: entry.realized_on,
-    paymentMethodId: entry.payment_method_id,
-    paymentMethodName: entry.payment_method_name,
-  };
-}
-
-async function recordEntryAudit(client, request, entry, action, { before, after } = {}) {
-  const details = {};
-  if (before) details.before = auditSnapshot(before);
-  if (after) details.after = auditSnapshot(after);
-  await client.query(`
-    INSERT INTO financial_entry_audit (
-      space_id, entry_id, actor_user_id, actor_display_name,
-      action, entry_kind, entry_description, details
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-  `, [request.auth.spaceId, entry.id, request.auth.id, request.auth.name, action, entry.kind, entry.description, JSON.stringify(details)]);
 }
 
 export function createEntriesRouter({ pool, secureCookies = false, csrfSecret }) {
@@ -132,12 +107,14 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
     if (categoryId !== null && !isUuid(categoryId)) return response.status(400).json({ error: 'Categoria inválida.' });
     if (status !== null && (typeof status !== 'string' || !statuses.has(status))) return response.status(400).json({ error: 'Situação inválida.' });
     try {
+      await generateRecurrenceOccurrences(pool, { spaceId: request.auth.spaceId });
       const monthStart = month ? `${month}-01` : null;
       const result = await pool.query(`
         SELECT e.id, e.kind, e.description, e.category_id, c.name AS category_name,
           e.competence_on::text AS competence_on, e.due_on::text AS due_on,
           e.planned_cents, e.actual_cents, e.realized_on::text AS realized_on,
           e.payment_method_id, pm.name AS payment_method_name, e.notes,
+          e.recurrence_rule_id, e.recurrence_overridden,
           e.created_by_user_id, e.updated_by_user_id, e.created_at, e.updated_at,
           CASE
             WHEN e.actual_cents IS NOT NULL THEN 'paid'
@@ -147,7 +124,7 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
         FROM financial_entries e
         LEFT JOIN categories c ON c.space_id = e.space_id AND c.id = e.category_id
         LEFT JOIN payment_methods pm ON pm.space_id = e.space_id AND pm.id = e.payment_method_id
-        WHERE e.space_id = $1
+        WHERE e.space_id = $1 AND NOT e.recurrence_skipped
           AND ($2::date IS NULL OR e.competence_on = $2::date)
           AND ($3::uuid IS NULL OR e.category_id = $3::uuid)
           AND ($4::text IS NULL OR CASE
@@ -183,7 +160,7 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
         RETURNING id
       `, [request.auth.spaceId, request.auth.id, entry.kind, entry.description, entry.categoryId, entry.competenceOn, entry.dueOn, entry.plannedCents, entry.paymentMethodId, entry.notes]);
       const created = await selectEntry(client, request.auth.spaceId, result.rows[0].id);
-      await recordEntryAudit(client, request, created, 'created', { after: created });
+      await recordEntryAudit(client, { spaceId: request.auth.spaceId, actorUserId: request.auth.id, actorName: request.auth.name, entry: created, action: 'created', after: created });
       await client.query('COMMIT');
       return response.status(201).json({ entry: created });
     } catch (error) {
@@ -213,7 +190,7 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
     try {
       client = await pool.connect();
       await client.query('BEGIN');
-      const existing = await client.query('SELECT id, category_id, payment_method_id FROM financial_entries WHERE id = $1 AND space_id = $2 FOR UPDATE', [request.params.id, request.auth.spaceId]);
+      const existing = await client.query('SELECT id, category_id, payment_method_id, recurrence_rule_id FROM financial_entries WHERE id = $1 AND space_id = $2 AND NOT recurrence_skipped FOR UPDATE', [request.params.id, request.auth.spaceId]);
       if (!existing.rows[0]) {
         await client.query('ROLLBACK');
         return response.status(404).json({ error: 'Lançamento não encontrado.' });
@@ -230,11 +207,13 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
       await client.query(`
         UPDATE financial_entries SET kind = $1, description = $2, category_id = $3,
           competence_on = $4, due_on = $5, planned_cents = $6,
-          payment_method_id = $7, notes = $8, updated_by_user_id = $9, updated_at = now()
+          payment_method_id = $7, notes = $8,
+          recurrence_overridden = CASE WHEN recurrence_rule_id IS NULL THEN recurrence_overridden ELSE true END,
+          updated_by_user_id = $9, updated_at = now()
         WHERE id = $10 AND space_id = $11
       `, [entry.kind, entry.description, entry.categoryId, entry.competenceOn, entry.dueOn, entry.plannedCents, entry.paymentMethodId, entry.notes, request.auth.id, request.params.id, request.auth.spaceId]);
       const updated = await selectEntry(client, request.auth.spaceId, request.params.id);
-      await recordEntryAudit(client, request, updated, 'updated', { before, after: updated });
+      await recordEntryAudit(client, { spaceId: request.auth.spaceId, actorUserId: request.auth.id, actorName: request.auth.name, entry: updated, action: 'updated', before, after: updated });
       await client.query('COMMIT');
       return response.json({ entry: updated });
     } catch (error) {
@@ -269,7 +248,7 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
         WHERE id = $4 AND space_id = $5
       `, [realization.actualCents, realization.realizedOn, request.auth.id, request.params.id, request.auth.spaceId]);
       const confirmed = await selectEntry(client, request.auth.spaceId, request.params.id);
-      await recordEntryAudit(client, request, confirmed, 'confirmed', { before, after: confirmed });
+      await recordEntryAudit(client, { spaceId: request.auth.spaceId, actorUserId: request.auth.id, actorName: request.auth.name, entry: confirmed, action: 'confirmed', before, after: confirmed });
       await client.query('COMMIT');
       return response.json({ entry: confirmed });
     } catch (error) {
@@ -302,7 +281,7 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
         WHERE id = $2 AND space_id = $3
       `, [request.auth.id, request.params.id, request.auth.spaceId]);
       const unconfirmed = await selectEntry(client, request.auth.spaceId, request.params.id);
-      await recordEntryAudit(client, request, unconfirmed, 'unconfirmed', { before, after: unconfirmed });
+      await recordEntryAudit(client, { spaceId: request.auth.spaceId, actorUserId: request.auth.id, actorName: request.auth.name, entry: unconfirmed, action: 'unconfirmed', before, after: unconfirmed });
       await client.query('COMMIT');
       return response.json({ entry: unconfirmed });
     } catch (error) {
@@ -319,14 +298,18 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
     try {
       client = await pool.connect();
       await client.query('BEGIN');
-      const existing = await client.query('SELECT id FROM financial_entries WHERE id = $1 AND space_id = $2 FOR UPDATE', [request.params.id, request.auth.spaceId]);
+      const existing = await client.query('SELECT id, recurrence_rule_id FROM financial_entries WHERE id = $1 AND space_id = $2 AND NOT recurrence_skipped FOR UPDATE', [request.params.id, request.auth.spaceId]);
       if (!existing.rows[0]) {
         await client.query('ROLLBACK');
         return response.status(404).json({ error: 'Lançamento não encontrado.' });
       }
       const deleted = await selectEntry(client, request.auth.spaceId, request.params.id);
-      await recordEntryAudit(client, request, deleted, 'deleted', { before: deleted });
-      await client.query('DELETE FROM financial_entries WHERE id = $1 AND space_id = $2', [request.params.id, request.auth.spaceId]);
+      await recordEntryAudit(client, { spaceId: request.auth.spaceId, actorUserId: request.auth.id, actorName: request.auth.name, entry: deleted, action: 'deleted', before: deleted });
+      if (existing.rows[0].recurrence_rule_id) {
+        await client.query('UPDATE financial_entries SET recurrence_skipped = true, updated_by_user_id = $1, updated_at = now() WHERE id = $2 AND space_id = $3', [request.auth.id, request.params.id, request.auth.spaceId]);
+      } else {
+        await client.query('DELETE FROM financial_entries WHERE id = $1 AND space_id = $2', [request.params.id, request.auth.spaceId]);
+      }
       await client.query('COMMIT');
       return response.status(204).end();
     } catch (error) {
