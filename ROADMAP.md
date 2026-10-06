@@ -32,7 +32,7 @@ Backlog inicial da primeira versão. Concluir dependências antes de iniciar uma
 
 ## 5. PWA e sincronização
 
-- [ ] [Implementar instalação e cache da PWA](https://github.com/csescobar/conta-clara/issues/17) — dependências: #3, #5.
+- [x] [Implementar instalação e cache da PWA](https://github.com/csescobar/conta-clara/issues/17) — dependências: #3, #5.
 - [ ] [Armazenar dados e alterações offline por usuário](https://github.com/csescobar/conta-clara/issues/18) — dependências: #17, #11.
 - [ ] [Sincronizar sem duplicações e tratar conflitos](https://github.com/csescobar/conta-clara/issues/19) — dependências: #18.
 
