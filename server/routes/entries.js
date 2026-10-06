@@ -87,6 +87,34 @@ async function selectEntry(client, spaceId, entryId) {
   return result.rows[0] ?? null;
 }
 
+function auditSnapshot(entry) {
+  return {
+    kind: entry.kind,
+    description: entry.description,
+    categoryId: entry.category_id,
+    categoryName: entry.category_name,
+    competenceOn: entry.competence_on,
+    dueOn: entry.due_on,
+    plannedCents: entry.planned_cents,
+    actualCents: entry.actual_cents,
+    realizedOn: entry.realized_on,
+    paymentMethodId: entry.payment_method_id,
+    paymentMethodName: entry.payment_method_name,
+  };
+}
+
+async function recordEntryAudit(client, request, entry, action, { before, after } = {}) {
+  const details = {};
+  if (before) details.before = auditSnapshot(before);
+  if (after) details.after = auditSnapshot(after);
+  await client.query(`
+    INSERT INTO financial_entry_audit (
+      space_id, entry_id, actor_user_id, actor_display_name,
+      action, entry_kind, entry_description, details
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+  `, [request.auth.spaceId, entry.id, request.auth.id, request.auth.name, action, entry.kind, entry.description, JSON.stringify(details)]);
+}
+
 export function createEntriesRouter({ pool, secureCookies = false, csrfSecret }) {
   const router = express.Router();
   const csrf = requireCsrf(csrfSecret);
@@ -155,6 +183,7 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
         RETURNING id
       `, [request.auth.spaceId, request.auth.id, entry.kind, entry.description, entry.categoryId, entry.competenceOn, entry.dueOn, entry.plannedCents, entry.paymentMethodId, entry.notes]);
       const created = await selectEntry(client, request.auth.spaceId, result.rows[0].id);
+      await recordEntryAudit(client, request, created, 'created', { after: created });
       await client.query('COMMIT');
       return response.status(201).json({ entry: created });
     } catch (error) {
@@ -189,6 +218,7 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
         await client.query('ROLLBACK');
         return response.status(404).json({ error: 'Lançamento não encontrado.' });
       }
+      const before = await selectEntry(client, request.auth.spaceId, request.params.id);
       const referenceError = await validateReferences(client, request.auth.spaceId, entry, {
         categoryId: existing.rows[0].category_id,
         paymentMethodId: existing.rows[0].payment_method_id,
@@ -204,6 +234,7 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
         WHERE id = $10 AND space_id = $11
       `, [entry.kind, entry.description, entry.categoryId, entry.competenceOn, entry.dueOn, entry.plannedCents, entry.paymentMethodId, entry.notes, request.auth.id, request.params.id, request.auth.spaceId]);
       const updated = await selectEntry(client, request.auth.spaceId, request.params.id);
+      await recordEntryAudit(client, request, updated, 'updated', { before, after: updated });
       await client.query('COMMIT');
       return response.json({ entry: updated });
     } catch (error) {
@@ -231,12 +262,14 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
         await client.query('ROLLBACK');
         return response.status(409).json({ error: 'Este lançamento já foi confirmado. Desfaça a confirmação antes de alterar o valor realizado.' });
       }
+      const before = await selectEntry(client, request.auth.spaceId, request.params.id);
       await client.query(`
         UPDATE financial_entries
         SET actual_cents = $1, realized_on = $2, updated_by_user_id = $3, updated_at = now()
         WHERE id = $4 AND space_id = $5
       `, [realization.actualCents, realization.realizedOn, request.auth.id, request.params.id, request.auth.spaceId]);
       const confirmed = await selectEntry(client, request.auth.spaceId, request.params.id);
+      await recordEntryAudit(client, request, confirmed, 'confirmed', { before, after: confirmed });
       await client.query('COMMIT');
       return response.json({ entry: confirmed });
     } catch (error) {
@@ -262,12 +295,14 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
         await client.query('ROLLBACK');
         return response.status(409).json({ error: 'Este lançamento ainda não foi confirmado.' });
       }
+      const before = await selectEntry(client, request.auth.spaceId, request.params.id);
       await client.query(`
         UPDATE financial_entries
         SET actual_cents = NULL, realized_on = NULL, updated_by_user_id = $1, updated_at = now()
         WHERE id = $2 AND space_id = $3
       `, [request.auth.id, request.params.id, request.auth.spaceId]);
       const unconfirmed = await selectEntry(client, request.auth.spaceId, request.params.id);
+      await recordEntryAudit(client, request, unconfirmed, 'unconfirmed', { before, after: unconfirmed });
       await client.query('COMMIT');
       return response.json({ entry: unconfirmed });
     } catch (error) {
@@ -280,12 +315,25 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
 
   router.delete('/:id', csrf, async (request, response, next) => {
     if (!isUuid(request.params.id)) return response.status(404).json({ error: 'Lançamento não encontrado.' });
+    let client;
     try {
-      const result = await pool.query('DELETE FROM financial_entries WHERE id = $1 AND space_id = $2 RETURNING id', [request.params.id, request.auth.spaceId]);
-      if (!result.rowCount) return response.status(404).json({ error: 'Lançamento não encontrado.' });
+      client = await pool.connect();
+      await client.query('BEGIN');
+      const existing = await client.query('SELECT id FROM financial_entries WHERE id = $1 AND space_id = $2 FOR UPDATE', [request.params.id, request.auth.spaceId]);
+      if (!existing.rows[0]) {
+        await client.query('ROLLBACK');
+        return response.status(404).json({ error: 'Lançamento não encontrado.' });
+      }
+      const deleted = await selectEntry(client, request.auth.spaceId, request.params.id);
+      await recordEntryAudit(client, request, deleted, 'deleted', { before: deleted });
+      await client.query('DELETE FROM financial_entries WHERE id = $1 AND space_id = $2', [request.params.id, request.auth.spaceId]);
+      await client.query('COMMIT');
       return response.status(204).end();
     } catch (error) {
+      if (client) await client.query('ROLLBACK').catch(() => {});
       return next(error);
+    } finally {
+      client?.release();
     }
   });
 

@@ -1,4 +1,4 @@
-import { ArrowLeftRight, House, LogOut, Repeat2, Settings, WalletCards } from 'lucide-react';
+import { ArrowLeftRight, History, House, LogOut, Repeat2, Settings, WalletCards } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 import { Button } from './ui/button';
@@ -9,6 +9,7 @@ const links = [
   { to: '/', label: 'Visão geral', Icon: House, end: true },
   { to: '/lancamentos', label: 'Lançamentos', Icon: ArrowLeftRight, end: false },
   { to: '/recorrencias', label: 'Recorrências', Icon: Repeat2, end: false },
+  { to: '/historico', label: 'Histórico', Icon: History, end: false },
   { to: '/configuracoes', label: 'Configurações', Icon: Settings, end: false },
 ];
 
@@ -23,7 +24,7 @@ function Brand() {
 
 function Navigation({ mobile = false }: { mobile?: boolean }) {
   return (
-    <nav aria-label={mobile ? 'Navegação principal móvel' : 'Navegação principal'} className={mobile ? 'grid grid-cols-4' : 'grid gap-1'}>
+    <nav aria-label={mobile ? 'Navegação principal móvel' : 'Navegação principal'} className={mobile ? 'grid grid-cols-5' : 'grid gap-1'}>
       {links.map(({ to, label, Icon, end }) => (
         <NavLink
           key={to}

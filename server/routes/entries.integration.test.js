@@ -127,6 +127,7 @@ describe.skipIf(!testDatabaseUrl)('financial entry routes with PostgreSQL', () =
       kind: 'expense', description: 'Conta residencial', categoryId: expenseCategory.body.category.id,
       competenceOn: '2026-10-01', dueOn: '2026-10-10', plannedCents: 145600,
       paymentMethodId: paymentMethod.body.paymentMethod.id, notes: 'Observação fictícia',
+      actorUserId: admin.id, actorDisplayName: 'Autor falso',
     }).expect(201);
     expect(expense.body.entry).toMatchObject({
       kind: 'expense', description: 'Conta residencial', category_name: 'Casa', competence_on: '2026-10-01',
@@ -219,5 +220,35 @@ describe.skipIf(!testDatabaseUrl)('financial entry routes with PostgreSQL', () =
     await sessionRequest('delete', `/api/entries/${income.body.entry.id}`, memberSession, memberState.body.csrfToken).expect(204);
     await sessionRequest('get', '/api/entries?month=2026-10', adminSession, adminState.body.csrfToken).expect(200)
       .expect(({ body }) => expect(body.entries.map(({ id }) => id)).toEqual([overdueExpense.body.entry.id, investment.body.entry.id, expense.body.entry.id]));
+
+    const adminActivity = await sessionRequest('get', '/api/activity', adminSession, adminState.body.csrfToken).expect(200);
+    const memberActivity = await sessionRequest('get', '/api/activity', memberSession, memberState.body.csrfToken).expect(200);
+    expect(memberActivity.body.events).toEqual(adminActivity.body.events);
+    const createdEvent = adminActivity.body.events.find(({ entry_id, action }) => entry_id === expense.body.entry.id && action === 'created');
+    expect(createdEvent).toMatchObject({ actor_user_id: member.id, actor_name: 'Membro lançamentos', entry_description: 'Conta residencial' });
+    expect(createdEvent.details.after).toMatchObject({ plannedCents: '145600', competenceOn: '2026-10-01' });
+    expect(createdEvent.details.after).not.toHaveProperty('notes');
+    expect(JSON.stringify(createdEvent)).not.toMatch(/senha|token|Autor falso/);
+    const editedEvent = adminActivity.body.events.find(({ entry_id, action }) => entry_id === expense.body.entry.id && action === 'updated');
+    expect(editedEvent).toMatchObject({ actor_user_id: admin.id, actor_name: 'Admin lançamentos' });
+    expect(editedEvent.details).toMatchObject({ before: { description: 'Conta residencial' }, after: { description: 'Moradia', plannedCents: '150000' } });
+    expect(adminActivity.body.events).toEqual(expect.arrayContaining([
+      expect.objectContaining({ entry_id: overdueExpense.body.entry.id, actor_user_id: member.id, action: 'confirmed' }),
+      expect.objectContaining({ entry_id: overdueExpense.body.entry.id, actor_user_id: admin.id, action: 'unconfirmed' }),
+      expect.objectContaining({ entry_id: income.body.entry.id, actor_user_id: member.id, action: 'deleted' }),
+    ]));
+    await sessionRequest('get', '/api/activity', otherSpace.sessionToken, memberState.body.csrfToken).expect(200)
+      .expect(({ body }) => expect(body.events).toEqual([]));
+    await sessionRequest('post', '/api/activity', memberSession, memberState.body.csrfToken).expect(404);
+    await expect(pool.query('UPDATE financial_entry_audit SET entry_description = $1 WHERE id = $2', ['Tampered', adminActivity.body.events[0].id]))
+      .rejects.toMatchObject({ code: '55000' });
+    await expect(pool.query('DELETE FROM financial_entry_audit WHERE id = $1', [adminActivity.body.events[0].id]))
+      .rejects.toMatchObject({ code: '55000' });
+
+    await sessionRequest('post', `/api/members/${member.id}/deactivate`, adminSession, adminState.body.csrfToken).expect(204);
+    const afterDeactivation = await sessionRequest('get', '/api/activity', adminSession, adminState.body.csrfToken).expect(200);
+    expect(afterDeactivation.body.events.find(({ entry_id, action }) => entry_id === expense.body.entry.id && action === 'created'))
+      .toMatchObject({ actor_user_id: member.id, actor_name: 'Membro lançamentos' });
+    await sessionRequest('get', '/api/activity', memberSession, memberState.body.csrfToken).expect(401);
   });
 });

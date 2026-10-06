@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import fs from 'node:fs';
 import { createAuthRouter } from './routes/auth.js';
+import { createActivityRouter } from './routes/activity.js';
 import { createCatalogRouter } from './routes/catalog.js';
 import { createEntriesRouter } from './routes/entries.js';
 import { createMembersRouter } from './routes/members.js';
@@ -23,6 +24,7 @@ export function createApp({ pool, secureCookies = process.env.COOKIE_SECURE === 
   if (pool) {
     const csrfSecret = randomBytes(32);
     app.use('/api/auth', createAuthRouter({ pool, secureCookies, loginLimit, secret: csrfSecret }));
+    app.use('/api/activity', createActivityRouter({ pool, secureCookies }));
     app.use('/api/catalog', createCatalogRouter({ pool, secureCookies, csrfSecret }));
     app.use('/api/entries', createEntriesRouter({ pool, secureCookies, csrfSecret }));
     app.use('/api/members', createMembersRouter({ pool, secureCookies, csrfSecret }));

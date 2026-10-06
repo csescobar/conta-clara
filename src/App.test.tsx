@@ -46,6 +46,16 @@ describe('application navigation and preview screens', () => {
     expect(screen.getByRole('heading', { name: 'Filtrar lançamentos' })).toBeInTheDocument();
   });
 
+  it('opens the read-only shared history from the main navigation', async () => {
+    const user = userEvent.setup();
+    await renderSignedInApp();
+
+    const mainNav = screen.getByRole('navigation', { name: /^Navegação principal$/ });
+    await user.click(within(mainNav).getByRole('link', { name: 'Histórico' }));
+    expect(await screen.findByRole('heading', { name: 'Histórico' })).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Nenhuma alteração registrada' })).toBeInTheDocument();
+  });
+
   it('makes the mobile navigation and active entry form clear', async () => {
     const user = userEvent.setup();
     await renderSignedInApp();
