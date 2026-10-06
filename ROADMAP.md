@@ -12,7 +12,7 @@ Backlog inicial da primeira versão. Concluir dependências antes de iniciar uma
 
 - [x] [Configurar Postgres e migrações](https://github.com/csescobar/conta-clara/issues/4) — dependências: #1.
 - [x] [Implementar administrador inicial e login](https://github.com/csescobar/conta-clara/issues/5) — dependências: #4.
-- [ ] [Cadastrar membros por convite](https://github.com/csescobar/conta-clara/issues/6) — dependências: #5.
+- [x] [Cadastrar membros por convite](https://github.com/csescobar/conta-clara/issues/6) — dependências: #5.
 - [ ] [Aplicar permissões do espaço financeiro compartilhado](https://github.com/csescobar/conta-clara/issues/7) — dependências: #6.
 
 ## 3. Controle financeiro

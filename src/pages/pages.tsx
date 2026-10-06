@@ -1,6 +1,7 @@
-import { ArrowDownLeft, ArrowUpRight, CalendarDays, ChevronRight, CirclePlus, Download, Filter, Plus, ReceiptText, RefreshCw, ShieldCheck, UsersRound } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useCallback, useContext, useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { ArrowDownLeft, ArrowUpRight, CalendarDays, ChevronRight, CirclePlus, Copy, Download, Filter, Mail, Plus, ReceiptText, RefreshCw, ShieldCheck, UsersRound } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { AuthContext } from '../auth/auth-gate';
 import { StatusBadge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
@@ -91,14 +92,122 @@ export function RecurrencesPage() {
 }
 
 export function SettingsPage() {
-  const settings = [
-    { Icon: UsersRound, title: 'Pessoas', detail: 'Convide membros para compartilhar o mesmo espaço financeiro.' },
-    { Icon: ShieldCheck, title: 'Privacidade e acesso', detail: 'Cada pessoa terá seu próprio login e permissões compartilhadas.' },
-    { Icon: ReceiptText, title: 'Preferências financeiras', detail: 'Categorias, formas de pagamento e preferências de exibição.' },
-  ];
+  const auth = useContext(AuthContext);
+  const isAdmin = auth?.user.role === 'admin';
+  const [members, setMembers] = useState<Array<{ id: string; name: string; email: string; role: string }> | null>(null);
+  const [invitations, setInvitations] = useState<Array<{ id: string; email: string; status: string; expires_at: string }> | null>(null);
+  const [email, setEmail] = useState('');
+  const [link, setLink] = useState<{ path: string; label: string; expires: string } | null>(null);
+  const [error, setError] = useState('');
+  const [copied, setCopied] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    const memberResponse = await fetch('/api/members', { credentials: 'same-origin' });
+    if (!memberResponse.ok) throw new Error('Não foi possível carregar as pessoas deste espaço.');
+    const memberResult = await memberResponse.json();
+    setMembers(memberResult.members);
+    if (isAdmin) {
+      const inviteResponse = await fetch('/api/members/invitations', { credentials: 'same-origin' });
+      if (!inviteResponse.ok) throw new Error('Não foi possível carregar os convites.');
+      const inviteResult = await inviteResponse.json();
+      setInvitations(inviteResult.invitations);
+    }
+  }, [isAdmin]);
+
+  useEffect(() => {
+    void load().catch((loadError) => setError(loadError instanceof Error ? loadError.message : 'Não foi possível carregar as pessoas.'));
+  }, [load]);
+
+  async function postAction(path: string, body?: Record<string, string>) {
+    const response = await fetch(path, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'X-CSRF-Token': auth?.csrfToken ?? '', ...(body ? { 'Content-Type': 'application/json' } : {}) },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    });
+    const result = response.status === 204 ? {} : await response.json();
+    if (!response.ok) throw new Error(result.error ?? 'Não foi possível concluir a operação.');
+    return result;
+  }
+
+  async function createInvitation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError('');
+    setBusy(true);
+    try {
+      const result = await postAction('/api/members/invitations', { email });
+      setLink({ path: result.activationPath, label: `Convite para ${result.invitation.email}`, expires: 'Este link expira em 48 horas e pode ser usado uma única vez.' });
+      setEmail('');
+      setCopied(false);
+      await load();
+    } catch (actionError) {
+      setError(actionError instanceof Error ? actionError.message : 'Não foi possível criar o convite.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function manageInvitation(id: string, action: 'reissue' | 'revoke') {
+    setError('');
+    setBusy(true);
+    try {
+      if (action === 'reissue') {
+        const result = await postAction(`/api/members/invitations/${id}/reissue`);
+        setLink({ path: result.activationPath, label: `Novo convite para ${result.invitation.email}`, expires: 'Este link expira em 48 horas e pode ser usado uma única vez.' });
+        setCopied(false);
+      } else {
+        await postAction(`/api/members/invitations/${id}/revoke`);
+      }
+      await load();
+    } catch (actionError) {
+      setError(actionError instanceof Error ? actionError.message : 'Não foi possível atualizar o convite.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function createResetLink(member: { id: string; email: string }) {
+    setError('');
+    setBusy(true);
+    try {
+      const result = await postAction(`/api/members/${member.id}/password-reset`);
+      setLink({ path: result.resetPath, label: `Redefinição de senha para ${member.email}`, expires: 'Este link expira em 1 hora e pode ser usado uma única vez.' });
+      setCopied(false);
+    } catch (actionError) {
+      setError(actionError instanceof Error ? actionError.message : 'Não foi possível gerar o link.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function copyLink() {
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(new URL(link.path, window.location.origin).toString());
+      setCopied(true);
+    } catch {
+      setError('A cópia automática não está disponível. Selecione o link abaixo e copie-o.');
+    }
+  }
+
+  const linkValue = link ? new URL(link.path, window.location.origin).toString() : '';
+  const statusText: Record<string, string> = { pending: 'Pendente', accepted: 'Ativado', revoked: 'Revogado', expired: 'Expirado' };
   return <>
-    <PageHeader eyebrow="Seu espaço" title="Configurações" description="Preferências e acesso ao espaço financeiro compartilhado." />
-    <section className="grid gap-3 md:grid-cols-2">{settings.map(({ Icon, title, detail }) => <Card key={title}><CardContent className="flex gap-4 p-5"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-accent text-accent-foreground"><Icon aria-hidden="true" className="size-5" /></span><div><h2 className="font-semibold">{title}</h2><p className="mt-1 text-sm leading-6 text-muted-foreground">{detail}</p><p className="mt-3 text-xs font-medium text-primary">Disponível em uma próxima etapa</p></div></CardContent></Card>)}</section>
-    <p className="mt-5 rounded-xl border border-border bg-card px-4 py-3 text-xs leading-5 text-muted-foreground">Esta tela é somente uma prévia. Nenhuma configuração ou convite é alterado.</p>
+    <PageHeader eyebrow="Seu espaço" title="Configurações" description="Pessoas e acessos ao espaço financeiro compartilhado." />
+    {error && <p role="alert" className="mb-5 rounded-xl bg-[#fdecec] px-4 py-3 text-sm font-medium text-destructive">{error}</p>}
+    <section aria-labelledby="members-heading" className="grid gap-4">
+      <Card><CardHeader><CardTitle id="members-heading"><span className="flex items-center gap-2"><UsersRound aria-hidden="true" className="size-5 text-primary" />Pessoas</span></CardTitle><CardDescription>Todos usam seu próprio acesso e compartilham as finanças deste espaço.</CardDescription></CardHeader><CardContent className="grid gap-4">
+        {members === null ? <p className="text-sm text-muted-foreground">Carregando pessoas…</p> : members.length ? <ul className="divide-y divide-border">{members.map((member) => <li key={member.id} className="flex flex-wrap items-center gap-3 py-3 first:pt-0 last:pb-0"><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{member.name}</p><p className="truncate text-xs text-muted-foreground">{member.email}</p></div><span className="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground">{member.role === 'admin' ? 'Administrador' : 'Membro'}</span>{isAdmin && <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => void createResetLink(member)}><ShieldCheck aria-hidden="true" className="size-4" />Link para redefinir senha</Button>}</li>)}</ul> : <p className="text-sm text-muted-foreground">Nenhum membro encontrado.</p>}
+      </CardContent></Card>
+
+      {isAdmin && <Card><CardHeader><CardTitle><span className="flex items-center gap-2"><Mail aria-hidden="true" className="size-5 text-primary" />Convidar pessoa</span></CardTitle><CardDescription>Gere um link local para a pessoa definir o próprio nome e senha. O link vale por 48 horas.</CardDescription></CardHeader><CardContent className="grid gap-5">
+        <form onSubmit={createInvitation} className="flex flex-col gap-3 sm:flex-row sm:items-end"><div className="flex-1"><FormField id="invite-email" label="E-mail da pessoa"><Input type="email" autoComplete="email" required maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} /></FormField></div><Button type="submit" disabled={busy}><Plus aria-hidden="true" className="size-4" />Gerar convite</Button></form>
+        {link && <div className="grid gap-2 rounded-xl border border-primary/30 bg-accent/40 p-4"><p className="text-sm font-semibold">{link.label}</p><p className="text-xs text-muted-foreground">{link.expires} Copie e entregue o link à pessoa; ele não será enviado por e-mail.</p><div className="flex flex-col gap-2 sm:flex-row"><Input aria-label="Link de acesso" readOnly value={linkValue} onFocus={(event) => event.currentTarget.select()} /><Button type="button" variant="outline" onClick={() => void copyLink()}><Copy aria-hidden="true" className="size-4" />{copied ? 'Copiado' : 'Copiar link'}</Button></div></div>}
+        <div className="grid gap-2">{invitations === null ? <p className="text-sm text-muted-foreground">Carregando convites…</p> : invitations.length ? invitations.map((invitation) => <div key={invitation.id} className="flex flex-wrap items-center gap-3 border-t border-border pt-3"><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{invitation.email}</p><p className="text-xs text-muted-foreground">{statusText[invitation.status] ?? invitation.status} · expira {new Date(invitation.expires_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</p></div>{invitation.status !== 'accepted' && <><Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => void manageInvitation(invitation.id, 'reissue')}><RefreshCw aria-hidden="true" className="size-4" />Reemitir</Button>{invitation.status === 'pending' && <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => void manageInvitation(invitation.id, 'revoke')}>Invalidar</Button>}</>}</div>) : <p className="text-sm text-muted-foreground">Nenhum convite emitido.</p>}</div>
+      </CardContent></Card>}
+
+      <Card><CardContent className="flex gap-4 p-5"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-accent text-accent-foreground"><ReceiptText aria-hidden="true" className="size-5" /></span><div><h2 className="font-semibold">Preferências financeiras</h2><p className="mt-1 text-sm leading-6 text-muted-foreground">Categorias e formas de pagamento estarão disponíveis em uma próxima etapa.</p></div></CardContent></Card>
+    </section>
   </>;
 }

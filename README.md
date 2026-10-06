@@ -6,7 +6,7 @@ Controle financeiro familiar local, com finanças compartilhadas e uso pelo comp
 
 Receitas, despesas fixas e variáveis, aportes separados do consumo, vencimentos, pagamentos e recorrências. Painel previsto versus realizado, gráficos, importação revisada de planilha e exportação CSV. PWA com consulta e lançamentos offline, sincronização e resolução de conflitos.
 
-Cada pessoa terá seu login e acesso aos mesmos dados financeiros do seu espaço. Administrador e membro poderão alterar finanças; somente administrador gerenciará usuários e backups. Convites locais dispensarão envio de e-mail.
+Cada pessoa terá seu login e acesso aos mesmos dados financeiros do seu espaço. Administrador e membro poderão alterar finanças; somente administrador gerenciará usuários e backups. O administrador gera e copia links locais de convite e redefinição de senha; não há envio por e-mail.
 
 ## Tecnologias planejadas
 
@@ -43,7 +43,7 @@ O build fica em `dist/client`; `npm start` serve o build e a API na porta `3001`
 
 ## Testes
 
-Vitest executa testes de unidade e interface com React Testing Library em jsdom; Supertest verifica rotas HTTP do Express sem iniciar um servidor de rede. Playwright será usado nas histórias de fluxos completos do navegador, incluindo instalação/offline. Testes que dependem de persistência usam uma base Postgres descartável configurada em `.env.test`; `npm run test:db` aplica migrações e limpa as tabelas de aplicação da base de teste antes dos cenários de autenticação. Use apenas uma base vazia com sufixo `_test`. Cada história declara cenários específicos e executa os checks pertinentes antes de ser concluída.
+Vitest executa testes de unidade e interface com React Testing Library em jsdom; Supertest verifica rotas HTTP do Express sem iniciar um servidor de rede. Playwright será usado nas histórias de fluxos completos do navegador, incluindo instalação/offline. Testes que dependem de persistência usam uma base Postgres descartável configurada em `.env.test`; `npm run test:db` aplica migrações e limpa as tabelas de aplicação antes dos cenários de autenticação e convites. Use apenas uma base vazia com sufixo `_test`. Cada história declara cenários específicos e executa os checks pertinentes antes de ser concluída.
 
 Consulte [docs/design-system.md](docs/design-system.md) para tokens, acessibilidade e componentes visuais.
 

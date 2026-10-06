@@ -8,6 +8,7 @@ const signedInState = {
   user: { id: 'demo-user', name: 'Pessoa de exemplo', email: 'demo@example.test', role: 'admin', spaceId: 'demo-space' },
   csrfToken: 'csrf-demo',
 };
+const demoMember = { id: 'demo-user', name: 'Pessoa de exemplo', email: 'demo@example.test', role: 'admin' };
 
 async function renderSignedInApp() {
   render(<App />);
@@ -16,7 +17,11 @@ async function renderSignedInApp() {
 
 beforeEach(() => {
   window.history.replaceState({}, '', '/');
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => signedInState }));
+  vi.stubGlobal('fetch', vi.fn().mockImplementation(async (input: string | URL | Request) => {
+    const path = String(input);
+    const body = path === '/api/auth/state' ? signedInState : path === '/api/members' ? { members: [demoMember] } : path === '/api/members/invitations' ? { invitations: [] } : {};
+    return { ok: true, json: async () => body };
+  }));
 });
 
 afterEach(() => vi.unstubAllGlobals());
@@ -58,14 +63,16 @@ describe('application navigation and preview screens', () => {
     expect(screen.getByText(/não são salvos nesta versão/i)).toBeInTheDocument();
   });
 
-  it('opens the shared settings preview without implying that settings are persisted', async () => {
+  it('opens member settings with admin controls and the current household roster', async () => {
     const user = userEvent.setup();
     await renderSignedInApp();
     const mainNav = screen.getByRole('navigation', { name: /^Navegação principal$/ });
 
     await user.click(within(mainNav).getByRole('link', { name: 'Configurações' }));
     expect(screen.getByRole('heading', { name: 'Configurações' })).toBeInTheDocument();
-    expect(screen.getAllByText(/próxima etapa/i)).toHaveLength(3);
-    expect(screen.getByText(/nenhuma configuração ou convite é alterado/i)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Pessoas' })).toBeInTheDocument();
+    expect(screen.getAllByText('Pessoa de exemplo')).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'Gerar convite' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Link para redefinir senha' })).toBeInTheDocument();
   });
 });

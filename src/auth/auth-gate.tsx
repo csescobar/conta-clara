@@ -1,9 +1,12 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useEffect, useState, type ReactNode } from 'react';
+import { Outlet } from 'react-router-dom';
 import { AuthPage, type AuthState, type AuthUser } from './auth-page';
 import { LoadingState } from '../components/ui/feedback';
 import { AppLayout } from '../components/app-layout';
 
-export function AuthGate({ children }: { children: ReactNode }) {
+export const AuthContext = createContext<{ user: AuthUser; csrfToken: string } | null>(null);
+
+export function AuthGate({ children }: { children?: ReactNode }) {
   const [state, setState] = useState<AuthState | null>(null);
   const [loadError, setLoadError] = useState('');
   const [actionError, setActionError] = useState('');
@@ -49,5 +52,5 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }
 
   if (!state.user) return <AuthPage initialized={state.initialized} csrfToken={state.csrfToken} onAuthenticated={acceptLogin} />;
-  return <AppLayout user={state.user} onLogout={() => void logout()} notice={actionError}>{children}</AppLayout>;
+  return <AuthContext.Provider value={{ user: state.user, csrfToken: state.csrfToken }}><AppLayout user={state.user} onLogout={() => void logout()} notice={actionError}>{children ?? <Outlet />}</AppLayout></AuthContext.Provider>;
 }

@@ -41,6 +41,7 @@ Revise permissões antes de habilitar as rotas da aplicação. Os papéis precis
 ## Modelo inicial
 
 - `users`, `finance_spaces` e `space_memberships` representam pessoas e o espaço compartilhado.
+- `sessions` armazena somente hashes de tokens de sessão. Convites e links de redefinição ficam em `account_tokens`, também apenas com hash; convites expiram em 48 horas, links de redefinição em 1 hora e os dois são de uso único.
 - `categories`, `payment_methods` e `financial_entries` pertencem ao espaço; chaves estrangeiras compostas impedem que um lançamento associe uma categoria, forma de pagamento ou autor de outro espaço.
 - Valores financeiros são `bigint` em centavos. `competence_on` é sempre o primeiro dia do mês; vencimentos e realizações são datas sem horário.
 - Valor/data efetivos são nulos em conjunto ou definidos em conjunto. Saldo e situação são derivados pela aplicação conforme as histórias financeiras.
@@ -48,7 +49,7 @@ Revise permissões antes de habilitar as rotas da aplicação. Os papéis precis
 
 ## Teste de integração
 
-Os testes de banco aceitam somente `TEST_DATABASE_URL`, nunca reaproveitam a URL de runtime como fallback. Aponte essa variável para uma base descartável com nome terminado em `_test`. A suíte cria o esquema e linhas fictícias; antes dos cenários de autenticação, `TRUNCATE users CASCADE` limpa os registros das tabelas da aplicação. Não aponte para uma base de desenvolvimento ou produção.
+Os testes de banco aceitam somente `TEST_DATABASE_URL`, nunca reaproveitam a URL de runtime como fallback. Aponte essa variável para uma base descartável com nome terminado em `_test`. A suíte cria o esquema e linhas fictícias; antes e depois das suítes de autenticação e convites, `TRUNCATE users CASCADE` limpa os registros das tabelas da aplicação. Não aponte para uma base de desenvolvimento ou produção.
 
 ```sh
 cp .env.test.example .env.test

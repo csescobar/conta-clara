@@ -1,8 +1,10 @@
 import express from 'express';
+import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import fs from 'node:fs';
 import { createAuthRouter } from './routes/auth.js';
+import { createMembersRouter } from './routes/members.js';
 
 const clientDist = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -16,7 +18,11 @@ export function createApp({ pool, secureCookies = process.env.COOKIE_SECURE === 
   app.get('/api/health', (_request, response) => {
     response.json({ status: 'ok' });
   });
-  if (pool) app.use('/api/auth', createAuthRouter({ pool, secureCookies, loginLimit }));
+  if (pool) {
+    const csrfSecret = randomBytes(32);
+    app.use('/api/auth', createAuthRouter({ pool, secureCookies, loginLimit, secret: csrfSecret }));
+    app.use('/api/members', createMembersRouter({ pool, secureCookies, csrfSecret }));
+  }
 
   if (fs.existsSync(clientDist)) {
     app.use(express.static(clientDist, { index: false }));

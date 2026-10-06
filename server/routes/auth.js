@@ -2,6 +2,7 @@ import { createHash, createHmac, randomBytes, scrypt as scryptCallback, timingSa
 import { promisify } from 'node:util';
 import express from 'express';
 import { rateLimit } from 'express-rate-limit';
+import { createAccountActivationRouter } from './account-activation.js';
 
 const scrypt = promisify(scryptCallback);
 const sessionCookie = 'cc_session';
@@ -24,7 +25,7 @@ function readCookie(request, name) {
   return null;
 }
 
-function cookieOptions(secure) {
+export function sessionCookieOptions(secure) {
   return { httpOnly: true, secure, sameSite: 'strict', path: '/', maxAge: sessionLifetimeMs };
 }
 
@@ -56,7 +57,7 @@ function sameOrigin(request) {
   }
 }
 
-function requireCsrf(secret) {
+export function requireCsrf(secret) {
   return (request, response, next) => {
     const cookieToken = readCookie(request, csrfCookie);
     const headerToken = request.get('x-csrf-token');
@@ -116,7 +117,7 @@ export async function verifyPassword(password, storedHash) {
 
 const dummyPasswordHash = hashPassword(randomBytes(32).toString('hex'));
 
-function sessionHash(token) {
+export function hashOpaqueToken(token) {
   return createHash('sha256').update(token).digest('hex');
 }
 
@@ -124,11 +125,11 @@ function publicUser(row) {
   return { id: row.user_id, name: row.display_name, email: row.email, role: row.role, spaceId: row.space_id };
 }
 
-async function createSession(client, user) {
+export async function createSession(client, user) {
   const token = randomBytes(32).toString('base64url');
   await client.query(
     'INSERT INTO sessions (space_id, user_id, token_hash, expires_at) VALUES ($1, $2, $3, now() + interval \'7 days\')',
-    [user.space_id, user.user_id, sessionHash(token)],
+    [user.space_id, user.user_id, hashOpaqueToken(token)],
   );
   return token;
 }
@@ -143,7 +144,7 @@ async function findSessionUser(pool, request) {
     JOIN space_memberships m ON m.space_id = s.space_id AND m.user_id = s.user_id
     WHERE s.token_hash = $1 AND s.expires_at > now()
     LIMIT 1
-  `, [sessionHash(token)]);
+  `, [hashOpaqueToken(token)]);
   return result.rows[0] ?? null;
 }
 
@@ -152,7 +153,7 @@ export function requireAuth(pool, secureCookies = false) {
     try {
       const user = await findSessionUser(pool, request);
       if (!user) {
-        response.clearCookie(sessionCookie, cookieOptions(secureCookies));
+        response.clearCookie(sessionCookie, sessionCookieOptions(secureCookies));
         return response.status(401).json({ error: 'Autenticação necessária.' });
       }
       request.auth = publicUser(user);
@@ -167,6 +168,10 @@ export function createAuthRouter({ pool, secureCookies = false, secret = randomB
   const router = express.Router();
   const csrfSecret = Buffer.isBuffer(secret) ? secret : Buffer.from(secret);
   const csrf = requireCsrf(csrfSecret);
+  router.use((_request, response, next) => {
+    response.set('Cache-Control', 'no-store');
+    next();
+  });
   const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     limit: loginLimit,
@@ -180,7 +185,7 @@ export function createAuthRouter({ pool, secureCookies = false, secret = randomB
       const token = ensureCsrf(request, response, csrfSecret, secureCookies);
       const initialized = (await pool.query('SELECT EXISTS (SELECT 1 FROM users) AS initialized')).rows[0].initialized;
       const row = initialized ? await findSessionUser(pool, request) : null;
-      if (readCookie(request, sessionCookie) && !row) response.clearCookie(sessionCookie, cookieOptions(secureCookies));
+      if (readCookie(request, sessionCookie) && !row) response.clearCookie(sessionCookie, sessionCookieOptions(secureCookies));
       return response.json({ initialized, user: row ? publicUser(row) : null, csrfToken: token });
     } catch (error) {
       next(error);
@@ -222,7 +227,7 @@ export function createAuthRouter({ pool, secureCookies = false, secret = randomB
       );
       const sessionToken = await createSession(client, { user_id: user.id, space_id: spaceId });
       await client.query('COMMIT');
-      response.cookie(sessionCookie, sessionToken, cookieOptions(secureCookies));
+      response.cookie(sessionCookie, sessionToken, sessionCookieOptions(secureCookies));
       return response.status(201).json({ user: { id: user.id, name: user.display_name, email: user.email, role: 'admin', spaceId } });
     } catch (error) {
       if (client) await client.query('ROLLBACK').catch(() => {});
@@ -241,7 +246,9 @@ export function createAuthRouter({ pool, secureCookies = false, secret = randomB
 
     let client;
     try {
-      const result = await pool.query(`
+      client = await pool.connect();
+      await client.query('BEGIN');
+      const result = await client.query(`
         SELECT u.id AS user_id, u.display_name, u.email, u.password_hash,
                m.role, m.space_id
         FROM users u
@@ -249,16 +256,21 @@ export function createAuthRouter({ pool, secureCookies = false, secret = randomB
         WHERE u.email = $1 AND u.is_active
         ORDER BY m.created_at
         LIMIT 1
+        FOR SHARE OF u, m
       `, [email]);
       const user = result.rows[0];
       const valid = await verifyPassword(password, user?.password_hash ?? await dummyPasswordHash);
-      if (!user || !valid) return response.status(401).json({ error: 'E-mail ou senha inválidos.' });
+      if (!user || !valid) {
+        await client.query('ROLLBACK');
+        return response.status(401).json({ error: 'E-mail ou senha inválidos.' });
+      }
 
-      client = await pool.connect();
       const token = await createSession(client, user);
-      response.cookie(sessionCookie, token, cookieOptions(secureCookies));
+      await client.query('COMMIT');
+      response.cookie(sessionCookie, token, sessionCookieOptions(secureCookies));
       return response.json({ user: publicUser(user) });
     } catch (error) {
+      if (client) await client.query('ROLLBACK').catch(() => {});
       next(error);
     } finally {
       client?.release();
@@ -268,13 +280,15 @@ export function createAuthRouter({ pool, secureCookies = false, secret = randomB
   router.post('/logout', csrf, requireAuth(pool, secureCookies), async (request, response, next) => {
     try {
       const token = readCookie(request, sessionCookie);
-      await pool.query('DELETE FROM sessions WHERE token_hash = $1', [sessionHash(token)]);
-      response.clearCookie(sessionCookie, cookieOptions(secureCookies));
+      await pool.query('DELETE FROM sessions WHERE token_hash = $1', [hashOpaqueToken(token)]);
+      response.clearCookie(sessionCookie, sessionCookieOptions(secureCookies));
       return response.status(204).end();
     } catch (error) {
       next(error);
     }
   });
+
+  router.use(createAccountActivationRouter({ pool, secureCookies, csrfSecret }));
 
   return router;
 }

@@ -44,6 +44,7 @@ describe.skipIf(!testDatabaseUrl)('PostgreSQL schema integration', () => {
 
     expect(status.find(({ name }) => name === '001_initial_schema.sql')?.status).toBe('applied');
     expect(status.find(({ name }) => name === '002_auth_sessions.sql')?.status).toBe('applied');
+    expect(status.find(({ name }) => name === '003_account_tokens.sql')?.status).toBe('applied');
   });
 
   it('rejects cross-space categories, invalid money, and non-month competence dates', async () => {
