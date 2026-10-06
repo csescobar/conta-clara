@@ -10,6 +10,7 @@ import { FormField, Input } from '../components/ui/input';
 import { currentMonthInputValue, formatBrazilianDate } from '../lib/finance';
 import type { ChartSummary, ExpenseCategoryChartEntry } from './dashboard-charts';
 import { CatalogSettings } from './catalog-settings';
+import { BackupSettings } from './backup-settings';
 import { PageHeader } from './page-header';
 import { isAuthenticationFailure, isNetworkFailure, useOfflineWorkspace } from '../offline/offline-context';
 
@@ -300,6 +301,8 @@ export function SettingsPage() {
         {link && <div className="grid gap-2 rounded-xl border border-primary/30 bg-accent/40 p-4"><p className="text-sm font-semibold">{link.label}</p><p className="text-xs text-muted-foreground">{link.expires} Copie e entregue o link à pessoa; ele não será enviado por e-mail.</p><div className="flex flex-col gap-2 sm:flex-row"><Input aria-label="Link de acesso" readOnly value={linkValue} onFocus={(event) => event.currentTarget.select()} /><Button type="button" variant="outline" onClick={() => void copyLink()}><Copy aria-hidden="true" className="size-4" />{copied ? 'Copiado' : 'Copiar link'}</Button></div></div>}
         <div className="grid gap-2">{invitations === null ? <p className="text-sm text-muted-foreground">Carregando convites…</p> : invitations.length ? invitations.map((invitation) => <div key={invitation.id} className="flex flex-wrap items-center gap-3 border-t border-border pt-3"><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{invitation.email}</p><p className="text-xs text-muted-foreground">{statusText[invitation.status] ?? invitation.status} · expira {new Date(invitation.expires_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</p></div>{invitation.status !== 'accepted' && <><Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => void manageInvitation(invitation.id, 'reissue')}><RefreshCw aria-hidden="true" className="size-4" />Reemitir</Button>{invitation.status === 'pending' && <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => void manageInvitation(invitation.id, 'revoke')}>Invalidar</Button>}</>}</div>) : <p className="text-sm text-muted-foreground">Nenhum convite emitido.</p>}</div>
       </CardContent></Card>}
+
+      {isAdmin && <BackupSettings />}
 
       <div className="xl:col-span-1"><CatalogSettings /></div>
     </section>

@@ -5,6 +5,8 @@ node_modules
 dist
 coverage
 local-certs
+secrets
+credentials
 backups
 data
 imports

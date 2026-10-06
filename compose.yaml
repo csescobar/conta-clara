@@ -21,6 +21,9 @@ services:
       PORT: "3001"
       COOKIE_SECURE: "true"
       DATABASE_URL: ${DATABASE_URL:?Defina DATABASE_URL no arquivo .env}
+      BACKUP_STATUS_FILE: /var/lib/conta-clara-backup/status.json
+    volumes:
+      - backup_status:/var/lib/conta-clara-backup:ro
     networks:
       application:
         aliases:
@@ -103,9 +106,40 @@ services:
     networks:
       - postgres
 
+  backup:
+    image: conta-clara-backup:local
+    profiles:
+      - backup
+    build:
+      context: .
+      dockerfile: deploy/Backup.Dockerfile
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:size=1g
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      TZ: America/Sao_Paulo
+      HOME: /tmp
+      RCLONE_CACHE_DIR: /tmp/rclone-cache
+      BACKUP_DATABASE_URL: ${MIGRATION_DATABASE_URL:-${DATABASE_URL:?Defina DATABASE_URL no arquivo .env}}
+      RCLONE_CONFIG: /run/rclone/rclone.conf
+      RCLONE_REMOTE: "conta-clara-crypt:"
+      BACKUP_STATUS_FILE: /status/status.json
+    volumes:
+      - ./secrets/rclone:/run/rclone
+      - backup_status:/status
+    networks:
+      - postgres
+
 volumes:
   caddy_data:
   caddy_config:
+  backup_status:
 
 networks:
   application:

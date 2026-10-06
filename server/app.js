@@ -12,6 +12,7 @@ import { createRecurrencesRouter } from './routes/recurrences.js';
 import { createDashboardRouter } from './routes/dashboard.js';
 import { createImportsRouter } from './routes/imports.js';
 import { createSyncRouter } from './routes/sync.js';
+import { createBackupsRouter } from './routes/backups.js';
 
 const clientDist = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -36,6 +37,7 @@ export function createApp({ pool, secureCookies = process.env.COOKIE_SECURE === 
     app.use('/api/members', createMembersRouter({ pool, secureCookies, csrfSecret }));
     app.use('/api/recurrences', createRecurrencesRouter({ pool, secureCookies, csrfSecret }));
     app.use('/api/dashboard', createDashboardRouter({ pool, secureCookies }));
+    app.use('/api/backups', createBackupsRouter({ pool, secureCookies }));
   } else {
     app.use(express.json({ limit: '16kb' }));
   }

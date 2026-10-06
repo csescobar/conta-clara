@@ -57,6 +57,8 @@ Para configurar o banco e executar migrações, consulte [docs/database.md](docs
 
 Para executar com Docker, integrar o Postgres existente e confiar o certificado HTTPS nos dispositivos da rede local, consulte [docs/docker-local-https.md](docs/docker-local-https.md).
 
+Para configurar os backups criptografados no Google Drive, consulte [docs/google-drive-backups.md](docs/google-drive-backups.md).
+
 ## Planejamento e contribuição
 
 Veja [ROADMAP.md](ROADMAP.md), [issues](https://github.com/csescobar/conta-clara/issues), [CONTRIBUTING.md](CONTRIBUTING.md) e [AGENTS.md](AGENTS.md). Contas bancárias, faturas, parcelamentos e acesso remoto ficam fora da primeira versão.

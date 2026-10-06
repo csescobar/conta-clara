@@ -16,6 +16,7 @@ COPY --chown=node:node server ./server
 COPY --chown=node:node scripts ./scripts
 COPY --chown=node:node migrations ./migrations
 COPY --from=build --chown=node:node /app/dist/client ./dist/client
+RUN mkdir -p /var/lib/conta-clara-backup && chown node:node /var/lib/conta-clara-backup
 
 USER node
 EXPOSE 3001
