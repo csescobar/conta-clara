@@ -21,9 +21,65 @@ function renderPage(path: string) {
   return render(<MemoryRouter initialEntries={[path]}><AuthContext.Provider value={auth}><Routes><Route path="/lancamentos" element={<TransactionsPage />} /><Route path="/lancamentos/novo" element={<NewTransactionPage />} /><Route path="/lancamentos/:id/editar" element={<NewTransactionPage />} /></Routes></AuthContext.Provider></MemoryRouter>);
 }
 
-afterEach(() => vi.unstubAllGlobals());
+const originalCreateObjectURL = Object.getOwnPropertyDescriptor(URL, 'createObjectURL');
+const originalRevokeObjectURL = Object.getOwnPropertyDescriptor(URL, 'revokeObjectURL');
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  if (originalCreateObjectURL) Object.defineProperty(URL, 'createObjectURL', originalCreateObjectURL);
+  else Reflect.deleteProperty(URL, 'createObjectURL');
+  if (originalRevokeObjectURL) Object.defineProperty(URL, 'revokeObjectURL', originalRevokeObjectURL);
+  else Reflect.deleteProperty(URL, 'revokeObjectURL');
+});
 
 describe('financial entry pages', () => {
+  it('exports only the currently filtered, space-authorized list as a CSV download', async () => {
+    const entry = {
+      id: 'csv-entry', kind: 'expense', description: 'Conta fictícia', category_id: 'expense-category', category_name: 'Moradia',
+      competence_on: `${currentMonthInputValue()}-01`, due_on: '2026-10-18', planned_cents: '123456', actual_cents: null,
+      realized_on: null, payment_method_id: null, payment_method_name: null, notes: null,
+      created_by_user_id: 'member-id', updated_by_user_id: 'member-id', status: 'pending',
+    };
+    const requestedUrls: string[] = [];
+    const fetchMock = vi.fn().mockImplementation(async (input: string) => {
+      if (input === '/api/catalog/categories?includeArchived=true') return response({ categories });
+      if (input.startsWith('/api/entries?')) {
+        requestedUrls.push(input);
+        return response({ entries: input.includes('categoryId=expense-category') && input.includes('status=pending') ? [entry] : [] });
+      }
+      throw new Error(`Unexpected request: ${input}`);
+    });
+    const createObjectURL = vi.fn((_blob: Blob) => 'blob:synthetic-csv');
+    const revokeObjectURL = vi.fn();
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL });
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeObjectURL });
+    const downloadedNames: string[] = [];
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) { downloadedNames.push(this.download); });
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    renderPage('/lancamentos');
+
+    const exportButton = await screen.findByRole('button', { name: 'Exportar CSV' });
+    expect(exportButton).toBeDisabled();
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Categoria' }), 'expense-category');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Situação' }), 'pending');
+    await screen.findByText('Conta fictícia');
+    await user.click(exportButton);
+
+    expect(requestedUrls).toContain(`/api/entries?month=${currentMonthInputValue()}&categoryId=expense-category&status=pending`);
+    expect(createObjectURL).toHaveBeenCalledOnce();
+    const blob = createObjectURL.mock.calls[0]?.[0] as Blob;
+    const blobText = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsText(blob, 'UTF-8');
+    });
+    expect(blobText).toContain('"Conta fictícia"');
+    expect(downloadedNames).toEqual([`conta-clara-lancamentos-${currentMonthInputValue()}.csv`]);
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:synthetic-csv');
+  });
+
   it('validates Brazilian dates and saves whole cents using active shared references', async () => {
     const fetchMock = vi.fn().mockImplementation(async (input: string, init?: RequestInit) => {
       if (input === '/api/catalog/categories') return response({ categories });

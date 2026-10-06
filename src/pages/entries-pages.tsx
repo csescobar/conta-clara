@@ -1,5 +1,5 @@
 import { useCallback, useContext, useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { ArrowDownLeft, ArrowUpRight, CalendarDays, Pencil, Plus, RefreshCw, Trash2, Upload } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, CalendarDays, Download, Pencil, Plus, RefreshCw, Trash2, Upload } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AuthContext } from '../auth/auth-gate';
 import { StatusBadge } from '../components/ui/badge';
@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { EmptyState, LoadingState } from '../components/ui/feedback';
 import { FormField, Input } from '../components/ui/input';
 import { currentBrazilianDate, currentMonthInputValue, formatBrazilianDate, formatBrazilianMonth, formatBrazilianMoney, parseBrazilianCents, parseBrazilianDate } from '../lib/finance';
+import { downloadCsv, entriesCsvFilename, serializeEntriesCsv } from '../lib/csv-export';
 import { PageHeader } from './page-header';
 
 type EntryKind = 'income' | 'expense' | 'investment';
@@ -168,7 +169,7 @@ export function TransactionsPage() {
   }
 
   return <>
-    <PageHeader eyebrow="Movimentações" title="Lançamentos" description="Acompanhe receitas, despesas e aportes do espaço compartilhado." action={<div className="flex flex-wrap gap-2"><Button asChild variant="outline"><Link to="/importar"><Upload aria-hidden="true" className="size-4" />Importar planilha</Link></Button><Button asChild><Link to="/lancamentos/novo"><Plus aria-hidden="true" className="size-4" />Adicionar lançamento</Link></Button></div>} />
+    <PageHeader eyebrow="Movimentações" title="Lançamentos" description="Acompanhe receitas, despesas e aportes do espaço compartilhado." action={<div className="flex flex-wrap gap-2"><Button type="button" variant="outline" disabled={loading || entries.length === 0} onClick={() => downloadCsv(serializeEntriesCsv(entries), entriesCsvFilename(month))}><Download aria-hidden="true" className="size-4" />Exportar CSV</Button><Button asChild variant="outline"><Link to="/importar"><Upload aria-hidden="true" className="size-4" />Importar planilha</Link></Button><Button asChild><Link to="/lancamentos/novo"><Plus aria-hidden="true" className="size-4" />Adicionar lançamento</Link></Button></div>} />
     {error && <p role="alert" className="mb-4 rounded-xl bg-[#fdecec] px-4 py-3 text-sm font-medium text-destructive">{error}</p>}
     <section className="grid gap-4">
       <Card>

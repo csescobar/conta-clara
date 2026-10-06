@@ -1,6 +1,6 @@
 # Conta Clara
 
-Controle financeiro familiar local, com finanças compartilhadas e uso pelo computador e celular. A aplicação web está em desenvolvimento: a fundação React/API, autenticação, convites, gestão de membros, cadastros compartilhados, registro e confirmação de lançamentos, histórico de alterações, recorrências mensais, painel com gráficos previsto versus realizado e importação revisada de planilha já funcionam; PWA, sincronização e exportação CSV seguem no roadmap.
+Controle financeiro familiar local, com finanças compartilhadas e uso pelo computador e celular. A aplicação web está em desenvolvimento: a fundação React/API, autenticação, convites, gestão de membros, cadastros compartilhados, registro e confirmação de lançamentos, histórico de alterações, recorrências mensais, painel com gráficos previsto versus realizado, importação revisada de planilha e exportação CSV já funcionam; PWA e sincronização seguem no roadmap.
 
 ## Proposta
 
@@ -43,9 +43,11 @@ O build fica em `dist/client`; `npm start` serve o build e a API na porta `3001`
 
 ## Testes
 
-Vitest executa testes de unidade e interface com React Testing Library e `user-event` em jsdom; Supertest verifica rotas HTTP do Express sem iniciar um servidor de rede. Playwright será usado nas histórias de fluxos completos do navegador, incluindo instalação/offline. Testes que dependem de persistência usam uma base Postgres descartável configurada em `.env.test`; `npm run test:db` aplica migrações e limpa as tabelas de aplicação antes dos cenários de autenticação, convites, permissões, cadastros, lançamentos, importação, histórico, recorrências e painel. As fixtures do painel conferem competências, aportes, mês vazio, virada de ano, filtros, navegação por teclado e isolamento entre espaços. Os testes do importador usam arquivos sintéticos e conferem separadores `en_US`, datas ambíguas, fórmulas ignoradas, mapeamento, confirmação explícita, autoria, transação, rollback e bloqueio de lotes repetidos. Use apenas uma base vazia com sufixo `_test`. Cada história declara cenários específicos e executa os checks pertinentes antes de ser concluída.
+Vitest executa testes de unidade e interface com React Testing Library e `user-event` em jsdom; Supertest verifica rotas HTTP do Express sem iniciar um servidor de rede. Playwright será usado nas histórias de fluxos completos do navegador, incluindo instalação/offline. Testes que dependem de persistência usam uma base Postgres descartável configurada em `.env.test`; `npm run test:db` aplica migrações e limpa as tabelas de aplicação antes dos cenários de autenticação, convites, permissões, cadastros, lançamentos, importação, histórico, recorrências e painel. As fixtures do painel conferem competências, aportes, mês vazio, virada de ano, filtros, navegação por teclado e isolamento entre espaços. Os testes do importador usam arquivos sintéticos e conferem separadores `en_US`, datas ambíguas, fórmulas ignoradas, mapeamento, confirmação explícita, autoria, transação, rollback e bloqueio de lotes repetidos. Os testes do CSV verificam caracteres acentuados, delimitadores, aspas, datas ISO, centavos exatos e proteção contra fórmulas em células textuais. Use apenas uma base vazia com sufixo `_test`. Cada história declara cenários específicos e executa os checks pertinentes antes de ser concluída.
 
 Para o formato de arquivo aceito, interpretação de datas, categorias e limites da importação, consulte [docs/spreadsheet-import.md](docs/spreadsheet-import.md).
+
+Para os filtros, formato e segurança do arquivo CSV, consulte [docs/csv-export.md](docs/csv-export.md).
 
 Consulte [docs/design-system.md](docs/design-system.md) para tokens, acessibilidade e componentes visuais.
 
