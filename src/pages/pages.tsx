@@ -1,5 +1,5 @@
 import { useCallback, useContext, useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { ArrowDownLeft, ArrowUpRight, CalendarDays, ChevronRight, CirclePlus, Copy, Download, Filter, Mail, Plus, ReceiptText, RefreshCw, ShieldCheck, UsersRound } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, CalendarDays, ChevronRight, CirclePlus, Copy, Download, Filter, Mail, Plus, RefreshCw, ShieldCheck, UsersRound } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AuthContext } from '../auth/auth-gate';
 import { StatusBadge } from '../components/ui/badge';
@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { EmptyState } from '../components/ui/feedback';
 import { FormField, Input } from '../components/ui/input';
 import { MoneyValue } from '../components/ui/money-value';
+import { CatalogSettings } from './catalog-settings';
 
 const transactions = [
   { id: 1, title: 'Salário', category: 'Renda', date: '5 out', cents: 780000, kind: 'income' as const, status: 'paid' as const },
@@ -235,7 +236,7 @@ export function SettingsPage() {
         <div className="grid gap-2">{invitations === null ? <p className="text-sm text-muted-foreground">Carregando convites…</p> : invitations.length ? invitations.map((invitation) => <div key={invitation.id} className="flex flex-wrap items-center gap-3 border-t border-border pt-3"><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{invitation.email}</p><p className="text-xs text-muted-foreground">{statusText[invitation.status] ?? invitation.status} · expira {new Date(invitation.expires_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</p></div>{invitation.status !== 'accepted' && <><Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => void manageInvitation(invitation.id, 'reissue')}><RefreshCw aria-hidden="true" className="size-4" />Reemitir</Button>{invitation.status === 'pending' && <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => void manageInvitation(invitation.id, 'revoke')}>Invalidar</Button>}</>}</div>) : <p className="text-sm text-muted-foreground">Nenhum convite emitido.</p>}</div>
       </CardContent></Card>}
 
-      <Card><CardContent className="flex gap-4 p-5"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-accent text-accent-foreground"><ReceiptText aria-hidden="true" className="size-5" /></span><div><h2 className="font-semibold">Preferências financeiras</h2><p className="mt-1 text-sm leading-6 text-muted-foreground">Categorias e formas de pagamento estarão disponíveis em uma próxima etapa.</p></div></CardContent></Card>
+      <div className="xl:col-span-1"><CatalogSettings /></div>
     </section>
   </>;
 }

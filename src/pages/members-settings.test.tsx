@@ -24,6 +24,8 @@ describe('member settings', () => {
   it('lets an administrator create an invitation link and displays it for handoff', async () => {
     const fetchMock = vi.fn().mockImplementation(async (input: string, init?: RequestInit) => {
       if (input === '/api/members') return response({ members });
+      if (input === '/api/catalog/categories?includeArchived=true') return response({ categories: [] });
+      if (input === '/api/catalog/payment-methods?includeArchived=true') return response({ paymentMethods: [] });
       if (input === '/api/members/invitations' && !init?.method) return response({ invitations: [] });
       if (input === '/api/members/invitations' && init?.method === 'POST') {
         return { ok: true, status: 201, json: async () => ({ invitation: { id: 'invite-id', email: 'membro@example.test' }, activationPath: `/ativar/${fakeToken}` }) };
@@ -49,6 +51,8 @@ describe('member settings', () => {
   it('shows the roster to a member but hides administrator-only access controls', async () => {
     const fetchMock = vi.fn().mockImplementation(async (input: string) => {
       if (input === '/api/members') return response({ members: [{ ...members[0], role: 'member' }] });
+      if (input === '/api/catalog/categories?includeArchived=true') return response({ categories: [] });
+      if (input === '/api/catalog/payment-methods?includeArchived=true') return response({ paymentMethods: [] });
       throw new Error(`Unexpected request: ${input}`);
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -57,13 +61,16 @@ describe('member settings', () => {
     expect(await screen.findByText('Administradora')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Gerar convite' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Link para redefinir senha' })).not.toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).not.toHaveBeenCalledWith('/api/members/invitations', expect.anything());
   });
 
   it('allows an administrator to deactivate a member after confirmation', async () => {
     const currentMembers = [members[0], { id: 'member-id', name: 'Pessoa convidada', email: 'membro@example.test', role: 'member', is_active: true }];
     const fetchMock = vi.fn().mockImplementation(async (input: string, init?: RequestInit) => {
       if (input === '/api/members') return response({ members: currentMembers });
+      if (input === '/api/catalog/categories?includeArchived=true') return response({ categories: [] });
+      if (input === '/api/catalog/payment-methods?includeArchived=true') return response({ paymentMethods: [] });
       if (input === '/api/members/invitations' && !init?.method) return response({ invitations: [] });
       if (input === '/api/members/member-id/deactivate' && init?.method === 'POST') {
         currentMembers[1] = { ...currentMembers[1], is_active: false };
