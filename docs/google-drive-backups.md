@@ -59,7 +59,7 @@ Consulte a última execução na tela **Configurações > Backups**. O container
 - O arquivo dump sem criptografia existe somente no tmpfs `/tmp` do container e é apagado ao fim da execução. O limite do tmpfs é 1 GiB; um dump maior falhará sem substituir nem excluir o último backup válido.
 - O volume `backup_status` contém apenas datas, estado e códigos de erro; os dados do Postgres ficam no volume do próprio banco.
 - Preserve uma cópia da senha e do salt do remote `crypt` fora do Google Drive. Perder esses valores impede descriptografar todos os dumps existentes, mesmo que o arquivo `rclone.conf` continue disponível.
-- O arquivo cifrado pode ser baixado e descriptografado apenas usando o remote `conta-clara-crypt` com a mesma senha e salt. O procedimento de restauração será documentado e testado na issue #22.
+- O arquivo cifrado pode ser baixado e descriptografado apenas usando o remote `conta-clara-crypt` com a mesma senha e salt. Para validar uma restauração em banco separado ou recuperar a instalação em outra máquina, siga [Restauração de backups](backup-restore.md).
 - A rede e o computador precisam estar disponíveis para enviar o backup. Ao voltar, o serviço cobre o estado atual do banco com um backup pendente; não recupera snapshots históricos dos períodos em que ficou desligado.
 
 Consulte a documentação oficial do rclone sobre [criptografia client-side](https://rclone.org/crypt/), [Google Drive](https://rclone.org/drive/) e [verificação de remotes crypt](https://rclone.org/commands/rclone_cryptcheck/).

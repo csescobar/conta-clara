@@ -59,6 +59,8 @@ Para executar com Docker, integrar o Postgres existente e confiar o certificado 
 
 Para configurar os backups criptografados no Google Drive, consulte [docs/google-drive-backups.md](docs/google-drive-backups.md).
 
+Para testar a restauração em um Postgres descartável e recuperar uma cópia em outra máquina, consulte [docs/backup-restore.md](docs/backup-restore.md).
+
 ## Planejamento e contribuição
 
 Veja [ROADMAP.md](ROADMAP.md), [issues](https://github.com/csescobar/conta-clara/issues), [CONTRIBUTING.md](CONTRIBUTING.md) e [AGENTS.md](AGENTS.md). Contas bancárias, faturas, parcelamentos e acesso remoto ficam fora da primeira versão.
