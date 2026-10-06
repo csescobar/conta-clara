@@ -1,4 +1,7 @@
 // @vitest-environment node
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
+import { createServer } from 'node:net';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../app.js';
@@ -9,6 +12,51 @@ import { createSession } from './auth.js';
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
 const origin = 'http://conta-clara.test';
+
+async function findAvailablePort() {
+  const server = createServer();
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  const { port } = server.address();
+  await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  return port;
+}
+
+async function startApiProcess(databaseUrl, port) {
+  const child = spawn(process.execPath, ['server/index.js'], {
+    cwd: process.cwd(),
+    env: { ...process.env, DATABASE_URL: databaseUrl, HOST: '127.0.0.1', PORT: String(port) },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  const output = [];
+  child.stdout.on('data', (chunk) => output.push(chunk.toString()));
+  child.stderr.on('data', (chunk) => output.push(chunk.toString()));
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (child.exitCode !== null) throw new Error(`A API encerrou durante a inicialização: ${output.join('')}`);
+    try {
+      await request(`http://127.0.0.1:${port}`).get('/api/health').timeout({ deadline: 500 }).expect(200);
+      return { child, output };
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+  }
+  child.kill('SIGTERM');
+  throw new Error(`A API não ficou pronta: ${output.join('')}`);
+}
+
+async function stopApiProcess(child) {
+  if (child.exitCode !== null) return;
+  child.kill('SIGTERM');
+  await new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error('A API não encerrou após SIGTERM.')), 5000);
+    once(child, 'exit').then(() => {
+      clearTimeout(timeout);
+      resolve();
+    }, reject);
+  });
+}
 
 describe.skipIf(!testDatabaseUrl)('monthly recurrence routes with PostgreSQL', () => {
   let pool;
@@ -199,5 +247,32 @@ describe.skipIf(!testDatabaseUrl)('monthly recurrence routes with PostgreSQL', (
     await expect(generateRecurrenceOccurrences(pool, { spaceId: admin.spaceId, ruleId, throughMonth: '2025-02-01' })).resolves.toBe(0);
     const finitePreserved = await pool.query('SELECT count(*)::integer AS count FROM financial_entries WHERE recurrence_rule_id = $1', [ruleId]);
     expect(finitePreserved.rows[0].count).toBe(3);
+
+    const firstMissingMonth = new Date(Date.UTC(currentYear, currentMonthNumber - 1 - 3, 1)).toISOString().slice(0, 10);
+    const restartRule = await pool.query(`
+      INSERT INTO recurrence_rules (
+        space_id, created_by_user_id, updated_by_user_id, kind, description,
+        category_id, start_competence_on, due_day, planned_cents
+      ) VALUES ($1, $2, $2, 'expense', 'Retomada após parada', $3, $4, 31, 5000)
+      RETURNING id
+    `, [admin.spaceId, admin.id, category.body.category.id, firstMissingMonth]);
+    const restartRuleId = restartRule.rows[0].id;
+    let child;
+    try {
+      for (let restart = 0; restart < 2; restart += 1) {
+        const port = await findAvailablePort();
+        const process = await startApiProcess(testDatabaseUrl, port);
+        child = process.child;
+        const startedOccurrences = await pool.query(
+          'SELECT count(*)::integer AS count FROM financial_entries WHERE recurrence_rule_id = $1',
+          [restartRuleId],
+        );
+        expect(startedOccurrences.rows[0].count).toBe(4);
+        await stopApiProcess(child);
+        child = null;
+      }
+    } finally {
+      if (child) await stopApiProcess(child);
+    }
   });
 });
