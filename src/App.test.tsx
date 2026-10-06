@@ -14,6 +14,7 @@ const demoDashboard = {
   month: `${currentMonthInputValue()}-01`,
   planned: { incomeCents: '780000', expenseCents: '346247', investmentCents: '50000', resultCents: '383753' },
   realized: { incomeCents: '780000', expenseCents: '346247', investmentCents: '50000', resultCents: '383753' },
+  charts: { expensesByCategory: [{ categoryId: 'demo-home', categoryName: 'Moradia', plannedCents: '180000', realizedCents: '180000' }] },
   upcoming: { count: 0, entries: [] }, overdue: { count: 0, entries: [] },
 };
 
@@ -40,7 +41,10 @@ describe('application navigation and preview screens', () => {
 
     expect(screen.getByRole('heading', { name: 'Visão geral' })).toBeInTheDocument();
     expect(screen.getByLabelText('Mês do painel')).toHaveValue(currentMonthInputValue());
-    expect(screen.getAllByText(/7\.800,00/)).toHaveLength(2);
+    const summaryTable = await screen.findByRole('table', { name: /Valores previstos e realizados/ });
+    const incomeCells = within(within(summaryTable).getByRole('row', { name: /Receitas/ })).getAllByRole('cell');
+    expect(incomeCells[0]).toHaveTextContent(/7\.800,00/);
+    expect(incomeCells[1]).toHaveTextContent(/7\.800,00/);
     expect(screen.getByText(/não representa o saldo de uma conta bancária/i)).toBeInTheDocument();
   });
 

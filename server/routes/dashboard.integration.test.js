@@ -82,17 +82,31 @@ describe.skipIf(!testDatabaseUrl)('dashboard routes with PostgreSQL', () => {
     const session = cookieValue(setup, 'cc_session');
     const otherSpace = await createOtherSpace();
 
-    const insertEntry = ({ kind, description, competenceOn, dueOn = null, plannedCents, actualCents = null, realizedOn = null }) => pool.query(`
+    const categoryResult = await pool.query(`
+      INSERT INTO categories (space_id, name, kind, expense_class)
+      VALUES ($1, $2, 'expense', 'variable')
+      RETURNING id, name
+    `, [admin.spaceId, 'Moradia']);
+    const homeCategoryId = categoryResult.rows[0].id;
+    const foodCategory = await pool.query(`
+      INSERT INTO categories (space_id, name, kind, expense_class)
+      VALUES ($1, 'Alimentação', 'expense', 'variable')
+      RETURNING id
+    `, [admin.spaceId]);
+    const foodCategoryId = foodCategory.rows[0].id;
+
+    const insertEntry = ({ kind, description, competenceOn, dueOn = null, plannedCents, actualCents = null, realizedOn = null, categoryId = null }) => pool.query(`
       INSERT INTO financial_entries (
         space_id, created_by_user_id, updated_by_user_id, kind, description,
-        competence_on, due_on, planned_cents, actual_cents, realized_on
-      ) VALUES ($1, $2, $2, $3, $4, $5, $6, $7, $8, $9)
+        category_id, competence_on, due_on, planned_cents, actual_cents, realized_on
+      ) VALUES ($1, $2, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING id
-    `, [admin.spaceId, admin.id, kind, description, competenceOn, dueOn, plannedCents, actualCents, realizedOn]);
+    `, [admin.spaceId, admin.id, kind, description, categoryId, competenceOn, dueOn, plannedCents, actualCents, realizedOn]);
 
     await insertEntry({ kind: 'income', description: 'Receita prevista em dezembro', competenceOn: '2025-12-01', dueOn: '2025-12-05', plannedCents: 100000, actualCents: 95000, realizedOn: '2026-01-05' });
     await insertEntry({ kind: 'income', description: 'Receita de competência anterior', competenceOn: '2025-11-01', dueOn: '2025-12-02', plannedCents: 20000, actualCents: 12000, realizedOn: '2025-12-30' });
-    await insertEntry({ kind: 'expense', description: 'Moradia', competenceOn: '2025-12-01', dueOn: '2025-12-20', plannedCents: 30000, actualCents: 28000, realizedOn: '2025-12-31' });
+    await insertEntry({ kind: 'expense', description: 'Moradia', competenceOn: '2025-12-01', dueOn: '2025-12-20', plannedCents: 30000, actualCents: 28000, realizedOn: '2025-12-31', categoryId: homeCategoryId });
+    await insertEntry({ kind: 'expense', description: 'Mercado', competenceOn: '2025-11-01', dueOn: '2025-11-20', plannedCents: 14000, actualCents: 12000, realizedOn: '2025-12-30', categoryId: foodCategoryId });
     await insertEntry({ kind: 'investment', description: 'Aporte', competenceOn: '2025-12-01', plannedCents: 10000 });
     await insertEntry({ kind: 'income', description: 'Renda em aberto', competenceOn: '2025-12-01', plannedCents: 5000 });
 
@@ -108,9 +122,13 @@ describe.skipIf(!testDatabaseUrl)('dashboard routes with PostgreSQL', () => {
     expect(december.body).toMatchObject({
       month: '2025-12-01',
       planned: { incomeCents: '105000', expenseCents: '30000', investmentCents: '10000', resultCents: '65000' },
-      realized: { incomeCents: '12000', expenseCents: '28000', investmentCents: '0', resultCents: '-16000' },
+      realized: { incomeCents: '12000', expenseCents: '40000', investmentCents: '0', resultCents: '-28000' },
       upcoming: { count: 1 }, overdue: { count: 1 },
     });
+    expect(december.body.charts.expensesByCategory).toEqual([
+      { categoryId: homeCategoryId, categoryName: 'Moradia', plannedCents: '30000', realizedCents: '28000' },
+      { categoryId: foodCategoryId, categoryName: 'Alimentação', plannedCents: '0', realizedCents: '12000' },
+    ]);
     expect(december.body.upcoming.entries[0]).toMatchObject({ description: 'Conta próxima', due_on: shiftDate(today, 2), planned_cents: '9990' });
     expect(december.body.overdue.entries[0]).toMatchObject({ description: 'Conta atrasada', due_on: shiftDate(today, -1), planned_cents: '5490' });
 
@@ -120,11 +138,13 @@ describe.skipIf(!testDatabaseUrl)('dashboard routes with PostgreSQL', () => {
       planned: { incomeCents: '0', expenseCents: '0', investmentCents: '0', resultCents: '0' },
       realized: { incomeCents: '95000', expenseCents: '0', investmentCents: '0', resultCents: '95000' },
     });
+    expect(january.body.charts.expensesByCategory).toEqual([]);
     const empty = await sessionRequest('get', '/api/dashboard?month=2025-10', session, state.body.csrfToken).expect(200);
     expect(empty.body).toMatchObject({ planned: { incomeCents: '0', expenseCents: '0', investmentCents: '0', resultCents: '0' }, realized: { incomeCents: '0', expenseCents: '0', investmentCents: '0', resultCents: '0' } });
+    expect(empty.body.charts.expensesByCategory).toEqual([]);
     await sessionRequest('get', '/api/dashboard?month=2025-13', session, state.body.csrfToken).expect(400);
     await sessionRequest('get', '/api/dashboard?month=2025-12', otherSpace.sessionToken, state.body.csrfToken).expect(200)
-      .expect(({ body }) => expect(body).toMatchObject({ planned: { incomeCents: '0', expenseCents: '0', investmentCents: '0', resultCents: '0' }, realized: { incomeCents: '0', expenseCents: '0', investmentCents: '0', resultCents: '0' }, upcoming: { count: 0 }, overdue: { count: 0 } }));
+      .expect(({ body }) => expect(body).toMatchObject({ planned: { incomeCents: '0', expenseCents: '0', investmentCents: '0', resultCents: '0' }, realized: { incomeCents: '0', expenseCents: '0', investmentCents: '0', resultCents: '0' }, charts: { expensesByCategory: [] }, upcoming: { count: 0 }, overdue: { count: 0 } }));
     await request(app).get('/api/dashboard?month=2025-12').set('Host', 'conta-clara.test').expect(401);
   });
 });

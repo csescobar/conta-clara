@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useState, type FormEvent } from 'react';
+import { lazy, Suspense, useCallback, useContext, useEffect, useState, type FormEvent } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight, Copy, Mail, Plus, RefreshCw, ShieldCheck, UsersRound } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AuthContext } from '../auth/auth-gate';
@@ -8,15 +8,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { EmptyState, LoadingState } from '../components/ui/feedback';
 import { FormField, Input } from '../components/ui/input';
 import { currentMonthInputValue, formatBrazilianDate } from '../lib/finance';
+import type { ChartSummary, ExpenseCategoryChartEntry } from './dashboard-charts';
 import { CatalogSettings } from './catalog-settings';
 import { PageHeader } from './page-header';
 
-type DashboardSummary = { incomeCents: string; expenseCents: string; investmentCents: string; resultCents: string };
+const DashboardCharts = lazy(() => import('./dashboard-charts').then(({ DashboardCharts: charts }) => ({ default: charts })));
+
 type DashboardEntry = { id: string; description: string; competence_on: string; due_on: string; planned_cents: string };
 type DashboardData = {
   month: string;
-  planned: DashboardSummary;
-  realized: DashboardSummary;
+  planned: ChartSummary;
+  realized: ChartSummary;
+  charts: { expensesByCategory: ExpenseCategoryChartEntry[] };
   upcoming: { count: number; entries: DashboardEntry[] };
   overdue: { count: number; entries: DashboardEntry[] };
 };
@@ -105,6 +108,9 @@ export function DashboardPage() {
           </table>
         </CardContent>
       </Card>
+      <Suspense fallback={<LoadingState label="Carregando gráficos financeiros" />}>
+        <DashboardCharts monthLabel={heading} planned={dashboard.planned} realized={dashboard.realized} expensesByCategory={dashboard.charts.expensesByCategory} />
+      </Suspense>
       <section aria-label="Contas a acompanhar" className="mt-4 grid gap-4 lg:grid-cols-2">
         <Card><CardHeader className="flex-row items-start justify-between gap-3"><div><CardTitle>Próximas contas</CardTitle><CardDescription>{dashboard.upcoming.count} despesas em aberto com vencimento nos próximos 7 dias</CardDescription></div><CalendarDays aria-hidden="true" className="mt-0.5 size-5 text-muted-foreground" /></CardHeader><CardContent>
           {dashboard.upcoming.entries.length ? <><DashboardEntryList entries={dashboard.upcoming.entries} />{dashboard.upcoming.count > dashboard.upcoming.entries.length && <p className="mt-3 text-xs text-muted-foreground">Mostrando {dashboard.upcoming.entries.length} de {dashboard.upcoming.count}. <Link to="/lancamentos" className="font-semibold text-primary hover:underline">Ver lançamentos</Link></p>}</> : <EmptyState title="Nenhuma conta próxima" description="Não há despesas em aberto vencendo nos próximos 7 dias." />}

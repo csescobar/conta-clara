@@ -50,7 +50,7 @@ export function createDashboardRouter({ pool, secureCookies = false }) {
           )
       `, [request.auth.spaceId, monthStart]);
 
-      const [upcomingResult, overdueResult] = await Promise.all([
+      const [upcomingResult, overdueResult, expenseCategoriesResult] = await Promise.all([
         pool.query(`
           SELECT count(*) OVER ()::integer AS total_count, id, description,
             competence_on::text AS competence_on, due_on::text AS due_on, planned_cents::text AS planned_cents
@@ -70,6 +70,26 @@ export function createDashboardRouter({ pool, secureCookies = false }) {
           ORDER BY due_on DESC, lower(description), id
           LIMIT 5
         `, [request.auth.spaceId]),
+        pool.query(`
+          SELECT c.id AS category_id,
+            COALESCE(c.name, 'Sem categoria') AS category_name,
+            COALESCE(SUM(e.planned_cents) FILTER (WHERE e.competence_on >= $2::date AND e.competence_on < ($2::date + interval '1 month')), 0)::text AS planned_cents,
+            COALESCE(SUM(e.actual_cents) FILTER (WHERE e.realized_on >= $2::date AND e.realized_on < ($2::date + interval '1 month')), 0)::text AS realized_cents
+          FROM financial_entries e
+          LEFT JOIN categories c ON c.space_id = e.space_id AND c.id = e.category_id
+          WHERE e.space_id = $1 AND e.kind = 'expense' AND NOT e.recurrence_skipped
+            AND (
+              (e.competence_on >= $2::date AND e.competence_on < ($2::date + interval '1 month'))
+              OR (e.realized_on >= $2::date AND e.realized_on < ($2::date + interval '1 month'))
+            )
+          GROUP BY c.id, c.name
+          HAVING COALESCE(SUM(e.planned_cents) FILTER (WHERE e.competence_on >= $2::date AND e.competence_on < ($2::date + interval '1 month')), 0) > 0
+            OR COALESCE(SUM(e.actual_cents) FILTER (WHERE e.realized_on >= $2::date AND e.realized_on < ($2::date + interval '1 month')), 0) > 0
+          ORDER BY
+            COALESCE(SUM(e.planned_cents) FILTER (WHERE e.competence_on >= $2::date AND e.competence_on < ($2::date + interval '1 month')), 0)
+              + COALESCE(SUM(e.actual_cents) FILTER (WHERE e.realized_on >= $2::date AND e.realized_on < ($2::date + interval '1 month')), 0) DESC,
+            lower(COALESCE(c.name, 'Sem categoria'))
+        `, [request.auth.spaceId, monthStart]),
       ]);
 
       const totals = summaryResult.rows[0];
@@ -90,6 +110,14 @@ export function createDashboardRouter({ pool, secureCookies = false }) {
         month: monthStart,
         planned,
         realized,
+        charts: {
+          expensesByCategory: expenseCategoriesResult.rows.map((row) => ({
+            categoryId: row.category_id,
+            categoryName: row.category_name,
+            plannedCents: row.planned_cents,
+            realizedCents: row.realized_cents,
+          })),
+        },
         upcoming: extractList(upcomingResult),
         overdue: extractList(overdueResult),
       });

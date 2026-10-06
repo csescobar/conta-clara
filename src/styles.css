@@ -16,6 +16,7 @@
   --accent-foreground: #1a4e46;
   --destructive: #9b2c2c;
   --warning: #76530e;
+  --chart-realized: #a85635;
   --border: #dce8e5;
   --input: #b9cbc6;
   --ring: #24776c;
@@ -37,6 +38,7 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  --color-chart-realized: var(--chart-realized);
   --color-warning: var(--warning);
   --color-success: var(--success);
   --color-border: var(--border);

@@ -16,6 +16,7 @@ Conta Clara usa uma aparência clara, calma e acolhedora, com verde petróleo co
 | Sucesso | `#1F6A46` | Situação paga, sempre com rótulo e ícone |
 | Atenção | `#76530E` | Situação pendente, sempre com rótulo e ícone |
 | Erro | `#9B2C2C` | Situação atrasada ou erro, sempre com rótulo e ícone |
+| Realizado em gráficos | `#A85635` | Série realizada, distinta do verde de ação da série prevista |
 
 Os pares de texto mais usados têm contraste superior a 4,5:1: texto principal sobre o fundo (11,27:1), ação primária sobre branco (6,39:1), texto secundário sobre branco (5,79:1), sucesso sobre fundo de sucesso (5,83:1), atenção sobre fundo de atenção (6,19:1) e erro sobre fundo de erro (6,59:1). Foco usa contorno visível de 2 px, com separação do componente.
 
@@ -36,9 +37,10 @@ Os componentes reutilizáveis ficam em `src/components/ui`. Seguem a composiçã
 - `FormField` e `Input`: rótulo visível ligado ao campo; ajuda e erro vinculados por `aria-describedby`.
 - `MoneyValue`: entrada em centavos inteiros, saída em reais no locale `pt-BR`.
 - `StatusBadge`: sempre exibe texto e ícone além da cor.
+- `DashboardCharts`: gráficos responsivos de previsto versus realizado e despesas por categoria, com aportes separados do consumo. Cada gráfico inclui resumo textual, tooltip com valor exato e tabela expansível; a navegação por teclado e leitores de tela permanecem habilitados.
 - `EmptyState`, `LoadingState` e `ErrorState`: mensagens explícitas; carregamento usa anúncio educado, erro usa alerta.
 
-O estado vazio explica como começar quando existe uma ação disponível. Carregamento mantém o layout estável e respeita movimento reduzido. Erro descreve a situação em texto e, quando a tela oferecer recuperação, orienta uma ação. Valores, legenda ou resumo acompanham os gráficos; não comunicar resultado somente pela cor.
+O estado vazio explica como começar quando existe uma ação disponível. Carregamento mantém o layout estável e respeita movimento reduzido. Erro descreve a situação em texto e, quando a tela oferecer recuperação, orienta uma ação. Valores, legenda ou resumo acompanham os gráficos; não comunicar resultado somente pela cor. Use os filtros do mesmo período do painel e mantenha valores exatos disponíveis fora dos eixos arredondados.
 
 ## Prévia e verificação
 
