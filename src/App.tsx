@@ -1,7 +1,8 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthGate } from './auth/auth-gate';
 import { OneTimeAccessPage } from './auth/one-time-access-page';
-import { DashboardPage, NewTransactionPage, RecurrencesPage, SettingsPage, TransactionsPage } from './pages/pages';
+import { DashboardPage, RecurrencesPage, SettingsPage } from './pages/pages';
+import { NewTransactionPage, TransactionsPage } from './pages/entries-pages';
 
 export default function App() {
   return (
@@ -13,6 +14,7 @@ export default function App() {
           <Route index element={<DashboardPage />} />
           <Route path="lancamentos" element={<TransactionsPage />} />
           <Route path="lancamentos/novo" element={<NewTransactionPage />} />
+          <Route path="lancamentos/:id/editar" element={<NewTransactionPage />} />
           <Route path="recorrencias" element={<RecurrencesPage />} />
           <Route path="configuracoes" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />

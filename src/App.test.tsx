@@ -36,17 +36,17 @@ describe('application navigation and preview screens', () => {
     expect(screen.getByText(/dados fictícios/i)).toBeInTheDocument();
   });
 
-  it('navigates to the transaction preview from the main navigation', async () => {
+  it('opens the saved transaction list from the main navigation', async () => {
     const user = userEvent.setup();
     await renderSignedInApp();
 
     const mainNav = screen.getByRole('navigation', { name: /^Navegação principal$/ });
     await user.click(within(mainNav).getByRole('link', { name: 'Lançamentos' }));
     expect(screen.getByRole('heading', { name: 'Lançamentos' })).toBeInTheDocument();
-    expect(screen.getByText(/não grava nem importa dados/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Filtrar lançamentos' })).toBeInTheDocument();
   });
 
-  it('makes the mobile navigation and the inactive demo form clear', async () => {
+  it('makes the mobile navigation and active entry form clear', async () => {
     const user = userEvent.setup();
     await renderSignedInApp();
 
@@ -59,8 +59,8 @@ describe('application navigation and preview screens', () => {
     await user.click(screen.getByRole('link', { name: 'Adicionar lançamento' }));
     expect(screen.getByRole('heading', { name: 'Adicionar lançamento' })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: 'Vencimento' })).toHaveAttribute('placeholder', 'DD/MM/AAAA');
-    expect(screen.getByRole('button', { name: /salvar lançamento/i })).toBeDisabled();
-    expect(screen.getByText(/não são salvos nesta versão/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Salvar lançamento' })).toBeEnabled();
+    expect(screen.getByRole('combobox', { name: 'Categoria' })).toBeInTheDocument();
   });
 
   it('opens member settings with admin controls and the current household roster', async () => {

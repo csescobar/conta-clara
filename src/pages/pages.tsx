@@ -1,14 +1,14 @@
-import { useCallback, useContext, useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { ArrowDownLeft, ArrowUpRight, CalendarDays, ChevronRight, CirclePlus, Copy, Download, Filter, Mail, Plus, RefreshCw, ShieldCheck, UsersRound } from 'lucide-react';
+import { useCallback, useContext, useEffect, useState, type FormEvent } from 'react';
+import { ArrowDownLeft, ArrowUpRight, CalendarDays, ChevronRight, Copy, Mail, Plus, RefreshCw, ShieldCheck, UsersRound } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AuthContext } from '../auth/auth-gate';
 import { StatusBadge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { EmptyState } from '../components/ui/feedback';
 import { FormField, Input } from '../components/ui/input';
 import { MoneyValue } from '../components/ui/money-value';
 import { CatalogSettings } from './catalog-settings';
+import { PageHeader } from './page-header';
 
 const transactions = [
   { id: 1, title: 'Salário', category: 'Renda', date: '5 out', cents: 780000, kind: 'income' as const, status: 'paid' as const },
@@ -16,10 +16,6 @@ const transactions = [
   { id: 3, title: 'Internet Giga Mais', category: 'Moradia', date: '10 out', cents: -9990, kind: 'expense' as const, status: 'pending' as const },
   { id: 4, title: 'Aporte mensal', category: 'Investimentos', date: '12 out', cents: -50000, kind: 'investment' as const, status: 'pending' as const },
 ];
-
-function PageHeader({ eyebrow, title, description, action }: { eyebrow: string; title: string; description: string; action?: ReactNode }) {
-  return <header className="mb-7 flex flex-wrap items-end justify-between gap-4"><div className="grid gap-1.5"><p className="text-sm font-medium text-primary">{eyebrow}</p><h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{title}</h1><p className="max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">{description}</p></div>{action}</header>;
-}
 
 function SummaryCard({ title, cents, detail, tone = 'default' }: { title: string; cents: number; detail: string; tone?: 'default' | 'positive' }) {
   return <Card><CardContent className="grid gap-3 p-4 sm:p-5"><p className="text-sm font-medium text-muted-foreground">{title}</p><p className="text-2xl font-semibold tracking-tight sm:text-[1.75rem]"><MoneyValue cents={cents} /></p><p className={`text-xs leading-5 ${tone === 'positive' ? 'text-success' : 'text-muted-foreground'}`}>{detail}</p></CardContent></Card>;
@@ -55,30 +51,6 @@ export function DashboardPage() {
       <Card><CardHeader><CardTitle>Movimentações recentes</CardTitle><CardDescription>Entradas, despesas e aportes de exemplo.</CardDescription></CardHeader><CardContent><TransactionRows compact /></CardContent></Card>
     </div>
     <p className="mt-5 rounded-xl border border-border bg-card px-4 py-3 text-xs leading-5 text-muted-foreground">Esta é uma demonstração com dados fictícios. Nenhum valor foi salvo.</p>
-  </>;
-}
-
-export function TransactionsPage() {
-  return <>
-    <PageHeader eyebrow="Movimentações" title="Lançamentos" description="Acompanhe entradas, despesas e aportes da família." action={<Button asChild><Link to="/lancamentos/novo"><Plus aria-hidden="true" className="size-4" />Adicionar lançamento</Link></Button>} />
-    <section className="grid gap-4">
-      <Card><CardHeader><div className="flex flex-wrap items-center justify-between gap-3"><div><CardTitle>Outubro de 2026</CardTitle><CardDescription>4 lançamentos de demonstração</CardDescription></div><div className="flex gap-2"><Button variant="outline" size="sm" type="button" disabled><Filter aria-hidden="true" className="size-4" />Filtros em breve</Button><Button variant="outline" size="sm" type="button" disabled><Download aria-hidden="true" className="size-4" />Exportar em breve</Button></div></div></CardHeader><CardContent><TransactionRows /></CardContent></Card>
-      <EmptyState title="Os dados são exemplos" description="Quando o armazenamento estiver conectado, seus lançamentos aparecerão nesta lista. Por enquanto, esta tela não grava nem importa dados." />
-    </section>
-  </>;
-}
-
-export function NewTransactionPage() {
-  return <>
-    <PageHeader eyebrow="Lançamentos" title="Adicionar lançamento" description="Este formulário demonstra como será o cadastro." />
-    <Card className="max-w-2xl"><CardContent className="grid gap-5 p-5 sm:p-7">
-      <p className="rounded-xl bg-secondary px-4 py-3 text-sm leading-6 text-secondary-foreground">Prévia: os campos abaixo não são salvos nesta versão.</p>
-      <FormField id="entry-title" label="Descrição"><Input placeholder="Ex.: conta de luz" /></FormField>
-      <fieldset className="grid gap-2"><legend className="text-sm font-medium">Tipo</legend><div className="flex flex-wrap gap-2">{['Receita', 'Despesa', 'Aporte'].map((kind, index) => <label key={kind} className="cursor-pointer"><input className="peer sr-only" type="radio" name="entry-kind" defaultChecked={index === 1} /><span className="inline-flex min-h-10 items-center rounded-xl border border-border bg-card px-4 text-sm font-medium text-muted-foreground peer-checked:border-primary peer-checked:bg-accent peer-checked:text-accent-foreground peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ring">{kind}</span></label>)}</div></fieldset>
-      <div className="grid gap-5 sm:grid-cols-2"><FormField id="entry-amount" label="Valor previsto"><Input inputMode="decimal" placeholder="R$ 0,00" /></FormField><FormField id="entry-date" label="Vencimento" hint="Dia/mês/ano"><Input inputMode="numeric" placeholder="DD/MM/AAAA" /></FormField></div>
-      <FormField id="entry-category" label="Categoria"><Input placeholder="Ex.: Moradia" /></FormField>
-      <div><Button type="button" disabled><CirclePlus aria-hidden="true" className="size-4" />Salvar lançamento (em breve)</Button><p className="mt-2 text-xs text-muted-foreground">O formulário só ficará ativo quando a API e o banco estiverem prontos.</p></div>
-    </CardContent></Card>
   </>;
 }
 

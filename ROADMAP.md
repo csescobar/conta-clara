@@ -18,7 +18,7 @@ Backlog inicial da primeira versão. Concluir dependências antes de iniciar uma
 ## 3. Controle financeiro
 
 - [x] [Gerenciar categorias e formas de pagamento](https://github.com/csescobar/conta-clara/issues/8) — dependências: #7.
-- [ ] [Cadastrar receitas, despesas e aportes](https://github.com/csescobar/conta-clara/issues/9) — dependências: #8.
+- [x] [Cadastrar receitas, despesas e aportes](https://github.com/csescobar/conta-clara/issues/9) — dependências: #8.
 - [ ] [Confirmar pagamentos e recebimentos](https://github.com/csescobar/conta-clara/issues/10) — dependências: #9.
 - [ ] [Registrar autoria das alterações](https://github.com/csescobar/conta-clara/issues/11) — dependências: #10.
 - [ ] [Gerar recorrências mensais](https://github.com/csescobar/conta-clara/issues/12) — dependências: #11.
