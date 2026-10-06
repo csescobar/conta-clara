@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AuthContext } from '../auth/auth-gate';
-import { currentMonthInputValue } from '../lib/finance';
+import { currentMonthInputValue, formatBrazilianMoney } from '../lib/finance';
 import { NewTransactionPage, TransactionsPage } from './entries-pages';
 
 const auth = { user: { id: 'member-id', name: 'Membro', email: 'member@example.test', role: 'member', spaceId: 'space-id' }, csrfToken: 'csrf-entry-test' };
@@ -94,6 +94,59 @@ describe('financial entry pages', () => {
     expect(await screen.findByRole('status', { name: 'Nenhum lançamento encontrado' })).toBeInTheDocument();
     const remove = fetchMock.mock.calls.find(([input, init]) => input === '/api/entries/entry-id' && init?.method === 'DELETE');
     expect(remove?.[1]?.headers).toMatchObject({ 'X-CSRF-Token': 'csrf-entry-test' });
+  });
+
+  it('confirms a different realized amount in a later month and can undo it', async () => {
+    const pendingEntry = {
+      id: 'entry-id', kind: 'expense', description: 'Conta de energia', category_id: 'expense-category', category_name: 'Moradia',
+      competence_on: `${currentMonthInputValue()}-01`, due_on: '2026-10-05', planned_cents: '123456', actual_cents: null,
+      realized_on: null, payment_method_id: null, payment_method_name: null, notes: null,
+      created_by_user_id: 'member-id', updated_by_user_id: 'member-id', status: 'late',
+    };
+    type EntryState = Omit<typeof pendingEntry, 'actual_cents' | 'realized_on' | 'status'> & { actual_cents: string | null; realized_on: string | null; status: string };
+    let currentEntry: EntryState = pendingEntry;
+    const fetchMock = vi.fn().mockImplementation(async (input: string, init?: RequestInit) => {
+      if (input === '/api/catalog/categories?includeArchived=true') return response({ categories });
+      if (input.startsWith('/api/entries?')) return response({ entries: [currentEntry] });
+      if (input === '/api/entries/entry-id/confirm' && init?.method === 'POST') {
+        const realization = JSON.parse(String(init.body));
+        currentEntry = { ...pendingEntry, actual_cents: String(realization.actualCents), realized_on: realization.realizedOn, status: 'paid' };
+        return response({ entry: currentEntry });
+      }
+      if (input === '/api/entries/entry-id/confirm' && init?.method === 'DELETE') {
+        currentEntry = { ...pendingEntry };
+        return response({ entry: currentEntry });
+      }
+      throw new Error(`Unexpected request: ${input}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('confirm', vi.fn(() => true));
+    const user = userEvent.setup();
+    renderPage('/lancamentos');
+
+    const row = await screen.findByText('Conta de energia').then((element) => element.closest('li'));
+    expect(row).not.toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Confirmar Conta de energia' }));
+    await user.clear(screen.getByRole('textbox', { name: 'Valor realizado (R$)' }));
+    await user.type(screen.getByRole('textbox', { name: 'Valor realizado (R$)' }), '97,00');
+    await user.clear(screen.getByRole('textbox', { name: 'Data de realização' }));
+    await user.type(screen.getByRole('textbox', { name: 'Data de realização' }), '02/11/2026');
+    await user.click(screen.getByRole('button', { name: 'Salvar realização' }));
+
+    await waitFor(() => expect(row).toHaveTextContent('Realizado 02/11/2026'));
+    expect(row).toHaveTextContent('Competência 10/2026');
+    expect(row).toHaveTextContent(formatBrazilianMoney('9700').replace(/\u00a0/g, ' '));
+    expect(row).toHaveTextContent(`Previsto ${formatBrazilianMoney('123456').replace(/\u00a0/g, ' ')}`);
+    expect(within(row as HTMLElement).getByLabelText('Situação: Pago')).toBeInTheDocument();
+    const confirmCall = fetchMock.mock.calls.find(([input, init]) => input === '/api/entries/entry-id/confirm' && init?.method === 'POST');
+    expect(JSON.parse(String(confirmCall?.[1]?.body))).toEqual({ actualCents: 9700, realizedOn: '2026-11-02' });
+
+    await user.click(screen.getByRole('button', { name: 'Desfazer confirmação Conta de energia' }));
+    expect(window.confirm).toHaveBeenCalledWith('Desfazer a confirmação de “Conta de energia”? O lançamento voltará a ficar em aberto ou atrasado.');
+    await waitFor(() => expect(within(row as HTMLElement).getByLabelText('Situação: Atrasado')).toBeInTheDocument());
+    expect(row).not.toHaveTextContent('Realizado 02/11/2026');
+    const undoCall = fetchMock.mock.calls.find(([input, init]) => input === '/api/entries/entry-id/confirm' && init?.method === 'DELETE');
+    expect(undoCall?.[1]?.headers).toMatchObject({ 'X-CSRF-Token': 'csrf-entry-test' });
   });
 
   it('keeps an archived category and payment method on the entry being edited', async () => {

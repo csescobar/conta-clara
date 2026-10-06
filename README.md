@@ -1,6 +1,6 @@
 # Conta Clara
 
-Controle financeiro familiar local, com finanças compartilhadas e uso pelo computador e celular. A aplicação web está em desenvolvimento: a fundação React/API, autenticação, convites, gestão de membros, cadastros compartilhados e registro de lançamentos previstos já funcionam; confirmação de pagamentos, painel e sincronização virão nas histórias seguintes.
+Controle financeiro familiar local, com finanças compartilhadas e uso pelo computador e celular. A aplicação web está em desenvolvimento: a fundação React/API, autenticação, convites, gestão de membros, cadastros compartilhados e registro e confirmação de lançamentos já funcionam; painel e sincronização virão nas histórias seguintes.
 
 ## Proposta
 

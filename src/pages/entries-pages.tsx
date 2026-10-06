@@ -7,7 +7,7 @@ import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { EmptyState, LoadingState } from '../components/ui/feedback';
 import { FormField, Input } from '../components/ui/input';
-import { currentMonthInputValue, formatBrazilianDate, formatBrazilianMoney, parseBrazilianCents, parseBrazilianDate } from '../lib/finance';
+import { currentBrazilianDate, currentMonthInputValue, formatBrazilianDate, formatBrazilianMonth, formatBrazilianMoney, parseBrazilianCents, parseBrazilianDate } from '../lib/finance';
 import { PageHeader } from './page-header';
 
 type EntryKind = 'income' | 'expense' | 'investment';
@@ -55,6 +55,9 @@ export function TransactionsPage() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyEntryId, setBusyEntryId] = useState('');
+  const [confirmingEntryId, setConfirmingEntryId] = useState('');
+  const [actualAmount, setActualAmount] = useState('');
+  const [actualDate, setActualDate] = useState(() => currentBrazilianDate());
   const [error, setError] = useState('');
 
   const loadEntries = useCallback(async () => {
@@ -105,6 +108,65 @@ export function TransactionsPage() {
     }
   }
 
+  function startConfirmation(entry: Entry) {
+    setConfirmingEntryId(entry.id);
+    setActualAmount(formatBrazilianMoney(entry.planned_cents));
+    setActualDate(currentBrazilianDate());
+    setError('');
+  }
+
+  async function confirmEntry(event: FormEvent<HTMLFormElement>, entry: Entry) {
+    event.preventDefault();
+    setError('');
+    const actualCents = parseBrazilianCents(actualAmount, true);
+    if (actualCents === null) {
+      setError('Informe um valor realizado em reais, com até duas casas decimais.');
+      return;
+    }
+    const realizedOn = parseBrazilianDate(actualDate);
+    if (!realizedOn) {
+      setError('Informe a data de realização no formato DD/MM/AAAA.');
+      return;
+    }
+    setBusyEntryId(entry.id);
+    try {
+      const response = await fetch(`/api/entries/${entry.id}/confirm`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': auth?.csrfToken ?? '' },
+        body: JSON.stringify({ actualCents, realizedOn }),
+      });
+      const result = await readApi(response);
+      if (!response.ok) throw new Error(result.error ?? 'Não foi possível confirmar o lançamento.');
+      setConfirmingEntryId('');
+      await loadEntries();
+    } catch (confirmationError) {
+      setError(confirmationError instanceof Error ? confirmationError.message : 'Não foi possível confirmar o lançamento.');
+    } finally {
+      setBusyEntryId('');
+    }
+  }
+
+  async function undoConfirmation(entry: Entry) {
+    if (!window.confirm(`Desfazer a confirmação de “${entry.description}”? O lançamento voltará a ficar em aberto ou atrasado.`)) return;
+    setBusyEntryId(entry.id);
+    setError('');
+    try {
+      const response = await fetch(`/api/entries/${entry.id}/confirm`, {
+        method: 'DELETE',
+        credentials: 'same-origin',
+        headers: { 'X-CSRF-Token': auth?.csrfToken ?? '' },
+      });
+      const result = await readApi(response);
+      if (!response.ok) throw new Error(result.error ?? 'Não foi possível desfazer a confirmação.');
+      await loadEntries();
+    } catch (undoError) {
+      setError(undoError instanceof Error ? undoError.message : 'Não foi possível desfazer a confirmação.');
+    } finally {
+      setBusyEntryId('');
+    }
+  }
+
   return <>
     <PageHeader eyebrow="Movimentações" title="Lançamentos" description="Acompanhe receitas, despesas e aportes do espaço compartilhado." action={<Button asChild><Link to="/lancamentos/novo"><Plus aria-hidden="true" className="size-4" />Adicionar lançamento</Link></Button>} />
     {error && <p role="alert" className="mb-4 rounded-xl bg-[#fdecec] px-4 py-3 text-sm font-medium text-destructive">{error}</p>}
@@ -124,9 +186,10 @@ export function TransactionsPage() {
             const Icon = entry.kind === 'income' ? ArrowDownLeft : entry.kind === 'investment' ? RefreshCw : ArrowUpRight;
             return <li key={entry.id} className="flex min-w-0 flex-wrap items-center gap-3 py-3.5 first:pt-0 last:pb-0 sm:gap-4">
               <span className={`grid size-10 shrink-0 place-items-center rounded-xl ${entry.kind === 'income' ? 'bg-[#e8f5ed] text-success' : entry.kind === 'investment' ? 'bg-accent text-accent-foreground' : 'bg-muted text-muted-foreground'}`}><Icon aria-hidden="true" className="size-[18px]" /></span>
-              <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{entry.description}</p><p className="mt-0.5 text-xs text-muted-foreground">{kindLabels[entry.kind]} · {entry.category_name ?? 'Sem categoria'} · {formatBrazilianDate(entry.due_on)}</p></div>
-              <div className="grid shrink-0 justify-items-end gap-1"><p className={`text-sm font-semibold tabular-nums ${entry.kind === 'income' ? 'text-success' : 'text-foreground'}`}>{formatBrazilianMoney(entry.planned_cents)}</p><StatusBadge status={entry.status} aria-label={`Situação: ${statusLabels[entry.status]}`} /></div>
-              <div className="flex w-full justify-end gap-1 sm:w-auto"><Button asChild size="sm" variant="ghost"><Link aria-label={`Editar ${entry.description}`} to={`/lancamentos/${entry.id}/editar`}><Pencil aria-hidden="true" className="size-4" />Editar</Link></Button><Button type="button" size="sm" variant="ghost" disabled={busyEntryId === entry.id} aria-label={`Excluir ${entry.description}`} onClick={() => void deleteEntry(entry)}><Trash2 aria-hidden="true" className="size-4" />Excluir</Button></div>
+              <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{entry.description}</p><p className="mt-0.5 text-xs leading-5 text-muted-foreground">{kindLabels[entry.kind]} · {entry.category_name ?? 'Sem categoria'} · Competência {formatBrazilianMonth(entry.competence_on)} · Vencimento {formatBrazilianDate(entry.due_on)}{entry.realized_on ? ` · Realizado ${formatBrazilianDate(entry.realized_on)}` : ''}</p></div>
+              <div className="grid shrink-0 justify-items-end gap-1"><p className={`text-sm font-semibold tabular-nums ${entry.kind === 'income' ? 'text-success' : 'text-foreground'}`}>{formatBrazilianMoney(entry.actual_cents ?? entry.planned_cents)}</p>{entry.actual_cents !== null && <p className="text-xs text-muted-foreground">Previsto {formatBrazilianMoney(entry.planned_cents)}</p>}<StatusBadge status={entry.status} aria-label={`Situação: ${statusLabels[entry.status]}`} /></div>
+              <div className="flex w-full flex-wrap justify-end gap-1 sm:w-auto">{entry.actual_cents === null ? <Button type="button" size="sm" variant="outline" disabled={busyEntryId === entry.id} aria-label={`Confirmar ${entry.description}`} onClick={() => startConfirmation(entry)}><CalendarDays aria-hidden="true" className="size-4" />Confirmar</Button> : <Button type="button" size="sm" variant="ghost" disabled={busyEntryId === entry.id} aria-label={`Desfazer confirmação ${entry.description}`} onClick={() => void undoConfirmation(entry)}>Desfazer confirmação</Button>}<Button asChild size="sm" variant="ghost"><Link aria-label={`Editar ${entry.description}`} to={`/lancamentos/${entry.id}/editar`}><Pencil aria-hidden="true" className="size-4" />Editar</Link></Button><Button type="button" size="sm" variant="ghost" disabled={busyEntryId === entry.id} aria-label={`Excluir ${entry.description}`} onClick={() => void deleteEntry(entry)}><Trash2 aria-hidden="true" className="size-4" />Excluir</Button></div>
+              {confirmingEntryId === entry.id && <form aria-label={`Confirmar lançamento ${entry.description}`} onSubmit={(event) => void confirmEntry(event, entry)} className="grid w-full gap-3 rounded-xl border border-border bg-muted/40 p-3 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-end"><FormField id={`actual-amount-${entry.id}`} label="Valor realizado (R$)"><Input required inputMode="decimal" value={actualAmount} onChange={(event) => setActualAmount(event.target.value)} /></FormField><FormField id={`actual-date-${entry.id}`} label="Data de realização" hint="DD/MM/AAAA"><Input required inputMode="numeric" maxLength={10} value={actualDate} onChange={(event) => setActualDate(event.target.value)} /></FormField><Button type="submit" size="sm" disabled={busyEntryId === entry.id}>{busyEntryId === entry.id ? 'Salvando…' : 'Salvar realização'}</Button><Button type="button" size="sm" variant="outline" onClick={() => setConfirmingEntryId('')}>Cancelar</Button></form>}
             </li>;
           })}</ul> : <EmptyState title="Nenhum lançamento encontrado" description="Ajuste os filtros ou adicione a primeira movimentação deste período." action={<Button asChild><Link to="/lancamentos/novo"><Plus aria-hidden="true" className="size-4" />Adicionar lançamento</Link></Button>} />}
         </CardContent>

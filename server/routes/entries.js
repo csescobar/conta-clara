@@ -39,6 +39,13 @@ function parseEntry(body) {
   return { kind, description, competenceOn, dueOn, plannedCents, categoryId, paymentMethodId, notes };
 }
 
+function parseRealization(body) {
+  const actualCents = body?.actualCents;
+  const realizedOn = body?.realizedOn;
+  if (!Number.isSafeInteger(actualCents) || actualCents < 0 || !isIsoDate(realizedOn)) return null;
+  return { actualCents, realizedOn };
+}
+
 async function validateReferences(client, spaceId, entry, current = {}) {
   if (entry.categoryId) {
     const category = await client.query(`
@@ -69,7 +76,7 @@ async function selectEntry(client, spaceId, entryId) {
       e.created_by_user_id, e.updated_by_user_id, e.created_at, e.updated_at,
       CASE
         WHEN e.actual_cents IS NOT NULL THEN 'paid'
-        WHEN e.due_on < (now() AT TIME ZONE 'America/Sao_Paulo')::date THEN 'late'
+        WHEN e.kind = 'expense' AND e.due_on < (now() AT TIME ZONE 'America/Sao_Paulo')::date THEN 'late'
         ELSE 'pending'
       END AS status
     FROM financial_entries e
@@ -106,7 +113,7 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
           e.created_by_user_id, e.updated_by_user_id, e.created_at, e.updated_at,
           CASE
             WHEN e.actual_cents IS NOT NULL THEN 'paid'
-            WHEN e.due_on < (now() AT TIME ZONE 'America/Sao_Paulo')::date THEN 'late'
+            WHEN e.kind = 'expense' AND e.due_on < (now() AT TIME ZONE 'America/Sao_Paulo')::date THEN 'late'
             ELSE 'pending'
           END AS status
         FROM financial_entries e
@@ -117,7 +124,7 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
           AND ($3::uuid IS NULL OR e.category_id = $3::uuid)
           AND ($4::text IS NULL OR CASE
             WHEN e.actual_cents IS NOT NULL THEN 'paid'
-            WHEN e.due_on < (now() AT TIME ZONE 'America/Sao_Paulo')::date THEN 'late'
+            WHEN e.kind = 'expense' AND e.due_on < (now() AT TIME ZONE 'America/Sao_Paulo')::date THEN 'late'
             ELSE 'pending'
           END = $4::text)
         ORDER BY e.competence_on DESC, e.due_on NULLS LAST, lower(e.description), e.id
@@ -199,6 +206,70 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
       const updated = await selectEntry(client, request.auth.spaceId, request.params.id);
       await client.query('COMMIT');
       return response.json({ entry: updated });
+    } catch (error) {
+      if (client) await client.query('ROLLBACK').catch(() => {});
+      return next(error);
+    } finally {
+      client?.release();
+    }
+  });
+
+  router.post('/:id/confirm', csrf, async (request, response, next) => {
+    if (!isUuid(request.params.id)) return response.status(404).json({ error: 'Lançamento não encontrado.' });
+    const realization = parseRealization(request.body);
+    if (!realization) return response.status(400).json({ error: 'Informe um valor realizado em centavos inteiros e uma data válida.' });
+    let client;
+    try {
+      client = await pool.connect();
+      await client.query('BEGIN');
+      const existing = await client.query('SELECT actual_cents FROM financial_entries WHERE id = $1 AND space_id = $2 FOR UPDATE', [request.params.id, request.auth.spaceId]);
+      if (!existing.rows[0]) {
+        await client.query('ROLLBACK');
+        return response.status(404).json({ error: 'Lançamento não encontrado.' });
+      }
+      if (existing.rows[0].actual_cents !== null) {
+        await client.query('ROLLBACK');
+        return response.status(409).json({ error: 'Este lançamento já foi confirmado. Desfaça a confirmação antes de alterar o valor realizado.' });
+      }
+      await client.query(`
+        UPDATE financial_entries
+        SET actual_cents = $1, realized_on = $2, updated_by_user_id = $3, updated_at = now()
+        WHERE id = $4 AND space_id = $5
+      `, [realization.actualCents, realization.realizedOn, request.auth.id, request.params.id, request.auth.spaceId]);
+      const confirmed = await selectEntry(client, request.auth.spaceId, request.params.id);
+      await client.query('COMMIT');
+      return response.json({ entry: confirmed });
+    } catch (error) {
+      if (client) await client.query('ROLLBACK').catch(() => {});
+      return next(error);
+    } finally {
+      client?.release();
+    }
+  });
+
+  router.delete('/:id/confirm', csrf, async (request, response, next) => {
+    if (!isUuid(request.params.id)) return response.status(404).json({ error: 'Lançamento não encontrado.' });
+    let client;
+    try {
+      client = await pool.connect();
+      await client.query('BEGIN');
+      const existing = await client.query('SELECT actual_cents FROM financial_entries WHERE id = $1 AND space_id = $2 FOR UPDATE', [request.params.id, request.auth.spaceId]);
+      if (!existing.rows[0]) {
+        await client.query('ROLLBACK');
+        return response.status(404).json({ error: 'Lançamento não encontrado.' });
+      }
+      if (existing.rows[0].actual_cents === null) {
+        await client.query('ROLLBACK');
+        return response.status(409).json({ error: 'Este lançamento ainda não foi confirmado.' });
+      }
+      await client.query(`
+        UPDATE financial_entries
+        SET actual_cents = NULL, realized_on = NULL, updated_by_user_id = $1, updated_at = now()
+        WHERE id = $2 AND space_id = $3
+      `, [request.auth.id, request.params.id, request.auth.spaceId]);
+      const unconfirmed = await selectEntry(client, request.auth.spaceId, request.params.id);
+      await client.query('COMMIT');
+      return response.json({ entry: unconfirmed });
     } catch (error) {
       if (client) await client.query('ROLLBACK').catch(() => {});
       return next(error);

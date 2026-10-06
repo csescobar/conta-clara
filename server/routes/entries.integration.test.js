@@ -135,12 +135,18 @@ describe.skipIf(!testDatabaseUrl)('financial entry routes with PostgreSQL', () =
     });
     const income = await sessionRequest('post', '/api/entries', adminSession, adminState.body.csrfToken, {
       kind: 'income', description: 'Salário', categoryId: incomeCategory.body.category.id,
-      competenceOn: '2026-10-01', plannedCents: 780000,
+      competenceOn: '2026-10-01', dueOn: '2000-02-01', plannedCents: 780000,
     }).expect(201);
-    const late = await sessionRequest('post', '/api/entries', adminSession, adminState.body.csrfToken, {
+    const investment = await sessionRequest('post', '/api/entries', adminSession, adminState.body.csrfToken, {
       kind: 'investment', description: 'Aporte mensal', competenceOn: '2026-10-01', dueOn: '2026-09-01', plannedCents: 50000,
     }).expect(201);
-    expect(late.body.entry).toMatchObject({ kind: 'investment', category_name: null, status: 'late' });
+    expect(income.body.entry).toMatchObject({ kind: 'income', due_on: '2000-02-01', status: 'pending' });
+    expect(investment.body.entry).toMatchObject({ kind: 'investment', category_name: null, status: 'pending' });
+    const overdueExpense = await sessionRequest('post', '/api/entries', adminSession, adminState.body.csrfToken, {
+      kind: 'expense', description: 'Conta vencida', categoryId: expenseCategory.body.category.id,
+      competenceOn: '2026-10-01', dueOn: '2000-01-01', plannedCents: 9900,
+    }).expect(201);
+    expect(overdueExpense.body.entry).toMatchObject({ kind: 'expense', status: 'late' });
 
     await sessionRequest('post', `/api/catalog/categories/${expenseCategory.body.category.id}/archive`, adminSession, adminState.body.csrfToken).expect(204);
     await sessionRequest('post', `/api/catalog/payment-methods/${paymentMethod.body.paymentMethod.id}/archive`, adminSession, adminState.body.csrfToken).expect(204);
@@ -156,17 +162,48 @@ describe.skipIf(!testDatabaseUrl)('financial entry routes with PostgreSQL', () =
     }).expect(400);
 
     const sharedList = await sessionRequest('get', '/api/entries?month=2026-10', adminSession, adminState.body.csrfToken).expect(200);
-    expect(sharedList.body.entries).toHaveLength(3);
+    expect(sharedList.body.entries).toHaveLength(4);
     await sessionRequest('get', `/api/entries?categoryId=${expenseCategory.body.category.id}`, memberSession, memberState.body.csrfToken).expect(200)
-      .expect(({ body }) => expect(body.entries.map(({ id }) => id)).toEqual([expense.body.entry.id]));
+      .expect(({ body }) => expect(body.entries.map(({ id }) => id)).toEqual([overdueExpense.body.entry.id, expense.body.entry.id]));
     await sessionRequest('get', '/api/entries?month=2026-10&status=pending', memberSession, memberState.body.csrfToken).expect(200)
-      .expect(({ body }) => expect(body.entries.map(({ id }) => id)).toEqual([expense.body.entry.id, income.body.entry.id]));
+      .expect(({ body }) => expect(body.entries.map(({ id }) => id)).toEqual([income.body.entry.id, investment.body.entry.id, expense.body.entry.id]));
     await sessionRequest('get', '/api/entries?month=2026-10&status=late', memberSession, memberState.body.csrfToken).expect(200)
-      .expect(({ body }) => expect(body.entries.map(({ id }) => id)).toEqual([late.body.entry.id]));
+      .expect(({ body }) => expect(body.entries.map(({ id }) => id)).toEqual([overdueExpense.body.entry.id]));
     await sessionRequest('get', '/api/entries?month=2026-15', memberSession, memberState.body.csrfToken).expect(400);
     await sessionRequest('get', '/api/entries?status=unknown', memberSession, memberState.body.csrfToken).expect(400);
     await sessionRequest('get', '/api/entries', otherSpace.sessionToken, memberState.body.csrfToken).expect(200).expect(({ body }) => expect(body.entries).toEqual([]));
     await sessionRequest('get', `/api/entries/${expense.body.entry.id}`, otherSpace.sessionToken, memberState.body.csrfToken).expect(404);
+
+    await sessionRequest('post', `/api/entries/${overdueExpense.body.entry.id}/confirm`, memberSession, memberState.body.csrfToken, {
+      actualCents: 9900.5, realizedOn: '2026-11-02',
+    }).expect(400);
+    await sessionRequest('post', `/api/entries/${overdueExpense.body.entry.id}/confirm`, memberSession, memberState.body.csrfToken, {
+      actualCents: 9700, realizedOn: '31/02/2026',
+    }).expect(400);
+    await sessionRequest('post', `/api/entries/${overdueExpense.body.entry.id}/confirm`, otherSpace.sessionToken, memberState.body.csrfToken, {
+      actualCents: 9700, realizedOn: '2026-11-02',
+    }).expect(404);
+    const confirmed = await sessionRequest('post', `/api/entries/${overdueExpense.body.entry.id}/confirm`, memberSession, memberState.body.csrfToken, {
+      actualCents: 9700, realizedOn: '2026-11-02',
+    }).expect(200);
+    expect(confirmed.body.entry).toMatchObject({
+      competence_on: '2026-10-01', due_on: '2000-01-01', planned_cents: '9900',
+      actual_cents: '9700', realized_on: '2026-11-02', status: 'paid', updated_by_user_id: member.id,
+    });
+    await sessionRequest('post', `/api/entries/${overdueExpense.body.entry.id}/confirm`, adminSession, adminState.body.csrfToken, {
+      actualCents: 9700, realizedOn: '2026-11-02',
+    }).expect(409);
+    await sessionRequest('get', '/api/entries?month=2026-10&status=paid', adminSession, adminState.body.csrfToken).expect(200)
+      .expect(({ body }) => expect(body.entries.map(({ id, realized_on }) => [id, realized_on])).toEqual([[overdueExpense.body.entry.id, '2026-11-02']]));
+    await sessionRequest('delete', `/api/entries/${overdueExpense.body.entry.id}/confirm`, otherSpace.sessionToken, memberState.body.csrfToken).expect(404);
+    const undone = await sessionRequest('delete', `/api/entries/${overdueExpense.body.entry.id}/confirm`, adminSession, adminState.body.csrfToken).expect(200);
+    expect(undone.body.entry).toMatchObject({
+      competence_on: '2026-10-01', planned_cents: '9900', actual_cents: null, realized_on: null,
+      status: 'late', updated_by_user_id: admin.id,
+    });
+    await sessionRequest('delete', `/api/entries/${overdueExpense.body.entry.id}/confirm`, memberSession, memberState.body.csrfToken).expect(409);
+    await sessionRequest('get', '/api/entries?month=2026-10&status=late', memberSession, memberState.body.csrfToken).expect(200)
+      .expect(({ body }) => expect(body.entries.map(({ id }) => id)).toEqual([overdueExpense.body.entry.id]));
 
     const updated = await sessionRequest('put', `/api/entries/${expense.body.entry.id}`, adminSession, adminState.body.csrfToken, {
       kind: 'expense', description: 'Moradia', categoryId: expenseCategory.body.category.id,
@@ -181,6 +218,6 @@ describe.skipIf(!testDatabaseUrl)('financial entry routes with PostgreSQL', () =
     await sessionRequest('delete', `/api/entries/${expense.body.entry.id}`, otherSpace.sessionToken, memberState.body.csrfToken).expect(404);
     await sessionRequest('delete', `/api/entries/${income.body.entry.id}`, memberSession, memberState.body.csrfToken).expect(204);
     await sessionRequest('get', '/api/entries?month=2026-10', adminSession, adminState.body.csrfToken).expect(200)
-      .expect(({ body }) => expect(body.entries.map(({ id }) => id)).toEqual([late.body.entry.id, expense.body.entry.id]));
+      .expect(({ body }) => expect(body.entries.map(({ id }) => id)).toEqual([overdueExpense.body.entry.id, investment.body.entry.id, expense.body.entry.id]));
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatBrazilianDate, formatBrazilianMoney, parseBrazilianCents, parseBrazilianDate } from './finance';
+import { formatBrazilianDate, formatBrazilianMonth, formatBrazilianMoney, parseBrazilianCents, parseBrazilianDate } from './finance';
 
 describe('Brazilian money and date input', () => {
   it.each([
@@ -14,11 +14,17 @@ describe('Brazilian money and date input', () => {
     expect(parseBrazilianCents(value)).toBeNull();
   });
 
+  it('allows a zero realized amount while planned entries remain positive', () => {
+    expect(parseBrazilianCents('0,00', true)).toBe(0);
+    expect(parseBrazilianCents('0,00')).toBeNull();
+  });
+
   it('checks calendar dates and formats dates and cents for Brazil', () => {
     expect(parseBrazilianDate('29/02/2024')).toBe('2024-02-29');
     expect(parseBrazilianDate('29/02/2025')).toBeNull();
     expect(parseBrazilianDate('31/04/2026')).toBeNull();
     expect(formatBrazilianDate('2026-10-05')).toBe('05/10/2026');
+    expect(formatBrazilianMonth('2026-10-01')).toBe('10/2026');
     expect(formatBrazilianMoney('145600')).toBe('R$ 1.456,00');
   });
 });

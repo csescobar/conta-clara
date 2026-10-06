@@ -1,11 +1,11 @@
-export function parseBrazilianCents(value: string): number | null {
+export function parseBrazilianCents(value: string, allowZero = false): number | null {
   const normalized = value.trim().replace(/^R\$\s*/i, '').replace(/\s/g, '');
   const match = normalized.match(/^(\d{1,3}(?:\.\d{3})+|\d+)(?:,(\d{1,2}))?$/);
   if (!match) return null;
   const whole = Number(match[1].replace(/\./g, ''));
   const fraction = Number((match[2] ?? '').padEnd(2, '0'));
   const cents = whole * 100 + fraction;
-  return Number.isSafeInteger(cents) && cents > 0 ? cents : null;
+  return Number.isSafeInteger(cents) && (allowZero ? cents >= 0 : cents > 0) ? cents : null;
 }
 
 export function parseBrazilianDate(value: string): string | null {
@@ -21,6 +21,15 @@ export function formatBrazilianDate(value: string | null): string {
   if (!value) return 'Sem vencimento';
   const [year, month, day] = value.slice(0, 10).split('-');
   return `${day}/${month}/${year}`;
+}
+
+export function formatBrazilianMonth(value: string): string {
+  const [year, month] = value.slice(0, 7).split('-');
+  return `${month}/${year}`;
+}
+
+export function currentBrazilianDate(date = new Date()): string {
+  return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
 }
 
 export function formatBrazilianMoney(cents: number | string): string {
