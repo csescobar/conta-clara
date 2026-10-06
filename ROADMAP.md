@@ -26,7 +26,7 @@ Backlog inicial da primeira versão. Concluir dependências antes de iniciar uma
 ## 4. Visão e migração
 
 - [x] [Construir painel previsto versus realizado](https://github.com/csescobar/conta-clara/issues/13) — dependências: #12.
-- [ ] [Adicionar gráficos e filtros](https://github.com/csescobar/conta-clara/issues/14) — dependências: #13.
+- [x] [Adicionar gráficos e filtros](https://github.com/csescobar/conta-clara/issues/14) — dependências: #13.
 - [ ] [Importar planilha com revisão](https://github.com/csescobar/conta-clara/issues/15) — dependências: #13.
 - [ ] [Exportar lançamentos em CSV](https://github.com/csescobar/conta-clara/issues/16) — dependências: #9.
 
