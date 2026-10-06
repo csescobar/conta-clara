@@ -141,7 +141,7 @@ async function findSessionUser(pool, request) {
     SELECT u.id AS user_id, u.display_name, u.email, m.role, m.space_id
     FROM sessions s
     JOIN users u ON u.id = s.user_id AND u.is_active
-    JOIN space_memberships m ON m.space_id = s.space_id AND m.user_id = s.user_id
+    JOIN space_memberships m ON m.space_id = s.space_id AND m.user_id = s.user_id AND m.deactivated_at IS NULL
     WHERE s.token_hash = $1 AND s.expires_at > now()
     LIMIT 1
   `, [hashOpaqueToken(token)]);
@@ -253,7 +253,7 @@ export function createAuthRouter({ pool, secureCookies = false, secret = randomB
                m.role, m.space_id
         FROM users u
         JOIN space_memberships m ON m.user_id = u.id
-        WHERE u.email = $1 AND u.is_active
+        WHERE u.email = $1 AND u.is_active AND m.deactivated_at IS NULL
         ORDER BY m.created_at
         LIMIT 1
         FOR SHARE OF u, m

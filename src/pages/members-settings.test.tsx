@@ -6,7 +6,7 @@ import { AuthContext } from '../auth/auth-gate';
 import { SettingsPage } from './pages';
 
 const csrfToken = 'csrf-members-test';
-const members = [{ id: 'admin-id', name: 'Administradora', email: 'admin@example.test', role: 'admin' }];
+const members = [{ id: 'admin-id', name: 'Administradora', email: 'admin@example.test', role: 'admin', is_active: true }];
 const fakeToken = 'A'.repeat(43);
 
 function response(body: unknown) {
@@ -58,5 +58,39 @@ describe('member settings', () => {
     expect(screen.queryByRole('button', { name: 'Gerar convite' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Link para redefinir senha' })).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('allows an administrator to deactivate a member after confirmation', async () => {
+    const currentMembers = [members[0], { id: 'member-id', name: 'Pessoa convidada', email: 'membro@example.test', role: 'member', is_active: true }];
+    const fetchMock = vi.fn().mockImplementation(async (input: string, init?: RequestInit) => {
+      if (input === '/api/members') return response({ members: currentMembers });
+      if (input === '/api/members/invitations' && !init?.method) return response({ invitations: [] });
+      if (input === '/api/members/member-id/deactivate' && init?.method === 'POST') {
+        currentMembers[1] = { ...currentMembers[1], is_active: false };
+        return { ok: true, status: 204, json: async () => ({}) };
+      }
+      if (input === '/api/members/member-id/reactivate' && init?.method === 'POST') {
+        currentMembers[1] = { ...currentMembers[1], is_active: true };
+        return { ok: true, status: 204, json: async () => ({}) };
+      }
+      throw new Error(`Unexpected request: ${input}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('confirm', vi.fn(() => true));
+    const user = userEvent.setup();
+    renderSettings('admin');
+
+    await user.click(await screen.findByRole('button', { name: 'Desativar acesso de Pessoa convidada' }));
+
+    expect(window.confirm).toHaveBeenCalledWith('Desativar o acesso de Pessoa convidada? As sessões ativas serão encerradas.');
+    expect(await screen.findByText('Acesso desativado')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Desativar acesso de Pessoa convidada' })).not.toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([input]) => input === '/api/members/member-id/deactivate')).toBe(true);
+
+    await user.click(screen.getByRole('button', { name: 'Reativar acesso de Pessoa convidada' }));
+
+    expect(await screen.findByRole('button', { name: 'Desativar acesso de Pessoa convidada' })).toBeInTheDocument();
+    expect(screen.queryByText('Acesso desativado')).not.toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([input]) => input === '/api/members/member-id/reactivate')).toBe(true);
   });
 });

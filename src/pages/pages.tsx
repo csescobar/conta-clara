@@ -94,7 +94,7 @@ export function RecurrencesPage() {
 export function SettingsPage() {
   const auth = useContext(AuthContext);
   const isAdmin = auth?.user.role === 'admin';
-  const [members, setMembers] = useState<Array<{ id: string; name: string; email: string; role: string }> | null>(null);
+  const [members, setMembers] = useState<Array<{ id: string; name: string; email: string; role: string; is_active: boolean }> | null>(null);
   const [invitations, setInvitations] = useState<Array<{ id: string; email: string; status: string; expires_at: string }> | null>(null);
   const [email, setEmail] = useState('');
   const [link, setLink] = useState<{ path: string; label: string; expires: string } | null>(null);
@@ -181,6 +181,34 @@ export function SettingsPage() {
     }
   }
 
+  async function deactivateMember(member: { id: string; name: string }) {
+    if (!window.confirm(`Desativar o acesso de ${member.name}? As sessões ativas serão encerradas.`)) return;
+    setError('');
+    setBusy(true);
+    try {
+      await postAction(`/api/members/${member.id}/deactivate`);
+      setLink(null);
+      await load();
+    } catch (actionError) {
+      setError(actionError instanceof Error ? actionError.message : 'Não foi possível desativar o acesso.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function reactivateMember(member: { id: string }) {
+    setError('');
+    setBusy(true);
+    try {
+      await postAction(`/api/members/${member.id}/reactivate`);
+      await load();
+    } catch (actionError) {
+      setError(actionError instanceof Error ? actionError.message : 'Não foi possível reativar o acesso.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function copyLink() {
     if (!link) return;
     try {
@@ -198,7 +226,7 @@ export function SettingsPage() {
     {error && <p role="alert" className="mb-5 rounded-xl bg-[#fdecec] px-4 py-3 text-sm font-medium text-destructive">{error}</p>}
     <section aria-labelledby="members-heading" className="grid gap-4">
       <Card><CardHeader><CardTitle id="members-heading"><span className="flex items-center gap-2"><UsersRound aria-hidden="true" className="size-5 text-primary" />Pessoas</span></CardTitle><CardDescription>Todos usam seu próprio acesso e compartilham as finanças deste espaço.</CardDescription></CardHeader><CardContent className="grid gap-4">
-        {members === null ? <p className="text-sm text-muted-foreground">Carregando pessoas…</p> : members.length ? <ul className="divide-y divide-border">{members.map((member) => <li key={member.id} className="flex flex-wrap items-center gap-3 py-3 first:pt-0 last:pb-0"><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{member.name}</p><p className="truncate text-xs text-muted-foreground">{member.email}</p></div><span className="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground">{member.role === 'admin' ? 'Administrador' : 'Membro'}</span>{isAdmin && <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => void createResetLink(member)}><ShieldCheck aria-hidden="true" className="size-4" />Link para redefinir senha</Button>}</li>)}</ul> : <p className="text-sm text-muted-foreground">Nenhum membro encontrado.</p>}
+        {members === null ? <p className="text-sm text-muted-foreground">Carregando pessoas…</p> : members.length ? <ul className="divide-y divide-border">{members.map((member) => <li key={member.id} className="flex flex-wrap items-center gap-3 py-3 first:pt-0 last:pb-0"><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{member.name}</p><p className="truncate text-xs text-muted-foreground">{member.email}</p></div><span className="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground">{member.role === 'admin' ? 'Administrador' : 'Membro'}</span>{!member.is_active && <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">Acesso desativado</span>}{isAdmin && member.is_active && <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => void createResetLink(member)}><ShieldCheck aria-hidden="true" className="size-4" />Link para redefinir senha</Button>}{isAdmin && member.is_active && member.role === 'member' && <Button type="button" variant="destructive" size="sm" disabled={busy} aria-label={`Desativar acesso de ${member.name}`} onClick={() => void deactivateMember(member)}>Desativar acesso</Button>}{isAdmin && !member.is_active && member.role === 'member' && <Button type="button" variant="outline" size="sm" disabled={busy} aria-label={`Reativar acesso de ${member.name}`} onClick={() => void reactivateMember(member)}>Reativar acesso</Button>}</li>)}</ul> : <p className="text-sm text-muted-foreground">Nenhum membro encontrado.</p>}
       </CardContent></Card>
 
       {isAdmin && <Card><CardHeader><CardTitle><span className="flex items-center gap-2"><Mail aria-hidden="true" className="size-5 text-primary" />Convidar pessoa</span></CardTitle><CardDescription>Gere um link local para a pessoa definir o próprio nome e senha. O link vale por 48 horas.</CardDescription></CardHeader><CardContent className="grid gap-5">

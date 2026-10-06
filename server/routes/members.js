@@ -43,12 +43,14 @@ export function createMembersRouter({ pool, secureCookies = false, csrfSecret })
   router.get('/', async (request, response, next) => {
     try {
       const result = await pool.query(`
-        SELECT u.id, u.display_name AS name, u.email, m.role, m.created_at AS joined_at
+        SELECT u.id, u.display_name AS name, u.email, m.role, m.created_at AS joined_at,
+          (u.is_active AND m.deactivated_at IS NULL) AS is_active
         FROM space_memberships m
-        JOIN users u ON u.id = m.user_id AND u.is_active
+        JOIN users u ON u.id = m.user_id
         WHERE m.space_id = $1
+          AND (m.deactivated_at IS NULL OR $2 = 'admin')
         ORDER BY CASE WHEN m.role = 'admin' THEN 0 ELSE 1 END, lower(u.display_name)
-      `, [request.auth.spaceId]);
+      `, [request.auth.spaceId, request.auth.role]);
       return response.json({ members: result.rows });
     } catch (error) {
       next(error);
@@ -190,7 +192,8 @@ export function createMembersRouter({ pool, secureCookies = false, csrfSecret })
         SELECT u.id, u.email
         FROM users u
         JOIN space_memberships m ON m.user_id = u.id
-        WHERE u.id = $1 AND m.space_id = $2 AND u.is_active
+        WHERE u.id = $1 AND m.space_id = $2 AND u.is_active AND m.deactivated_at IS NULL
+        FOR SHARE OF m
       `, [request.params.userId, request.auth.spaceId]);
       if (!target.rows[0]) {
         await client.query('ROLLBACK');
@@ -209,6 +212,77 @@ export function createMembersRouter({ pool, secureCookies = false, csrfSecret })
       `, [request.auth.spaceId, member.email, tokenHash, request.auth.id, member.id]);
       await client.query('COMMIT');
       return response.status(201).json({ email: member.email, resetPath: `/redefinir-senha/${token}`, expiresInMinutes: resetLifetimeHours * 60 });
+    } catch (error) {
+      if (client) await client.query('ROLLBACK').catch(() => {});
+      next(error);
+    } finally {
+      client?.release();
+    }
+  });
+
+  router.post('/:userId/deactivate', csrf, requireAdmin, async (request, response, next) => {
+    if (!isUuid(request.params.userId)) return response.status(404).json({ error: 'Membro não encontrado.' });
+    let client;
+    try {
+      client = await pool.connect();
+      await client.query('BEGIN');
+      const target = await client.query(`
+        SELECT role, deactivated_at
+        FROM space_memberships
+        WHERE user_id = $1 AND space_id = $2
+        FOR UPDATE
+      `, [request.params.userId, request.auth.spaceId]);
+      if (!target.rows[0]) {
+        await client.query('ROLLBACK');
+        return response.status(404).json({ error: 'Membro não encontrado.' });
+      }
+      if (target.rows[0].role !== 'member') {
+        await client.query('ROLLBACK');
+        return response.status(409).json({ error: 'Administradores não podem ser desativados por esta operação.' });
+      }
+      await client.query(`
+        UPDATE space_memberships SET deactivated_at = COALESCE(deactivated_at, now())
+        WHERE user_id = $1 AND space_id = $2
+      `, [request.params.userId, request.auth.spaceId]);
+      await client.query('DELETE FROM sessions WHERE user_id = $1 AND space_id = $2', [request.params.userId, request.auth.spaceId]);
+      await client.query(`
+        UPDATE account_tokens SET revoked_at = now()
+        WHERE space_id = $1 AND target_user_id = $2 AND purpose = 'password_reset'
+          AND used_at IS NULL AND revoked_at IS NULL
+      `, [request.auth.spaceId, request.params.userId]);
+      await client.query('COMMIT');
+      return response.status(204).end();
+    } catch (error) {
+      if (client) await client.query('ROLLBACK').catch(() => {});
+      next(error);
+    } finally {
+      client?.release();
+    }
+  });
+
+  router.post('/:userId/reactivate', csrf, requireAdmin, async (request, response, next) => {
+    if (!isUuid(request.params.userId)) return response.status(404).json({ error: 'Membro não encontrado.' });
+    let client;
+    try {
+      client = await pool.connect();
+      await client.query('BEGIN');
+      const target = await client.query(`
+        SELECT role
+        FROM space_memberships
+        WHERE user_id = $1 AND space_id = $2
+        FOR UPDATE
+      `, [request.params.userId, request.auth.spaceId]);
+      if (!target.rows[0]) {
+        await client.query('ROLLBACK');
+        return response.status(404).json({ error: 'Membro não encontrado.' });
+      }
+      if (target.rows[0].role !== 'member') {
+        await client.query('ROLLBACK');
+        return response.status(409).json({ error: 'Administradores não podem ser reativados por esta operação.' });
+      }
+      await client.query('UPDATE space_memberships SET deactivated_at = NULL WHERE user_id = $1 AND space_id = $2', [request.params.userId, request.auth.spaceId]);
+      await client.query('COMMIT');
+      return response.status(204).end();
     } catch (error) {
       if (client) await client.query('ROLLBACK').catch(() => {});
       next(error);

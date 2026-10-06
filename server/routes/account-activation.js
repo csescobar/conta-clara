@@ -103,6 +103,7 @@ export function createAccountActivationRouter({ pool, secureCookies = false, csr
         SELECT t.email
         FROM account_tokens t
         JOIN users u ON u.id = t.target_user_id AND u.is_active
+        JOIN space_memberships m ON m.space_id = t.space_id AND m.user_id = t.target_user_id AND m.deactivated_at IS NULL
         WHERE t.token_hash = $1 AND t.purpose = 'password_reset'
           AND t.used_at IS NULL AND t.revoked_at IS NULL AND t.expires_at > now()
         LIMIT 1
@@ -125,9 +126,10 @@ export function createAccountActivationRouter({ pool, secureCookies = false, csr
         return response.status(400).json({ error: invalidTokenMessage });
       }
       const preview = await pool.query(`
-        SELECT t.id
+        SELECT t.id, t.space_id, t.target_user_id
         FROM account_tokens t
         JOIN users u ON u.id = t.target_user_id AND u.is_active
+        JOIN space_memberships m ON m.space_id = t.space_id AND m.user_id = t.target_user_id AND m.deactivated_at IS NULL
         WHERE t.token_hash = $1 AND t.purpose = 'password_reset'
           AND t.used_at IS NULL AND t.revoked_at IS NULL AND t.expires_at > now()
         LIMIT 1
@@ -137,11 +139,21 @@ export function createAccountActivationRouter({ pool, secureCookies = false, csr
 
       client = await pool.connect();
       await client.query('BEGIN');
+      const membership = await client.query(`
+        SELECT role
+        FROM space_memberships
+        WHERE space_id = $1 AND user_id = $2 AND deactivated_at IS NULL
+        FOR UPDATE
+      `, [preview.rows[0].space_id, preview.rows[0].target_user_id]);
+      if (!membership.rows[0]) {
+        await client.query('ROLLBACK');
+        return response.status(400).json({ error: invalidTokenMessage });
+      }
       const locked = await client.query(`
         SELECT t.id, t.space_id, t.target_user_id, u.display_name, u.email, m.role
         FROM account_tokens t
         JOIN users u ON u.id = t.target_user_id AND u.is_active
-        JOIN space_memberships m ON m.space_id = t.space_id AND m.user_id = u.id
+        JOIN space_memberships m ON m.space_id = t.space_id AND m.user_id = u.id AND m.deactivated_at IS NULL
         WHERE t.id = $1 AND t.purpose = 'password_reset'
           AND t.used_at IS NULL AND t.revoked_at IS NULL AND t.expires_at > now()
         FOR UPDATE OF t

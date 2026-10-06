@@ -1,6 +1,6 @@
 # Conta Clara
 
-Controle financeiro familiar local, com finanças compartilhadas e uso pelo computador e celular. Projeto open source em planejamento: este repositório contém documentação e backlog; ainda não existe aplicação executável.
+Controle financeiro familiar local, com finanças compartilhadas e uso pelo computador e celular. A aplicação web está em desenvolvimento: a fundação React/API, autenticação, convites e gestão de membros já funcionam; as telas de finanças ainda usam exemplos fictícios e não salvam lançamentos.
 
 ## Proposta
 
@@ -43,7 +43,7 @@ O build fica em `dist/client`; `npm start` serve o build e a API na porta `3001`
 
 ## Testes
 
-Vitest executa testes de unidade e interface com React Testing Library em jsdom; Supertest verifica rotas HTTP do Express sem iniciar um servidor de rede. Playwright será usado nas histórias de fluxos completos do navegador, incluindo instalação/offline. Testes que dependem de persistência usam uma base Postgres descartável configurada em `.env.test`; `npm run test:db` aplica migrações e limpa as tabelas de aplicação antes dos cenários de autenticação e convites. Use apenas uma base vazia com sufixo `_test`. Cada história declara cenários específicos e executa os checks pertinentes antes de ser concluída.
+Vitest executa testes de unidade e interface com React Testing Library em jsdom; Supertest verifica rotas HTTP do Express sem iniciar um servidor de rede. Playwright será usado nas histórias de fluxos completos do navegador, incluindo instalação/offline. Testes que dependem de persistência usam uma base Postgres descartável configurada em `.env.test`; `npm run test:db` aplica migrações e limpa as tabelas de aplicação antes dos cenários de autenticação, convites e permissões do espaço compartilhado. Use apenas uma base vazia com sufixo `_test`. Cada história declara cenários específicos e executa os checks pertinentes antes de ser concluída.
 
 Consulte [docs/design-system.md](docs/design-system.md) para tokens, acessibilidade e componentes visuais.
 

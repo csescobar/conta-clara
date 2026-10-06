@@ -8,7 +8,7 @@ const signedInState = {
   user: { id: 'demo-user', name: 'Pessoa de exemplo', email: 'demo@example.test', role: 'admin', spaceId: 'demo-space' },
   csrfToken: 'csrf-demo',
 };
-const demoMember = { id: 'demo-user', name: 'Pessoa de exemplo', email: 'demo@example.test', role: 'admin' };
+const demoMember = { id: 'demo-user', name: 'Pessoa de exemplo', email: 'demo@example.test', role: 'admin', is_active: true };
 
 async function renderSignedInApp() {
   render(<App />);
