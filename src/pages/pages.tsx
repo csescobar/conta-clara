@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useContext, useEffect, useState, type FormEvent } from 'react';
+import { lazy, Suspense, useCallback, useContext, useEffect, useRef, useState, type FormEvent } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight, Copy, Mail, Plus, RefreshCw, ShieldCheck, UsersRound } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AuthContext } from '../auth/auth-gate';
@@ -11,6 +11,7 @@ import { currentMonthInputValue, formatBrazilianDate } from '../lib/finance';
 import type { ChartSummary, ExpenseCategoryChartEntry } from './dashboard-charts';
 import { CatalogSettings } from './catalog-settings';
 import { PageHeader } from './page-header';
+import { isAuthenticationFailure, isNetworkFailure, useOfflineWorkspace } from '../offline/offline-context';
 
 const DashboardCharts = lazy(() => import('./dashboard-charts').then(({ DashboardCharts: charts }) => ({ default: charts })));
 
@@ -58,6 +59,9 @@ function DashboardEntryList({ entries, overdue = false }: { entries: DashboardEn
 }
 
 export function DashboardPage() {
+  const offline = useOfflineWorkspace();
+  const offlineRef = useRef(offline);
+  offlineRef.current = offline;
   const [month, setMonth] = useState(currentMonthInputValue());
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -67,18 +71,47 @@ export function DashboardPage() {
     let active = true;
     setLoading(true);
     setError('');
-    fetch(`/api/dashboard?month=${month}`, { credentials: 'same-origin', cache: 'no-store' })
-      .then(async (response) => {
+    const currentOffline = offlineRef.current;
+    const path = `/api/dashboard?month=${month}`;
+    async function loadDashboard() {
+      if (currentOffline && !currentOffline.online) {
+        const cached = await currentOffline.getSnapshot<DashboardData>(path).catch(() => null);
+        if (active) {
+          if (cached) setDashboard(cached);
+          else setError('Este mês ainda não foi carregado neste aparelho. Conecte-se para consultar o painel.');
+          setLoading(false);
+        }
+        return;
+      }
+
+      try {
+        const response = await fetch(path, { credentials: 'same-origin', cache: 'no-store' });
         const result = await response.json() as DashboardApiResponse;
-        if (!response.ok) throw new Error(result.error ?? 'Não foi possível carregar o painel.');
+        if (!response.ok) {
+          if (currentOffline && isAuthenticationFailure(response)) currentOffline.invalidateSession();
+          throw new Error(result.error ?? 'Não foi possível carregar o painel.');
+        }
         if (active) setDashboard(result);
-      })
-      .catch((loadError: unknown) => {
-        if (active) setError(loadError instanceof Error ? loadError.message : 'Não foi possível carregar o painel.');
-      })
-      .finally(() => { if (active) setLoading(false); });
+        await currentOffline?.cacheSnapshot(path, result);
+        currentOffline?.setOnline(true);
+      } catch (loadError) {
+        if (currentOffline && isNetworkFailure(loadError, currentOffline.online)) {
+          currentOffline.setOnline(navigator.onLine && !(loadError instanceof TypeError));
+          const cached = await currentOffline.getSnapshot<DashboardData>(path).catch(() => null);
+          if (active) {
+            if (cached) setDashboard(cached);
+            else setError('Este mês ainda não foi carregado neste aparelho. Conecte-se para consultar o painel.');
+          }
+        } else if (active) {
+          setError(loadError instanceof Error ? loadError.message : 'Não foi possível carregar o painel.');
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+    void loadDashboard();
     return () => { active = false; };
-  }, [month]);
+  }, [month, offline?.online]);
 
   const heading = monthHeading(month);
   return <>

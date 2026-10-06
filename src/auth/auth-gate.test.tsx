@@ -1,7 +1,8 @@
+import { IDBFactory } from 'fake-indexeddb';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthGate } from './auth-gate';
 
 const admin = { id: 'admin-id', name: 'Pessoa de teste', email: 'pessoa@example.test', role: 'admin', spaceId: 'space-id' };
@@ -15,6 +16,9 @@ function jsonResponse(body: unknown, ok = true) {
   return { ok, json: async () => body };
 }
 
+const indexedDb = new IDBFactory();
+
+beforeEach(() => vi.stubGlobal('indexedDB', indexedDb));
 afterEach(() => vi.unstubAllGlobals());
 
 describe('authentication interface', () => {

@@ -10,7 +10,7 @@ O manifesto e o service worker habilitam a instalação do Conta Clara como apli
 
 ## Limites do modo offline
 
-O primeiro acesso precisa estar online para instalar o service worker e baixar a interface. Nesta etapa, login, sessão, leituras e alterações financeiras ainda precisam da API e do Postgres disponíveis. Respostas de `/api` nunca entram no cache. Ao abrir a PWA offline, o shell é mostrado e o login comunica que o servidor local precisa estar acessível. Armazenamento de dados e fila de operações offline pertencem à issue #18.
+O primeiro acesso precisa estar online para instalar o service worker e baixar a interface. Respostas de `/api` nunca entram no cache HTTP do service worker. Depois que a identidade foi verificada e páginas foram consultadas, uma cópia dos dados selecionados pode ser lida e alterada offline pelo armazenamento separado em IndexedDB. Ao abrir a PWA offline, o shell é mostrado e a aplicação tenta restaurar a última identidade verificada no aparelho. A fila permanece local: a sincronização automática e o tratamento de conflitos fazem parte da issue [#19](https://github.com/csescobar/conta-clara/issues/19). Veja [docs/offline-storage.md](offline-storage.md) para prazo de acesso, descarte de alterações e demais limites.
 
 ## Atualização e limpeza
 

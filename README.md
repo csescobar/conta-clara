@@ -49,7 +49,7 @@ Para o formato de arquivo aceito, interpretação de datas, categorias e limites
 
 Para os filtros, formato e segurança do arquivo CSV, consulte [docs/csv-export.md](docs/csv-export.md).
 
-Para instalação, cache e limites do modo offline, consulte [docs/pwa.md](docs/pwa.md).
+Para instalação e cache da interface, consulte [docs/pwa.md](docs/pwa.md); [docs/offline-storage.md](docs/offline-storage.md) explica os dados locais, a fila e os limites de sincronização.
 
 Consulte [docs/design-system.md](docs/design-system.md) para tokens, acessibilidade e componentes visuais.
 

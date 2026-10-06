@@ -4,6 +4,7 @@ import { Link, NavLink } from 'react-router-dom';
 import { Button } from './ui/button';
 import type { AuthUser } from '../auth/auth-page';
 import { cn } from '../lib/utils';
+import { useOfflineWorkspace } from '../offline/offline-context';
 
 const links = [
   { to: '/', label: 'Visão geral', Icon: House, end: true },
@@ -45,6 +46,20 @@ function Navigation({ mobile = false }: { mobile?: boolean }) {
 }
 
 export function AppLayout({ user, onLogout, notice, children }: { user: AuthUser; onLogout: () => void; notice?: string; children: ReactNode }) {
+  const offline = useOfflineWorkspace();
+  const lastUpdated = offline?.lastSyncedAt
+    ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Sao_Paulo' }).format(new Date(offline.lastSyncedAt))
+    : null;
+  const offlineMessage = !offline?.supported
+    ? 'Este navegador não permite armazenar dados para uso offline.'
+    : !offline.ready
+      ? 'Preparando os dados offline deste usuário…'
+      : !offline.online
+        ? `Sem conexão de rede${offline.pendingCount ? ` · ${offline.pendingCount} ${offline.pendingCount === 1 ? 'alteração pendente' : 'alterações pendentes'}` : ''}.`
+        : offline.pendingCount
+          ? `Rede conectada · ${offline.pendingCount} ${offline.pendingCount === 1 ? 'alteração aguarda' : 'alterações aguardam'} sincronização.`
+          : 'Rede conectada · nenhuma alteração pendente.';
+
   return (
     <div className="min-h-screen lg:flex">
       <a href="#main-content" className="sr-only z-50 rounded-lg bg-card px-4 py-3 font-medium text-primary focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Pular para o conteúdo principal</a>
@@ -61,6 +76,10 @@ export function AppLayout({ user, onLogout, notice, children }: { user: AuthUser
         </header>
         <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-6xl px-4 pb-28 pt-7 sm:px-8 sm:pt-10 lg:px-10 lg:pb-12">
           {notice && <p role="alert" className="mb-5 rounded-xl bg-[#fdecec] px-4 py-3 text-sm font-medium text-destructive">{notice}</p>}
+          {offline && <div role="status" aria-live="polite" className={`mb-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-xl border px-4 py-2.5 text-xs leading-5 ${offline.online && offline.pendingCount === 0 ? 'border-border bg-card text-muted-foreground' : 'border-amber-200 bg-amber-50 text-amber-950'}`}>
+            <span>{offlineMessage}</span>
+            {lastUpdated && <span>Última atualização online: <time dateTime={offline.lastSyncedAt ?? undefined}>{lastUpdated}</time></span>}
+          </div>}
           {children}
         </main>
       </div>

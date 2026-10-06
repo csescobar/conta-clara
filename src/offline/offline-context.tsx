@@ -1,0 +1,233 @@
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  clearOfflineWorkspace,
+  loadOfflineSnapshot,
+  loadOfflineWorkspace,
+  queueOfflineEntryChange,
+  queueOfflineEntryDelete,
+  removeCachedOfflineEntry,
+  saveOfflineCatalogs,
+  saveOfflineEntries,
+  saveOfflineSnapshot,
+  type OfflineCategory,
+  type OfflineEntry,
+  type OfflinePaymentMethod,
+  type OfflineScope,
+  type OfflineWorkspaceSnapshot,
+} from './offline-store';
+
+export type OfflineWorkspace = OfflineWorkspaceSnapshot & {
+  online: boolean;
+  ready: boolean;
+  supported: boolean;
+  storageError: string;
+  pendingCount: number;
+  refresh: () => Promise<OfflineWorkspaceSnapshot>;
+  cacheEntries: (entries: OfflineEntry[]) => Promise<void>;
+  cacheCatalogs: (categories: OfflineCategory[], paymentMethods: OfflinePaymentMethod[]) => Promise<void>;
+  cacheSnapshot: (path: string, data: unknown) => Promise<void>;
+  getSnapshot: <T>(path: string) => Promise<T | null>;
+  queueChange: (entry: OfflineEntry, kind: 'create' | 'update') => Promise<void>;
+  queueDelete: (entryId: string) => Promise<void>;
+  removeCachedEntry: (entryId: string) => Promise<void>;
+  clear: () => Promise<void>;
+  setOnline: (online: boolean) => void;
+  invalidateSession: () => void;
+};
+
+const emptySnapshot: OfflineWorkspaceSnapshot = { entries: [], categories: [], paymentMethods: [], operations: [], lastSyncedAt: null };
+const OfflineWorkspaceContext = createContext<OfflineWorkspace | null>(null);
+
+export function OfflineWorkspaceProvider({ scope, children }: { scope: OfflineScope; children: ReactNode }) {
+  const stableScope = useMemo(() => ({ userId: scope.userId, spaceId: scope.spaceId }), [scope.userId, scope.spaceId]);
+  const [snapshot, setSnapshot] = useState(emptySnapshot);
+  const [online, setOnline] = useState(() => typeof navigator === 'undefined' || navigator.onLine);
+  const [ready, setReady] = useState(false);
+  const [supported, setSupported] = useState(true);
+  const [storageError, setStorageError] = useState('');
+
+  const refresh = useCallback(async () => {
+    try {
+      const loaded = await loadOfflineWorkspace(stableScope);
+      setSnapshot(loaded);
+      setSupported(true);
+      setStorageError('');
+      return loaded;
+    } catch (error) {
+      setSupported(false);
+      setStorageError(error instanceof Error ? error.message : 'Não foi possível acessar o armazenamento offline.');
+      return emptySnapshot;
+    } finally {
+      setReady(true);
+    }
+  }, [stableScope]);
+
+  useEffect(() => {
+    const setBrowserOnline = () => setOnline(navigator.onLine);
+    window.addEventListener('online', setBrowserOnline);
+    window.addEventListener('offline', setBrowserOnline);
+    void refresh();
+    return () => {
+      window.removeEventListener('online', setBrowserOnline);
+      window.removeEventListener('offline', setBrowserOnline);
+    };
+  }, [refresh]);
+
+  const cacheEntries = useCallback(async (entries: OfflineEntry[]) => {
+    if (!supported) return;
+    try {
+      await saveOfflineEntries(stableScope, entries);
+      await refresh();
+    } catch (error) {
+      setSupported(false);
+      setStorageError(error instanceof Error ? error.message : 'Não foi possível salvar os dados offline.');
+    }
+  }, [refresh, stableScope, supported]);
+
+  const cacheCatalogs = useCallback(async (categories: OfflineCategory[], paymentMethods: OfflinePaymentMethod[]) => {
+    if (!supported) return;
+    try {
+      await saveOfflineCatalogs(stableScope, categories, paymentMethods);
+      await refresh();
+    } catch (error) {
+      setSupported(false);
+      setStorageError(error instanceof Error ? error.message : 'Não foi possível salvar os cadastros offline.');
+    }
+  }, [refresh, stableScope, supported]);
+
+  const cacheSnapshot = useCallback(async (path: string, data: unknown) => {
+    if (!supported) return;
+    try {
+      await saveOfflineSnapshot(stableScope, path, data);
+      await refresh();
+    } catch (error) {
+      setSupported(false);
+      setStorageError(error instanceof Error ? error.message : 'Não foi possível salvar o painel offline.');
+    }
+  }, [refresh, stableScope, supported]);
+
+  const getSnapshot = useCallback(<T,>(path: string) => loadOfflineSnapshot<T>(stableScope, path), [stableScope]);
+
+  const queueChange = useCallback(async (entry: OfflineEntry, kind: 'create' | 'update') => {
+    await queueOfflineEntryChange(stableScope, entry, kind);
+    await refresh();
+  }, [refresh, stableScope]);
+
+  const queueDelete = useCallback(async (entryId: string) => {
+    await queueOfflineEntryDelete(stableScope, entryId);
+    await refresh();
+  }, [refresh, stableScope]);
+
+  const removeCachedEntry = useCallback(async (entryId: string) => {
+    if (!supported) return;
+    try {
+      await removeCachedOfflineEntry(stableScope, entryId);
+      await refresh();
+    } catch (error) {
+      setSupported(false);
+      setStorageError(error instanceof Error ? error.message : 'Não foi possível atualizar os dados offline.');
+    }
+  }, [refresh, stableScope, supported]);
+
+  const clear = useCallback(async () => {
+    if (supported) await clearOfflineWorkspace(stableScope);
+    setSnapshot(emptySnapshot);
+  }, [stableScope, supported]);
+
+  const invalidateSession = useCallback(() => {
+    window.dispatchEvent(new Event('conta-clara:session-expired'));
+  }, []);
+
+  const value = useMemo<OfflineWorkspace>(() => ({
+    ...snapshot,
+    online,
+    ready,
+    supported,
+    storageError,
+    pendingCount: snapshot.operations.length,
+    refresh,
+    cacheEntries,
+    cacheCatalogs,
+    cacheSnapshot,
+    getSnapshot,
+    queueChange,
+    queueDelete,
+    removeCachedEntry,
+    clear,
+    setOnline,
+    invalidateSession,
+  }), [snapshot, online, ready, supported, storageError, refresh, cacheEntries, cacheCatalogs, cacheSnapshot, getSnapshot, queueChange, queueDelete, removeCachedEntry, clear, invalidateSession]);
+
+  return <OfflineWorkspaceContext.Provider value={value}>{children}</OfflineWorkspaceContext.Provider>;
+}
+
+export function useOfflineWorkspace() {
+  return useContext(OfflineWorkspaceContext);
+}
+
+export function filterOfflineEntries(entries: OfflineEntry[], filters: { month?: string; categoryId?: string; status?: string }) {
+  return entries.filter((entry) => (!filters.month || entry.competence_on.startsWith(filters.month))
+    && (!filters.categoryId || entry.category_id === filters.categoryId)
+    && (!filters.status || entry.status === filters.status));
+}
+
+export function mergeOfflineEntries(serverEntries: OfflineEntry[], snapshot: OfflineWorkspaceSnapshot, filters: { month?: string; categoryId?: string; status?: string }, includeCached = true) {
+  const localOperations = new Map(snapshot.operations.map((operation) => [operation.entryId, operation]));
+  const entries = new Map(serverEntries.map((entry) => [entry.id, entry]));
+  for (const operation of snapshot.operations) {
+    if (operation.kind === 'delete') entries.delete(operation.entryId);
+    else {
+      const local = snapshot.entries.find((entry) => entry.id === operation.entryId);
+      if (local) entries.set(local.id, local);
+    }
+  }
+  if (includeCached) {
+    for (const entry of snapshot.entries) {
+      if (!localOperations.has(entry.id) && !entries.has(entry.id)) entries.set(entry.id, entry);
+    }
+  }
+  return filterOfflineEntries([...entries.values()], filters);
+}
+
+export function makeOfflineEntry(input: {
+  id: string;
+  userId: string;
+  kind: OfflineEntry['kind'];
+  description: string;
+  categoryId: string | null;
+  competenceOn: string;
+  dueOn: string | null;
+  plannedCents: number;
+  paymentMethodId: string | null;
+  notes: string | null;
+}, categories: OfflineCategory[], paymentMethods: OfflinePaymentMethod[], previous?: OfflineEntry): OfflineEntry {
+  const todayParts = new Intl.DateTimeFormat('en', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' })
+    .formatToParts(new Date()).reduce<Record<string, string>>((parts, part) => ({ ...parts, [part.type]: part.value }), {});
+  const today = `${todayParts.year}-${todayParts.month}-${todayParts.day}`;
+  return {
+    id: input.id,
+    kind: input.kind,
+    description: input.description.trim(),
+    category_id: input.categoryId,
+    category_name: categories.find((category) => category.id === input.categoryId)?.name ?? previous?.category_name ?? null,
+    competence_on: input.competenceOn,
+    due_on: input.dueOn,
+    planned_cents: String(input.plannedCents),
+    actual_cents: previous?.actual_cents ?? null,
+    realized_on: previous?.realized_on ?? null,
+    payment_method_id: input.paymentMethodId,
+    payment_method_name: paymentMethods.find((method) => method.id === input.paymentMethodId)?.name ?? previous?.payment_method_name ?? null,
+    notes: input.notes,
+    created_by_user_id: previous?.created_by_user_id ?? input.userId,
+    updated_by_user_id: input.userId,
+    status: previous?.actual_cents !== null && previous?.actual_cents !== undefined ? 'paid' : input.dueOn && input.dueOn < today ? 'late' : 'pending',
+  };
+}
+
+export function isNetworkFailure(error: unknown, online: boolean) {
+  return !online || error instanceof TypeError;
+}
+
+export function isAuthenticationFailure(response: Response) {
+  return response.status === 401;
+}
