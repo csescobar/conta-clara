@@ -43,10 +43,21 @@ Backlog inicial da primeira versão. Concluir dependências antes de iniciar uma
 - [x] [Validar restauração dos backups](https://github.com/csescobar/conta-clara/issues/22) — dependências: #21; guia e teste em [docs/backup-restore.md](docs/backup-restore.md).
 - [x] [Concluir testes integrados e documentação de instalação](https://github.com/csescobar/conta-clara/issues/23) — dependências: #14, #15, #16, #22; guia em [docs/installation.md](docs/installation.md).
 
-## Acompanhamento
+## Acompanhamento da V1
 
-[Issue central](https://github.com/csescobar/conta-clara/issues/24). Atualizar ambos os checklists após cada história concluída.
+[Issue central da V1](https://github.com/csescobar/conta-clara/issues/24). Atualizar ambos os checklists após cada história concluída.
 
-## Depois da primeira versão
+## 7. Cartões e faturas (V2)
 
-Contas bancárias, faturas, parcelamento, integração bancária e acesso remoto serão planejados separadamente.
+- [ ] [Cadastrar cartões no espaço compartilhado](https://github.com/csescobar/conta-clara/issues/25) — dependências: V1 concluída.
+- [ ] [Registrar compras parceladas e gerar parcelas offline](https://github.com/csescobar/conta-clara/issues/26) — dependências: #25.
+- [ ] [Consultar e quitar faturas, integrar painel e exportação CSV](https://github.com/csescobar/conta-clara/issues/27) — dependências: #26.
+- [ ] [Validar integração e documentar cartões e faturas](https://github.com/csescobar/conta-clara/issues/28) — dependências: #25, #26, #27.
+
+### Acompanhamento da V2
+
+[Issue central da V2](https://github.com/csescobar/conta-clara/issues/29). Atualizar ambos os checklists após cada história concluída.
+
+## Evoluções fora da V2
+
+Contas bancárias e saldos, integração bancária, importação de extratos, pagamento parcial/rotativo e acesso remoto permanecem fora desta etapa.
