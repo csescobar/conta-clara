@@ -14,7 +14,7 @@ O primeiro acesso precisa estar online para instalar o service worker e baixar a
 
 ## Atualização e limpeza
 
-O build gera um identificador do cache a partir do conteúdo publicado e inclui os arquivos estáticos do próprio build no pré-cache. Assim, a nova versão prepara um cache separado enquanto janelas antigas continuam abertas. O service worker novo ativa quando as janelas controladas pela versão anterior forem fechadas; na ativação, apaga somente os caches com prefixo `conta-clara-shell-` de outras versões. Não chama `skipWaiting`, não apaga IndexedDB nem caches de outros recursos. A fila offline que será criada na issue #18 continuará fora do ciclo de vida dos caches da interface.
+O build gera um identificador do cache a partir do conteúdo publicado e inclui os arquivos estáticos do próprio build no pré-cache. Assim, a nova versão prepara um cache separado enquanto janelas antigas continuam abertas. O service worker novo ativa quando as janelas controladas pela versão anterior forem fechadas; na ativação, apaga somente os caches com prefixo `conta-clara-shell-` de outras versões. Não chama `skipWaiting`, não apaga IndexedDB nem caches de outros recursos. A fila de alterações offline fica no IndexedDB, separada do ciclo de vida dos caches da interface.
 
 ## Verificações
 

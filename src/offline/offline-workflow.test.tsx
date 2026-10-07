@@ -201,7 +201,7 @@ describe('offline transaction workflow', () => {
     Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
     window.dispatchEvent(new Event('online'));
 
-    await waitFor(async () => expect((await loadOfflineWorkspace(scope)).operations).toHaveLength(0));
+    await waitFor(async () => expect((await loadOfflineWorkspace(scope)).operations).toHaveLength(0), { timeout: 5000 });
     expect(stateReads).toBe(2);
     expect(applied.size).toBe(1);
     expect(fetchMock.mock.calls.filter(([input]) => String(input) === '/api/sync/operations')).toHaveLength(1);

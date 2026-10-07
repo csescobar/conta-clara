@@ -1,6 +1,10 @@
 # Conta Clara
 
-Controle financeiro familiar local, com finanças compartilhadas e uso pelo computador e celular. A aplicação web está em desenvolvimento: a fundação React/API, autenticação, convites, gestão de membros, cadastros compartilhados, registro e confirmação de lançamentos, histórico de alterações, recorrências mensais, painel com gráficos previsto versus realizado, importação revisada de planilha, exportação CSV e PWA com armazenamento e sincronização offline já funcionam.
+Controle financeiro familiar local, com finanças compartilhadas e uso pelo computador e celular. A primeira versão reúne autenticação individual, espaço compartilhado, cadastro e confirmação de lançamentos, histórico, recorrências, painel previsto versus realizado, importação revisada, exportação CSV e PWA com armazenamento e sincronização offline.
+
+## Instalação
+
+Para instalar em Docker com PostgreSQL e HTTPS local, siga o [guia de instalação](docs/installation.md). O primeiro acesso cria a conta administradora; convites são gerados como links locais e entregues manualmente.
 
 ## Proposta
 
@@ -8,7 +12,7 @@ Receitas, despesas fixas e variáveis, aportes separados do consumo, vencimentos
 
 Cada pessoa terá seu login e acesso aos mesmos dados financeiros do seu espaço. Administrador e membro poderão alterar finanças; somente administrador gerenciará usuários e backups. O administrador gera e copia links locais de convite e redefinição de senha; não há envio por e-mail.
 
-## Tecnologias planejadas
+## Tecnologias
 
 - React, TypeScript e Vite; shadcn/ui, Tailwind CSS e Recharts.
 - Node.js 24 LTS, Express e Postgres; migrações SQL versionadas.
@@ -16,7 +20,7 @@ Cada pessoa terá seu login e acesso aos mesmos dados financeiros do seu espaço
 - Docker Compose e Caddy com HTTPS local por CA privada.
 - pg_dump e rclone crypt para backups privados no Google Drive.
 
-Interface em português, valores em reais, datas brasileiras e operação em America/Sao_Paulo. Postgres será a fonte de verdade após importação inicial; não haverá sincronização contínua com Google Sheets.
+Interface em português, valores em reais, datas brasileiras e operação em America/Sao_Paulo. Postgres é a fonte de verdade após a importação inicial; não há sincronização contínua com Google Sheets.
 
 ## Desenvolvimento
 
@@ -30,7 +34,7 @@ npm run db:migrate
 npm run dev
 ```
 
-A interface abre em `http://localhost:5173`; o endpoint de saúde da API fica em `http://localhost:3001/api/health`. No primeiro acesso, crie o administrador inicial. O servidor de desenvolvimento escuta apenas em `127.0.0.1`; para acesso por outro dispositivo, aguarde a configuração de HTTPS local da issue #20.
+A interface abre em `http://localhost:5173`; o endpoint de saúde da API fica em `http://localhost:3001/api/health`. No primeiro acesso, crie o administrador inicial. O servidor de desenvolvimento escuta apenas em `127.0.0.1`; para usar outro dispositivo, configure o HTTPS local descrito em [docs/docker-local-https.md](docs/docker-local-https.md).
 
 ```sh
 npm run typecheck
@@ -43,7 +47,9 @@ O build fica em `dist/client`; `npm start` serve o build e a API na porta `3001`
 
 ## Testes
 
-Vitest executa testes de unidade e interface com React Testing Library e `user-event` em jsdom; Supertest verifica rotas HTTP do Express sem iniciar um servidor de rede. Playwright será usado nas histórias de fluxos completos do navegador, incluindo instalação/offline. Testes que dependem de persistência usam uma base Postgres descartável configurada em `.env.test`; `npm run test:db` aplica migrações e limpa as tabelas de aplicação antes dos cenários de autenticação, convites, permissões, cadastros, lançamentos, importação, histórico, recorrências e painel. As fixtures do painel conferem competências, aportes, mês vazio, virada de ano, filtros, navegação por teclado e isolamento entre espaços. Os testes do importador usam arquivos sintéticos e conferem separadores `en_US`, datas ambíguas, fórmulas ignoradas, mapeamento, confirmação explícita, autoria, transação, rollback e bloqueio de lotes repetidos. Os testes do CSV verificam caracteres acentuados, delimitadores, aspas, datas ISO, centavos exatos e proteção contra fórmulas em células textuais. Use apenas uma base vazia com sufixo `_test`. Cada história declara cenários específicos e executa os checks pertinentes antes de ser concluída.
+Vitest e React Testing Library verificam unidades e interface em jsdom; Supertest cobre rotas Express; Playwright executa o fluxo de navegador com duas contas fictícias. Instale o Chromium de teste uma vez com `npx playwright install chromium --only-shell`. Testes de persistência e navegador usam exclusivamente `.env.test` apontado para uma base Postgres descartável terminada em `_test`; o inicializador de Playwright bloqueia qualquer outro nome e limpa as tabelas da aplicação antes do teste. O navegador exercita convite, importação, recorrência, confirmação, permissões do membro, painel e sincronização offline. `scripts/backup-restore-drill.sh` restaura um backup sintético em Postgres isolado e rejeita arquivo inválido e chave incorreta.
+
+Para executar as verificações de desenvolvimento em sequência, depois de configurar `.env.test`, Chromium e Docker, use `npm run verify`. O comando inclui typecheck, testes de interface, build, testes Postgres, Playwright e simulação de restauração; também pode executar cada etapa separadamente com `npm run typecheck`, `npm test`, `npm run build`, `npm run test:db`, `npm run e2e` e `bash scripts/backup-restore-drill.sh`. As fixtures são fictícias; nunca aponte os testes para uma base de uso diário.
 
 Para o formato de arquivo aceito, interpretação de datas, categorias e limites da importação, consulte [docs/spreadsheet-import.md](docs/spreadsheet-import.md).
 

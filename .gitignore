@@ -28,4 +28,6 @@ build/
 coverage/
 .cache/
 *.log
+test-results/
+playwright-report/
 .DS_Store
