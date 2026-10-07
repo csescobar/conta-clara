@@ -259,6 +259,7 @@ test('administra um espaço compartilhado, importa e sincroniza uma alteração 
   await member.getByLabel('Descrição').fill('Compra offline fictícia');
   await member.getByLabel('Data da compra').fill('2026-10-26');
   await member.getByLabel('Valor total (R$)').fill('20,00');
+  await member.getByLabel('Quantidade de parcelas').fill('2');
   await member.getByRole('button', { name: 'Salvar compra' }).click();
   await expect(member.getByText('Compra offline fictícia')).toBeVisible();
   await expect(member.getByText(/Pendente neste aparelho/)).toBeVisible();
@@ -284,6 +285,10 @@ test('administra um espaço compartilhado, importa e sincroniza uma alteração 
   await member.getByRole('link', { name: 'Compras' }).click();
   await expect(member.getByText('Compra offline fictícia')).toBeVisible();
   await expect(member.getByText(/Pendente neste aparelho/)).toHaveCount(0, { timeout: 20_000 });
+  const purchasesAfterReconnect = await member.evaluate(async () => (await (await fetch('/api/purchases')).json()).purchases);
+  const syncedOfflinePurchase = purchasesAfterReconnect.filter((purchase) => purchase.description === 'Compra offline fictícia');
+  expect(syncedOfflinePurchase).toHaveLength(1);
+  expect(syncedOfflinePurchase[0].installments).toHaveLength(2);
   await member.reload();
   await member.getByRole('link', { name: 'Configurações' }).click();
   await member.getByRole('link', { name: 'Configurações' }).click();

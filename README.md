@@ -59,6 +59,8 @@ Para os filtros, formato e segurança do arquivo CSV, consulte [docs/csv-export.
 
 Para instalação e cache da interface, consulte [docs/pwa.md](docs/pwa.md); [docs/offline-storage.md](docs/offline-storage.md) e [docs/synchronization.md](docs/synchronization.md) explicam os dados locais, a fila e os limites de sincronização.
 
+Para cadastro de cartões, cálculo do ciclo, parcelas, quitação de faturas, exportação e uso offline, consulte [docs/cards-and-invoices.md](docs/cards-and-invoices.md).
+
 Consulte [docs/design-system.md](docs/design-system.md) para tokens, acessibilidade e componentes visuais.
 
 Para configurar o banco e executar migrações, consulte [docs/database.md](docs/database.md).

@@ -55,6 +55,30 @@ describe.skipIf(!testDatabaseUrl)('PostgreSQL schema integration', () => {
     expect(status.find(({ name }) => name === '011_card_invoices.sql')?.status).toBe('applied');
   });
 
+  it('applies every migration from a clean isolated schema', async () => {
+    const schema = `migration_${randomUUID().replaceAll('-', '')}`;
+    await pool.query(`CREATE SCHEMA ${schema}`);
+    const isolatedUrl = new URL(testDatabaseUrl);
+    isolatedUrl.searchParams.set('options', `-c search_path=${schema},public`);
+    const isolatedPool = createPool(isolatedUrl.toString());
+    try {
+      await migrate(isolatedPool);
+      const status = await migrationStatus(isolatedPool);
+      expect(status).toHaveLength(11);
+      expect(status.every(({ status: migrationState }) => migrationState === 'applied')).toBe(true);
+      const schemaTables = await isolatedPool.query(`
+        SELECT to_regclass('users') AS users, to_regclass('credit_cards') AS credit_cards,
+          to_regclass('card_purchases') AS card_purchases, to_regclass('card_invoices') AS card_invoices
+      `);
+      expect(schemaTables.rows[0]).toEqual({
+        users: 'users', credit_cards: 'credit_cards', card_purchases: 'card_purchases', card_invoices: 'card_invoices',
+      });
+    } finally {
+      await isolatedPool.end();
+      await pool.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
+    }
+  });
+
   it('backfills one invoice when different members created purchases for the same card and month', async () => {
     // Simulate upgrading a database that has purchases but has not applied migration 011.
     await pool.query('DROP TABLE card_invoices');
