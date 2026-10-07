@@ -1,6 +1,18 @@
 import { recordEntryAudit } from './financial-entry-audit.js';
 
 const monthPattern = /^\d{4}-(0[1-9]|1[0-2])-01$/;
+export const RECURRENCE_HORIZON_MONTHS_AHEAD = 12;
+
+export function recurrenceHorizonMonth(currentCompetence, monthsAhead = RECURRENCE_HORIZON_MONTHS_AHEAD) {
+  if (!monthPattern.test(currentCompetence)) {
+    throw new TypeError('A competência atual precisa estar no formato AAAA-MM-01.');
+  }
+  if (!Number.isInteger(monthsAhead) || monthsAhead < 0) {
+    throw new TypeError('O horizonte precisa ser um número inteiro de meses não negativo.');
+  }
+  const [year, month] = currentCompetence.slice(0, 7).split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1 + monthsAhead, 1)).toISOString().slice(0, 10);
+}
 
 export function listCompetenceMonths(startCompetenceOn, endCompetenceOn, throughMonth) {
   if (![startCompetenceOn, throughMonth].every((value) => monthPattern.test(value)) || (endCompetenceOn && !monthPattern.test(endCompetenceOn))) {
@@ -32,8 +44,9 @@ export function recurrenceDueDate(competenceOn, dueDay) {
 async function generateForClient(client, { spaceId = null, ruleId = null, throughMonth = null } = {}) {
   const throughResult = throughMonth
     ? { rows: [{ through_month: throughMonth }] }
-    : await client.query("SELECT to_char(date_trunc('month', now() AT TIME ZONE 'America/Sao_Paulo'), 'YYYY-MM-DD') AS through_month");
-  const lastMonth = throughResult.rows[0].through_month;
+    : await client.query("SELECT to_char(date_trunc('month', now() AT TIME ZONE 'America/Sao_Paulo'), 'YYYY-MM-DD') AS current_month");
+  const lastMonth = throughMonth
+    ?? recurrenceHorizonMonth(throughResult.rows[0].current_month);
   if (!monthPattern.test(lastMonth)) throw new TypeError('A competência final precisa ser o primeiro dia do mês.');
   const rules = await client.query(`
     SELECT r.id, r.space_id, r.created_by_user_id, r.kind, r.description, r.category_id,

@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../app.js';
 import { createPool } from '../database/connection.js';
 import { migrate } from '../database/migrate.js';
-import { generateRecurrenceOccurrences } from '../services/recurrences.js';
+import { generateRecurrenceOccurrences, listCompetenceMonths, recurrenceHorizonMonth } from '../services/recurrences.js';
 import { createSession } from './auth.js';
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
@@ -205,50 +205,73 @@ describe.skipIf(!testDatabaseUrl)('monthly recurrence routes with PostgreSQL', (
 
     const dbMonthResult = await pool.query("SELECT to_char(date_trunc('month', now() AT TIME ZONE 'America/Sao_Paulo'), 'YYYY-MM-DD') AS month");
     const currentMonth = dbMonthResult.rows[0].month;
-    const [currentYear, currentMonthNumber] = currentMonth.slice(0, 7).split('-').map(Number);
-    const catchUpThroughMonth = new Date(Date.UTC(currentYear, currentMonthNumber - 1 + 3, 1)).toISOString().slice(0, 10);
-    const ongoing = await sessionRequest('post', '/api/recurrences', session, state.body.csrfToken, {
-      kind: 'expense', description: 'Internet', categoryId: category.body.category.id,
+    const horizonThroughMonth = recurrenceHorizonMonth(currentMonth);
+    const horizonMonths = listCompetenceMonths(currentMonth, null, horizonThroughMonth);
+    const forecast = await sessionRequest('post', '/api/recurrences', session, state.body.csrfToken, {
+      kind: 'expense', description: 'Internet prevista', categoryId: category.body.category.id,
       startCompetenceOn: currentMonth, endCompetenceOn: null, dueDay: 31, plannedCents: 9990,
     }).expect(201);
-    expect(ongoing.body.generatedCount).toBe(1);
-    const updatedOngoing = await sessionRequest('put', `/api/recurrences/${ongoing.body.rule.id}`, session, state.body.csrfToken, {
-      kind: 'expense', description: 'Internet reajustada', categoryId: category.body.category.id,
-      startCompetenceOn: currentMonth, endCompetenceOn: null, dueDay: 31, plannedCents: 10990,
+    expect(horizonMonths).toHaveLength(13);
+    expect(forecast.body.generatedCount).toBe(13);
+    expect(forecast.body.rule.occurrence_count).toBe(13);
+    const forecastRows = await pool.query(`
+      SELECT competence_on::text FROM financial_entries
+      WHERE recurrence_rule_id = $1 ORDER BY competence_on
+    `, [forecast.body.rule.id]);
+    expect(forecastRows.rows.map(({ competence_on }) => competence_on)).toEqual(horizonMonths);
+
+    const lastHorizonRule = await sessionRequest('post', '/api/recurrences', session, state.body.csrfToken, {
+      kind: 'expense', description: 'Último mês projetado', categoryId: category.body.category.id,
+      startCompetenceOn: horizonThroughMonth, endCompetenceOn: horizonThroughMonth, plannedCents: 1000,
+    }).expect(201);
+    expect(lastHorizonRule.body.generatedCount).toBe(1);
+    const beyondHorizonMonth = recurrenceHorizonMonth(currentMonth, 13);
+    const beyondHorizonRule = await sessionRequest('post', '/api/recurrences', session, state.body.csrfToken, {
+      kind: 'expense', description: 'Fora do horizonte', categoryId: category.body.category.id,
+      startCompetenceOn: beyondHorizonMonth, endCompetenceOn: beyondHorizonMonth, plannedCents: 1000,
+    }).expect(201);
+    expect(beyondHorizonRule.body.generatedCount).toBe(0);
+    const beyondHorizonRows = await pool.query('SELECT count(*)::integer AS count FROM financial_entries WHERE recurrence_rule_id = $1', [beyondHorizonRule.body.rule.id]);
+    expect(beyondHorizonRows.rows[0].count).toBe(0);
+
+    const catchUpThroughMonth = recurrenceHorizonMonth(currentMonth, 15);
+    const catchUp = await sessionRequest('post', '/api/recurrences', session, state.body.csrfToken, {
+      kind: 'expense', description: 'Internet futura', categoryId: category.body.category.id,
+      startCompetenceOn: beyondHorizonMonth, endCompetenceOn: catchUpThroughMonth, dueDay: 31, plannedCents: 9990,
+    }).expect(201);
+    expect(catchUp.body.generatedCount).toBe(0);
+    const updatedCatchUp = await sessionRequest('put', `/api/recurrences/${catchUp.body.rule.id}`, session, state.body.csrfToken, {
+      kind: 'expense', description: 'Internet futura reajustada', categoryId: category.body.category.id,
+      startCompetenceOn: beyondHorizonMonth, endCompetenceOn: catchUpThroughMonth, dueDay: 31, plannedCents: 10990,
     }).expect(200);
-    expect(updatedOngoing.body.generatedCount).toBe(0);
-    const existingMonth = await sessionRequest('get', `/api/entries?month=${currentMonth.slice(0, 7)}`, session, state.body.csrfToken).expect(200);
-    expect(existingMonth.body.entries).toContainEqual(expect.objectContaining({ description: 'Internet', planned_cents: '9990' }));
-    await expect(generateRecurrenceOccurrences(pool, { spaceId: admin.spaceId, ruleId: ongoing.body.rule.id, throughMonth: catchUpThroughMonth })).resolves.toBe(3);
-    await expect(generateRecurrenceOccurrences(pool, { spaceId: admin.spaceId, ruleId: ongoing.body.rule.id, throughMonth: catchUpThroughMonth })).resolves.toBe(0);
-    const futureMonths = [1, 2, 3].map((offset) => new Date(Date.UTC(currentYear, currentMonthNumber - 1 + offset, 1)).toISOString().slice(0, 10));
+    expect(updatedCatchUp.body.generatedCount).toBe(0);
+    await expect(generateRecurrenceOccurrences(pool, { spaceId: admin.spaceId, ruleId: catchUp.body.rule.id, throughMonth: catchUpThroughMonth })).resolves.toBe(3);
+    await expect(generateRecurrenceOccurrences(pool, { spaceId: admin.spaceId, ruleId: catchUp.body.rule.id, throughMonth: catchUpThroughMonth })).resolves.toBe(0);
+    const futureMonths = listCompetenceMonths(beyondHorizonMonth, catchUpThroughMonth, catchUpThroughMonth);
     const catchUpRows = await pool.query(`
       SELECT competence_on::text, description, planned_cents
       FROM financial_entries WHERE recurrence_rule_id = $1 ORDER BY competence_on
-    `, [ongoing.body.rule.id]);
-    expect(catchUpRows.rows).toEqual([
-      { competence_on: currentMonth, description: 'Internet', planned_cents: '9990' },
-      ...futureMonths.map((competence_on) => ({ competence_on, description: 'Internet reajustada', planned_cents: '10990' })),
-    ]);
+    `, [catchUp.body.rule.id]);
+    expect(catchUpRows.rows).toEqual(futureMonths.map((competence_on) => ({ competence_on, description: 'Internet futura reajustada', planned_cents: '10990' })));
 
     const firstFutureEntries = await sessionRequest('get', `/api/entries?month=${futureMonths[0].slice(0, 7)}`, session, state.body.csrfToken).expect(200);
     expect(firstFutureEntries.body.entries).toHaveLength(1);
     await sessionRequest('delete', `/api/entries/${firstFutureEntries.body.entries[0].id}`, session, state.body.csrfToken).expect(204);
-    await expect(generateRecurrenceOccurrences(pool, { spaceId: admin.spaceId, ruleId: ongoing.body.rule.id, throughMonth: catchUpThroughMonth })).resolves.toBe(0);
+    await expect(generateRecurrenceOccurrences(pool, { spaceId: admin.spaceId, ruleId: catchUp.body.rule.id, throughMonth: catchUpThroughMonth })).resolves.toBe(0);
     await sessionRequest('get', `/api/entries?month=${futureMonths[0].slice(0, 7)}`, session, state.body.csrfToken).expect(200)
       .expect(({ body }) => expect(body.entries).toEqual([]));
 
-    await sessionRequest('post', `/api/recurrences/${ongoing.body.rule.id}/archive`, session, state.body.csrfToken).expect(204);
-    const laterMonth = new Date(Date.UTC(currentYear, currentMonthNumber - 1 + 4, 1)).toISOString().slice(0, 10);
-    await expect(generateRecurrenceOccurrences(pool, { spaceId: admin.spaceId, ruleId: ongoing.body.rule.id, throughMonth: laterMonth })).resolves.toBe(0);
-    const preserved = await pool.query('SELECT count(*)::integer AS count FROM financial_entries WHERE recurrence_rule_id = $1', [ongoing.body.rule.id]);
-    expect(preserved.rows[0].count).toBe(4);
+    await sessionRequest('post', `/api/recurrences/${catchUp.body.rule.id}/archive`, session, state.body.csrfToken).expect(204);
+    const laterMonth = recurrenceHorizonMonth(currentMonth, 16);
+    await expect(generateRecurrenceOccurrences(pool, { spaceId: admin.spaceId, ruleId: catchUp.body.rule.id, throughMonth: laterMonth })).resolves.toBe(0);
+    const preserved = await pool.query('SELECT count(*)::integer AS count FROM financial_entries WHERE recurrence_rule_id = $1', [catchUp.body.rule.id]);
+    expect(preserved.rows[0].count).toBe(3);
     await sessionRequest('post', `/api/recurrences/${ruleId}/archive`, session, state.body.csrfToken).expect(204);
     await expect(generateRecurrenceOccurrences(pool, { spaceId: admin.spaceId, ruleId, throughMonth: '2025-02-01' })).resolves.toBe(0);
     const finitePreserved = await pool.query('SELECT count(*)::integer AS count FROM financial_entries WHERE recurrence_rule_id = $1', [ruleId]);
     expect(finitePreserved.rows[0].count).toBe(3);
 
-    const firstMissingMonth = new Date(Date.UTC(currentYear, currentMonthNumber - 1 - 3, 1)).toISOString().slice(0, 10);
+    const firstMissingMonth = new Date(Date.UTC(Number(currentMonth.slice(0, 4)), Number(currentMonth.slice(5, 7)) - 1 - 3, 1)).toISOString().slice(0, 10);
     const restartRule = await pool.query(`
       INSERT INTO recurrence_rules (
         space_id, created_by_user_id, updated_by_user_id, kind, description,
@@ -267,7 +290,7 @@ describe.skipIf(!testDatabaseUrl)('monthly recurrence routes with PostgreSQL', (
           'SELECT count(*)::integer AS count FROM financial_entries WHERE recurrence_rule_id = $1',
           [restartRuleId],
         );
-        expect(startedOccurrences.rows[0].count).toBe(4);
+        expect(startedOccurrences.rows[0].count).toBe(16);
         await stopApiProcess(child);
         child = null;
       }

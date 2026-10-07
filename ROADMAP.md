@@ -64,7 +64,7 @@ Backlog inicial da primeira versão. Concluir dependências antes de iniciar uma
 
 ## 8. Previsão e recorrências (V3)
 
-- [ ] [Projetar recorrências até 12 meses](https://github.com/csescobar/conta-clara/issues/32) — dependências: geração mensal da V1 (#12).
+- [x] [Projetar recorrências até 12 meses](https://github.com/csescobar/conta-clara/issues/32) — dependências: geração mensal da V1 (#12); gera mês atual + próximos 12, com ajuste de vencimento e idempotência.
 - [ ] [Sincronizar alterações nas regras com as projeções futuras](https://github.com/csescobar/conta-clara/issues/33) — dependências: #32.
 - [ ] [Integrar previsões mensais às telas e ao uso offline](https://github.com/csescobar/conta-clara/issues/34) — dependências: #32, #33.
 - [ ] [Validar integração e documentar previsão de recorrências](https://github.com/csescobar/conta-clara/issues/35) — dependências: #32–#34.
