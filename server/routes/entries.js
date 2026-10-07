@@ -384,7 +384,7 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
       }
       await recordEntryAudit(client, { spaceId: request.auth.spaceId, actorUserId: request.auth.id, actorName: request.auth.name, entry: deleted, action: 'deleted', before: deleted });
       if (existing.rows[0].recurrence_rule_id) {
-        await client.query('UPDATE financial_entries SET recurrence_skipped = true, updated_by_user_id = $1, updated_at = now(), version = version + 1 WHERE id = $2 AND space_id = $3', [request.auth.id, request.params.id, request.auth.spaceId]);
+        await client.query("UPDATE financial_entries SET recurrence_skipped = true, recurrence_skip_reason = 'user', updated_by_user_id = $1, updated_at = now(), version = version + 1 WHERE id = $2 AND space_id = $3", [request.auth.id, request.params.id, request.auth.spaceId]);
       } else {
         await client.query('DELETE FROM financial_entries WHERE id = $1 AND space_id = $2', [request.params.id, request.auth.spaceId]);
       }

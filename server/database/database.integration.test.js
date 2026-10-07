@@ -53,6 +53,7 @@ describe.skipIf(!testDatabaseUrl)('PostgreSQL schema integration', () => {
     expect(status.find(({ name }) => name === '009_credit_cards.sql')?.status).toBe('applied');
     expect(status.find(({ name }) => name === '010_card_purchases.sql')?.status).toBe('applied');
     expect(status.find(({ name }) => name === '011_card_invoices.sql')?.status).toBe('applied');
+    expect(status.find(({ name }) => name === '012_recurrence_skip_reason.sql')?.status).toBe('applied');
   });
 
   it('applies every migration from a clean isolated schema', async () => {
@@ -64,7 +65,7 @@ describe.skipIf(!testDatabaseUrl)('PostgreSQL schema integration', () => {
     try {
       await migrate(isolatedPool);
       const status = await migrationStatus(isolatedPool);
-      expect(status).toHaveLength(11);
+      expect(status).toHaveLength(12);
       expect(status.every(({ status: migrationState }) => migrationState === 'applied')).toBe(true);
       const schemaTables = await isolatedPool.query(`
         SELECT to_regclass('users') AS users, to_regclass('credit_cards') AS credit_cards,
@@ -134,6 +135,39 @@ describe.skipIf(!testDatabaseUrl)('PostgreSQL schema integration', () => {
       WHERE space_id = $1 AND card_id = $2 AND invoice_month = '2026-11-01'
     `, [household.spaceId, card.rows[0].id]);
     expect(invoices.rows).toEqual([{ status: 'paid', actual_cents: '30000', paid_on: '2026-11-06' }]);
+  });
+
+  it('preserves existing manual recurrence skips when adding the skip reason migration', async () => {
+    const household = await createSpace('pulo-manual-retroativo');
+    const category = await pool.query(
+      "INSERT INTO categories (space_id, name, kind) VALUES ($1, 'Moradia fictícia', 'expense') RETURNING id",
+      [household.spaceId],
+    );
+    const rule = await pool.query(`
+      INSERT INTO recurrence_rules (
+        space_id, created_by_user_id, updated_by_user_id, kind, description,
+        category_id, start_competence_on, planned_cents
+      ) VALUES ($1, $2, $2, 'expense', 'Conta fictícia', $3, '2026-10-01', 10000)
+      RETURNING id
+    `, [household.spaceId, household.userId, category.rows[0].id]);
+    const entry = await pool.query(`
+      INSERT INTO financial_entries (
+        space_id, created_by_user_id, updated_by_user_id, kind, description,
+        category_id, competence_on, planned_cents, recurrence_rule_id, recurrence_skipped
+      ) VALUES ($1, $2, $2, 'expense', 'Conta fictícia', $3, '2026-10-01', 10000, $4, true)
+      RETURNING id
+    `, [household.spaceId, household.userId, category.rows[0].id, rule.rows[0].id]);
+
+    await pool.query('ALTER TABLE financial_entries DROP CONSTRAINT financial_entries_recurrence_skip_reason_check');
+    await pool.query('ALTER TABLE financial_entries DROP COLUMN recurrence_skip_reason');
+    await pool.query("DELETE FROM schema_migrations WHERE version = '012'");
+    await migrate(pool);
+
+    const backfilled = await pool.query(
+      'SELECT recurrence_skipped, recurrence_skip_reason FROM financial_entries WHERE id = $1',
+      [entry.rows[0].id],
+    );
+    expect(backfilled.rows).toEqual([{ recurrence_skipped: true, recurrence_skip_reason: 'user' }]);
   });
 
   it('rejects cross-space categories, invalid money, and non-month competence dates', async () => {

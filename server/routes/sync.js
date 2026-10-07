@@ -257,7 +257,7 @@ async function applyOperation(client, request, operation) {
   const nextVersion = Number(current.version) + 1;
   if (current.recurrence_rule_id) {
     await client.query(`
-      UPDATE financial_entries SET recurrence_skipped = true, updated_by_user_id = $1,
+      UPDATE financial_entries SET recurrence_skipped = true, recurrence_skip_reason = 'user', updated_by_user_id = $1,
         updated_at = now(), version = version + 1 WHERE id = $2 AND space_id = $3
     `, [userId, operation.entryId, spaceId]);
   } else {

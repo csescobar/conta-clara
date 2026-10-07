@@ -1,6 +1,6 @@
 import express from 'express';
 import { requireAuth, requireCsrf } from './auth.js';
-import { generateRecurrenceOccurrences, generateRecurrenceOccurrencesInTransaction } from '../services/recurrences.js';
+import { generateRecurrenceOccurrences, generateRecurrenceOccurrencesInTransaction, synchronizeRecurrenceOccurrencesInTransaction } from '../services/recurrences.js';
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const entryKinds = new Set(['income', 'expense', 'investment']);
@@ -187,7 +187,14 @@ export function createRecurrencesRouter({ pool, secureCookies = false, csrfSecre
           updated_by_user_id = $10, updated_at = now()
         WHERE id = $11 AND space_id = $12
       `, [rule.kind, rule.description, rule.categoryId, rule.paymentMethodId, rule.startCompetenceOn, rule.endCompetenceOn, rule.dueDay, rule.plannedCents, rule.notes, request.auth.id, request.params.id, request.auth.spaceId]);
-      const generatedCount = await generateRecurrenceOccurrencesInTransaction(client, { spaceId: request.auth.spaceId, ruleId: request.params.id });
+      const generatedCount = await generateRecurrenceOccurrencesInTransaction(client, {
+        spaceId: request.auth.spaceId, ruleId: request.params.id,
+        actorUserId: request.auth.id, actorName: request.auth.name,
+      });
+      await synchronizeRecurrenceOccurrencesInTransaction(client, {
+        spaceId: request.auth.spaceId, ruleId: request.params.id,
+        actorUserId: request.auth.id, actorName: request.auth.name,
+      });
       const updated = await selectRule(client, request.auth.spaceId, request.params.id);
       await client.query('COMMIT');
       return response.json({ rule: updated, generatedCount });
@@ -201,15 +208,30 @@ export function createRecurrencesRouter({ pool, secureCookies = false, csrfSecre
 
   router.post('/:id/archive', csrf, async (request, response, next) => {
     if (!isUuid(request.params.id)) return response.status(404).json({ error: 'Regra não encontrada.' });
+    let client;
     try {
-      const result = await pool.query(`
+      client = await pool.connect();
+      await client.query('BEGIN');
+      const result = await client.query(`
         UPDATE recurrence_rules SET archived_at = now(), updated_by_user_id = $1, updated_at = now()
         WHERE id = $2 AND space_id = $3 AND archived_at IS NULL
+        RETURNING id
       `, [request.auth.id, request.params.id, request.auth.spaceId]);
-      if (!result.rowCount) return response.status(404).json({ error: 'Regra não encontrada ou já arquivada.' });
+      if (!result.rowCount) {
+        await client.query('ROLLBACK');
+        return response.status(404).json({ error: 'Regra não encontrada ou já arquivada.' });
+      }
+      await synchronizeRecurrenceOccurrencesInTransaction(client, {
+        spaceId: request.auth.spaceId, ruleId: request.params.id,
+        actorUserId: request.auth.id, actorName: request.auth.name,
+      });
+      await client.query('COMMIT');
       return response.status(204).end();
     } catch (error) {
+      if (client) await client.query('ROLLBACK').catch(() => {});
       return next(error);
+    } finally {
+      client?.release();
     }
   });
 

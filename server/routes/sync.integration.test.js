@@ -276,4 +276,38 @@ describe.skipIf(!testDatabaseUrl)('offline synchronization routes with PostgreSQ
     const remaining = await pool.query('SELECT count(*)::integer AS count FROM financial_entries WHERE description = $1', ['Alteração local preservada']);
     expect(remaining.rows[0].count).toBe(0);
   });
+
+  it('keeps an offline manual recurrence skip distinct when its rule is expanded', async () => {
+    const admin = await createSpaceUser({ email: 'sync-recurrence-admin@example.test', name: 'Admin recorrência offline' });
+    const csrfToken = (await sameOrigin(request.agent(app), 'get', '/api/auth/state').expect(200)).body.csrfToken;
+    const category = await sessionRequest('post', '/api/catalog/categories', admin.sessionToken, csrfToken, {
+      name: 'Moradia offline fictícia', kind: 'expense', expenseClass: 'fixed',
+    }).expect(201);
+    const monthResult = await pool.query("SELECT to_char(date_trunc('month', now() AT TIME ZONE 'America/Sao_Paulo'), 'YYYY-MM-DD') AS current_month");
+    const [year, month] = monthResult.rows[0].current_month.slice(0, 7).split('-').map(Number);
+    const futureMonth = (offset) => new Date(Date.UTC(year, month - 1 + offset, 1)).toISOString().slice(0, 10);
+    const rule = await sessionRequest('post', '/api/recurrences', admin.sessionToken, csrfToken, {
+      kind: 'expense', description: 'Serviço offline fictício', categoryId: category.body.category.id,
+      startCompetenceOn: monthResult.rows[0].current_month, endCompetenceOn: futureMonth(2),
+      dueDay: 10, plannedCents: 2500,
+    }).expect(201);
+    const occurrence = await pool.query(`
+      SELECT id, version FROM financial_entries
+      WHERE recurrence_rule_id = $1 AND competence_on = $2
+    `, [rule.body.rule.id, futureMonth(1)]);
+
+    const deleted = await sessionRequest('post', '/api/sync/operations', admin.sessionToken, csrfToken,
+      offlineOperation({ kind: 'delete', entryId: occurrence.rows[0].id, baseVersion: occurrence.rows[0].version })).expect(200);
+    expect(deleted.body).toMatchObject({ status: 'applied', deleted: true });
+    const manualSkip = await pool.query('SELECT recurrence_skipped, recurrence_skip_reason FROM financial_entries WHERE id = $1', [occurrence.rows[0].id]);
+    expect(manualSkip.rows).toEqual([{ recurrence_skipped: true, recurrence_skip_reason: 'user' }]);
+
+    await sessionRequest('put', `/api/recurrences/${rule.body.rule.id}`, admin.sessionToken, csrfToken, {
+      kind: 'expense', description: 'Serviço atualizado fictício', categoryId: category.body.category.id,
+      startCompetenceOn: monthResult.rows[0].current_month, endCompetenceOn: futureMonth(3),
+      dueDay: 15, plannedCents: 3000,
+    }).expect(200);
+    const stillManual = await pool.query('SELECT recurrence_skipped, recurrence_skip_reason FROM financial_entries WHERE id = $1', [occurrence.rows[0].id]);
+    expect(stillManual.rows).toEqual([{ recurrence_skipped: true, recurrence_skip_reason: 'user' }]);
+  });
 });

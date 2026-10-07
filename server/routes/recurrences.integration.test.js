@@ -271,6 +271,120 @@ describe.skipIf(!testDatabaseUrl)('monthly recurrence routes with PostgreSQL', (
     const finitePreserved = await pool.query('SELECT count(*)::integer AS count FROM financial_entries WHERE recurrence_rule_id = $1', [ruleId]);
     expect(finitePreserved.rows[0].count).toBe(3);
 
+    const [currentYear, currentNumber] = currentMonth.slice(0, 7).split('-').map(Number);
+    const futureMonth = (offset) => new Date(Date.UTC(currentYear, currentNumber - 1 + offset, 1)).toISOString().slice(0, 10);
+    const managedRule = await sessionRequest('post', '/api/recurrences', session, state.body.csrfToken, {
+      kind: 'expense', description: 'Internet fictícia', categoryId: category.body.category.id,
+      paymentMethodId: paymentMethod.body.paymentMethod.id, startCompetenceOn: currentMonth,
+      endCompetenceOn: futureMonth(5), dueDay: 10, plannedCents: 5000, notes: 'Nota original fictícia',
+    }).expect(201);
+    const managedRuleId = managedRule.body.rule.id;
+    const managedRows = await pool.query(`
+      SELECT id, competence_on::text AS competence_on FROM financial_entries
+      WHERE recurrence_rule_id = $1 ORDER BY competence_on
+    `, [managedRuleId]);
+    const byMonth = new Map(managedRows.rows.map((row) => [row.competence_on, row.id]));
+    const manualEditId = byMonth.get(futureMonth(1));
+    const paidId = byMonth.get(futureMonth(2));
+    const manualSkipId = byMonth.get(futureMonth(3));
+    const updateId = byMonth.get(futureMonth(4));
+    const shortenId = byMonth.get(futureMonth(5));
+
+    await sessionRequest('put', `/api/entries/${manualEditId}`, session, state.body.csrfToken, {
+      kind: 'expense', description: 'Internet ajustada manualmente', categoryId: category.body.category.id,
+      competenceOn: futureMonth(1), dueOn: futureMonth(1).replace('-01', '-15'), plannedCents: 5500,
+      paymentMethodId: paymentMethod.body.paymentMethod.id, notes: 'Ajuste manual fictício',
+    }).expect(200);
+    await sessionRequest('post', `/api/entries/${paidId}/confirm`, session, state.body.csrfToken, {
+      actualCents: 5000, realizedOn: futureMonth(2),
+    }).expect(200);
+    await sessionRequest('delete', `/api/entries/${manualSkipId}`, session, state.body.csrfToken).expect(204);
+
+    const updateRuleBody = {
+      kind: 'expense', description: 'Internet reajustada', categoryId: category.body.category.id,
+      paymentMethodId: paymentMethod.body.paymentMethod.id, startCompetenceOn: currentMonth,
+      endCompetenceOn: futureMonth(5), dueDay: 20, plannedCents: 6500, notes: 'Nota atualizada fictícia',
+    };
+    await sessionRequest('put', `/api/recurrences/${managedRuleId}`, session, state.body.csrfToken, updateRuleBody).expect(200);
+    const afterUpdate = await pool.query(`
+      SELECT competence_on::text AS competence_on, description, due_on::text AS due_on,
+        planned_cents, actual_cents, recurrence_overridden, recurrence_skipped, recurrence_skip_reason,
+        updated_by_user_id
+      FROM financial_entries WHERE recurrence_rule_id = $1 ORDER BY competence_on
+    `, [managedRuleId]);
+    const rowAt = (competence) => afterUpdate.rows.find((row) => row.competence_on === competence);
+    expect(rowAt(currentMonth)).toMatchObject({ description: 'Internet fictícia', planned_cents: '5000', recurrence_skipped: false });
+    expect(rowAt(futureMonth(1))).toMatchObject({ description: 'Internet ajustada manualmente', planned_cents: '5500', recurrence_overridden: true });
+    expect(rowAt(futureMonth(2))).toMatchObject({ description: 'Internet fictícia', planned_cents: '5000', actual_cents: '5000', recurrence_overridden: false });
+    expect(rowAt(futureMonth(3))).toMatchObject({ recurrence_skipped: true, recurrence_skip_reason: 'user' });
+    expect(rowAt(futureMonth(4))).toMatchObject({ description: 'Internet reajustada', due_on: futureMonth(4).replace('-01', '-20'), planned_cents: '6500', updated_by_user_id: admin.id });
+    expect(rowAt(futureMonth(5))).toMatchObject({ description: 'Internet reajustada', planned_cents: '6500' });
+
+    const updateAudit = await pool.query(`
+      SELECT actor_user_id, action, details FROM financial_entry_audit WHERE entry_id = $1 ORDER BY id DESC LIMIT 1
+    `, [updateId]);
+    expect(updateAudit.rows[0]).toMatchObject({ actor_user_id: admin.id, action: 'updated' });
+    expect(updateAudit.rows[0].details).toMatchObject({ before: { description: 'Internet fictícia' }, after: { description: 'Internet reajustada' } });
+
+    await sessionRequest('put', `/api/recurrences/${managedRuleId}`, session, state.body.csrfToken, {
+      ...updateRuleBody, endCompetenceOn: futureMonth(3), description: 'Internet com período reduzido',
+    }).expect(200);
+    let projected = await pool.query(`
+      SELECT competence_on::text AS competence_on, recurrence_skipped, recurrence_skip_reason, description
+      FROM financial_entries WHERE recurrence_rule_id = $1 ORDER BY competence_on
+    `, [managedRuleId]);
+    const projectAt = (rows, competence) => rows.find((row) => row.competence_on === competence);
+    expect(projectAt(projected.rows, futureMonth(4))).toMatchObject({ recurrence_skipped: true, recurrence_skip_reason: 'rule' });
+    expect(projectAt(projected.rows, futureMonth(5))).toMatchObject({ recurrence_skipped: true, recurrence_skip_reason: 'rule' });
+    expect(projectAt(projected.rows, futureMonth(3))).toMatchObject({ recurrence_skipped: true, recurrence_skip_reason: 'user' });
+    expect(projectAt(projected.rows, futureMonth(1))).toMatchObject({ description: 'Internet ajustada manualmente', recurrence_skipped: false });
+    expect(projectAt(projected.rows, futureMonth(2))).toMatchObject({ recurrence_skipped: false });
+
+    const expandedBody = { ...updateRuleBody, description: 'Internet restaurada' };
+    await sessionRequest('put', `/api/recurrences/${managedRuleId}`, session, state.body.csrfToken, expandedBody).expect(200);
+    await sessionRequest('put', `/api/recurrences/${managedRuleId}`, session, state.body.csrfToken, expandedBody)
+      .expect(200).expect(({ body }) => expect(body.generatedCount).toBe(0));
+    const extended = await sessionRequest('put', `/api/recurrences/${managedRuleId}`, session, state.body.csrfToken, {
+      ...expandedBody, endCompetenceOn: futureMonth(8),
+    }).expect(200);
+    expect(extended.body.generatedCount).toBe(3);
+    const extensionAudit = await pool.query(`
+      SELECT actor_user_id, action FROM financial_entry_audit
+      WHERE entry_id = (SELECT id FROM financial_entries WHERE recurrence_rule_id = $1 AND competence_on = $2)
+      ORDER BY id
+    `, [managedRuleId, futureMonth(6)]);
+    expect(extensionAudit.rows).toEqual([{ actor_user_id: admin.id, action: 'created' }]);
+    projected = await pool.query(`
+      SELECT competence_on::text AS competence_on, recurrence_skipped, recurrence_skip_reason, description, planned_cents
+      FROM financial_entries WHERE recurrence_rule_id = $1 ORDER BY competence_on
+    `, [managedRuleId]);
+    expect(projectAt(projected.rows, futureMonth(4))).toMatchObject({ recurrence_skipped: false, recurrence_skip_reason: null, description: 'Internet restaurada', planned_cents: '6500' });
+    expect(projectAt(projected.rows, futureMonth(5))).toMatchObject({ recurrence_skipped: false, recurrence_skip_reason: null, description: 'Internet restaurada', planned_cents: '6500' });
+    expect(projectAt(projected.rows, futureMonth(3))).toMatchObject({ recurrence_skipped: true, recurrence_skip_reason: 'user' });
+    const restoreEvents = await pool.query(`
+      SELECT action, actor_user_id FROM financial_entry_audit
+      WHERE entry_id = $1 ORDER BY id
+    `, [shortenId]);
+    expect(restoreEvents.rows.slice(-2)).toEqual([
+      { action: 'deleted', actor_user_id: admin.id },
+      { action: 'updated', actor_user_id: admin.id },
+    ]);
+
+    await sessionRequest('post', `/api/recurrences/${managedRuleId}/archive`, session, state.body.csrfToken).expect(204);
+    projected = await pool.query(`
+      SELECT competence_on::text AS competence_on, recurrence_skipped, recurrence_skip_reason, actual_cents, recurrence_overridden
+      FROM financial_entries WHERE recurrence_rule_id = $1 ORDER BY competence_on
+    `, [managedRuleId]);
+    expect(projectAt(projected.rows, currentMonth)).toMatchObject({ recurrence_skipped: false });
+    expect(projectAt(projected.rows, futureMonth(1))).toMatchObject({ recurrence_skipped: false, recurrence_overridden: true });
+    expect(projectAt(projected.rows, futureMonth(2))).toMatchObject({ recurrence_skipped: false, actual_cents: '5000' });
+    expect(projectAt(projected.rows, futureMonth(3))).toMatchObject({ recurrence_skipped: true, recurrence_skip_reason: 'user' });
+    expect(projectAt(projected.rows, futureMonth(4))).toMatchObject({ recurrence_skipped: true, recurrence_skip_reason: 'rule' });
+    const archivedAudit = await pool.query(`
+      SELECT action, actor_user_id FROM financial_entry_audit WHERE entry_id = $1 ORDER BY id DESC LIMIT 1
+    `, [updateId]);
+    expect(archivedAudit.rows).toEqual([{ action: 'deleted', actor_user_id: admin.id }]);
+
     const firstMissingMonth = new Date(Date.UTC(Number(currentMonth.slice(0, 4)), Number(currentMonth.slice(5, 7)) - 1 - 3, 1)).toISOString().slice(0, 10);
     const restartRule = await pool.query(`
       INSERT INTO recurrence_rules (
