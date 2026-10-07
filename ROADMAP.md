@@ -60,4 +60,6 @@ Backlog inicial da primeira versão. Concluir dependências antes de iniciar uma
 
 ## Evoluções fora da V2
 
+- [x] [Corrigir sobreposição da navegação no celular](https://github.com/csescobar/conta-clara/issues/30) — menu compacto com os outros destinos em “Mais”; validado em 320–430 px, desktop e teclado (`c0e73d0`).
+
 Contas bancárias e saldos, integração bancária, importação de extratos, pagamento parcial/rotativo e acesso remoto permanecem fora desta etapa.
