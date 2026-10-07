@@ -98,7 +98,7 @@ export function RecurrencesPage() {
         </li>)}</ul> : <EmptyState title="Nenhuma regra mensal" description="Crie uma regra para gerar os lançamentos mensais que se repetem." action={<Button asChild><Link to="/recorrencias/novo"><Plus aria-hidden="true" className="size-4" />Nova regra</Link></Button>} />}
       </CardContent>
     </Card>
-    <p className="mt-4 rounded-xl border border-border bg-card px-4 py-3 text-xs leading-5 text-muted-foreground">Regras geram competências que faltam até o mês atual. Alterar uma regra afeta novas competências; meses já gerados podem ser editados individualmente em Lançamentos.</p>
+    <p className="mt-4 rounded-xl border border-border bg-card px-4 py-3 text-xs leading-5 text-muted-foreground">Cada regra projeta até 13 competências: o mês atual e os próximos 12. Ao alterar ou arquivar uma regra, o sistema atualiza ou retira projeções futuras automáticas ainda em aberto. Competências atuais ou passadas, pagamentos, ajustes individuais e exclusões manuais são preservados. Depois desse horizonte, novas projeções recorrentes não são garantidas.</p>
   </>;
 }
 

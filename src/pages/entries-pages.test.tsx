@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -33,6 +33,36 @@ afterEach(() => {
 });
 
 describe('financial entry pages', () => {
+  it('shows a generated recurring entry in the selected future competence', async () => {
+    const current = currentMonthInputValue();
+    const [year, month] = current.split('-').map(Number);
+    const futureMonth = new Date(Date.UTC(year, month, 1)).toISOString().slice(0, 7);
+    const occurrence = {
+      id: 'future-recurrence', kind: 'expense', description: 'Internet mensal projetada',
+      category_id: 'expense-category', category_name: 'Moradia', competence_on: `${futureMonth}-01`,
+      due_on: `${futureMonth}-10`, planned_cents: '8990', actual_cents: null, realized_on: null,
+      payment_method_id: 'payment-method', payment_method_name: 'Pix', notes: null,
+      recurrence_rule_id: 'rule-fixture', created_by_user_id: 'member-id', updated_by_user_id: 'member-id', status: 'pending',
+    };
+    const fetchMock = vi.fn().mockImplementation(async (input: string) => {
+      if (input === '/api/catalog/categories?includeArchived=true') return response({ categories });
+      if (input.startsWith('/api/entries?')) {
+        return response({ entries: input.includes(`month=${futureMonth}`) ? [occurrence] : [] });
+      }
+      throw new Error(`Unexpected request: ${input}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    renderPage('/lancamentos');
+
+    fireEvent.change(screen.getByLabelText('Competência'), { target: { value: futureMonth } });
+    const description = await screen.findByText('Internet mensal projetada');
+    const row = description.closest('li');
+    expect(row).not.toBeNull();
+    expect(row).toHaveTextContent(`Competência ${futureMonth.slice(5, 7)}/${futureMonth.slice(0, 4)}`);
+    expect(row).toHaveTextContent(/89,90/);
+    expect(fetchMock).toHaveBeenCalledWith(`/api/entries?month=${futureMonth}`, { credentials: 'same-origin' });
+  });
+
   it('exports only the currently filtered, space-authorized list as a CSV download', async () => {
     const entry = {
       id: 'csv-entry', kind: 'expense', description: 'Conta fictícia', category_id: 'expense-category', category_name: 'Moradia',

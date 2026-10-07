@@ -1,15 +1,17 @@
 import { IDBFactory } from 'fake-indexeddb';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { AuthContext, AuthGate } from '../auth/auth-gate';
 import { NewTransactionPage, TransactionsPage } from '../pages/entries-pages';
+import { DashboardPage } from '../pages/pages';
 import { currentMonthInputValue } from '../lib/finance';
 import { OfflineWorkspaceProvider } from './offline-context';
 import {
   clearOfflineWorkspace,
   isOfflineLogoutMarked,
+  loadOfflineSnapshot,
   loadRememberedOfflineUser,
   loadOfflineWorkspace,
   markOfflineConflict,
@@ -40,6 +42,7 @@ function offlinePage(scope: OfflineScope, path: string) {
     <AuthContext.Provider value={{ user: scopedUser, csrfToken }}>
       <MemoryRouter initialEntries={[path]}>
         <Routes>
+          <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/lancamentos" element={<TransactionsPage />} />
           <Route path="/lancamentos/novo" element={<NewTransactionPage />} />
           <Route path="/lancamentos/:id/editar" element={<NewTransactionPage />} />
@@ -68,6 +71,51 @@ beforeAll(() => {
 afterAll(() => vi.unstubAllGlobals());
 
 describe('offline transaction workflow', () => {
+  it('caches only dashboard months opened online and asks for a connection for an uncached month', async () => {
+    const scope = { userId: 'offline-dashboard-user', spaceId: 'offline-dashboard-space' };
+    const currentMonth = currentMonthInputValue();
+    const [year, month] = currentMonth.split('-').map(Number);
+    const futureMonth = new Date(Date.UTC(year, month, 1)).toISOString().slice(0, 7);
+    const uncachedMonth = new Date(Date.UTC(year, month + 1, 1)).toISOString().slice(0, 7);
+    const forecast = {
+      month: `${futureMonth}-01`,
+      planned: { incomeCents: '0', expenseCents: '15600', investmentCents: '0', resultCents: '-15600' },
+      realized: { incomeCents: '0', expenseCents: '0', investmentCents: '0', resultCents: '0' },
+      charts: { expensesByCategory: [{ categoryId: 'offline-category', categoryName: 'Moradia', plannedCents: '15600', realizedCents: '0' }] },
+      upcoming: { count: 0, entries: [] }, overdue: { count: 0, entries: [] },
+    };
+    const dashboardFor = (selectedMonth: string) => selectedMonth === futureMonth ? forecast : {
+      ...forecast,
+      month: `${selectedMonth}-01`,
+      planned: { incomeCents: '0', expenseCents: '0', investmentCents: '0', resultCents: '0' },
+      charts: { expensesByCategory: [] },
+    };
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const path = String(input);
+      const selectedMonth = new URL(path, window.location.origin).searchParams.get('month') ?? currentMonth;
+      return jsonResponse(dashboardFor(selectedMonth));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    offlinePage(scope, '/dashboard');
+
+    const monthInput = await screen.findByLabelText('Mês do painel');
+    fireEvent.change(monthInput, { target: { value: futureMonth } });
+    const forecastTitle = await screen.findByText('Resultado previsto');
+    expect(within(forecastTitle.parentElement as HTMLElement).getByText(/-R\$.*156,00/)).toBeInTheDocument();
+    expect(await loadOfflineSnapshot(scope, `/api/dashboard?month=${futureMonth}`)).toEqual(forecast);
+    expect(await loadOfflineSnapshot(scope, `/api/dashboard?month=${uncachedMonth}`)).toBeNull();
+
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
+    window.dispatchEvent(new Event('offline'));
+    await waitFor(() => expect(within(forecastTitle.parentElement as HTMLElement).getByText(/-R\$.*156,00/)).toBeInTheDocument());
+    fireEvent.change(monthInput, { target: { value: uncachedMonth } });
+    expect(await screen.findByRole('alert')).toHaveTextContent('Este mês ainda não foi carregado neste aparelho. Conecte-se para consultar o painel.');
+    expect(screen.queryByRole('table', { name: /Valores previstos e realizados/ })).not.toBeInTheDocument();
+    expect(fetchMock.mock.calls.map(([input]) => String(input))).not.toContain(`/api/dashboard?month=${uncachedMonth}`);
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
+  });
+
   it('reopens the last verified user and cached entries after launch without a network', async () => {
     const scope: OfflineScope = { userId: 'offline-restore-user', spaceId: 'offline-restore-space' };
     const restoredUser = { ...authUser, id: scope.userId, spaceId: scope.spaceId };

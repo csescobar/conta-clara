@@ -15,6 +15,11 @@ function shiftDate(value, offset) {
   return date.toISOString().slice(0, 10);
 }
 
+function shiftMonth(value, offset) {
+  const [year, month] = value.slice(0, 7).split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1 + offset, 1)).toISOString().slice(0, 10);
+}
+
 describe.skipIf(!testDatabaseUrl)('dashboard routes with PostgreSQL', () => {
   let pool;
   let app;
@@ -146,5 +151,33 @@ describe.skipIf(!testDatabaseUrl)('dashboard routes with PostgreSQL', () => {
     await sessionRequest('get', '/api/dashboard?month=2025-12', otherSpace.sessionToken, state.body.csrfToken).expect(200)
       .expect(({ body }) => expect(body).toMatchObject({ planned: { incomeCents: '0', expenseCents: '0', investmentCents: '0', resultCents: '0' }, realized: { incomeCents: '0', expenseCents: '0', investmentCents: '0', resultCents: '0' }, charts: { expensesByCategory: [] }, upcoming: { count: 0 }, overdue: { count: 0 } }));
     await request(app).get('/api/dashboard?month=2025-12').set('Host', 'conta-clara.test').expect(401);
+
+    const recurrence = await sessionRequest('post', '/api/recurrences', session, state.body.csrfToken)
+      .set('X-CSRF-Token', state.body.csrfToken)
+      .send({
+        kind: 'expense', description: 'Serviço recorrente fictício', categoryId: homeCategoryId,
+        startCompetenceOn: currentMonth, endCompetenceOn: shiftMonth(currentMonth, 12),
+        dueDay: 15, plannedCents: 8790,
+      }).expect(201);
+    const nextMonth = shiftMonth(currentMonth, 1).slice(0, 7);
+    const firstFuturePanel = await sessionRequest('get', `/api/dashboard?month=${nextMonth}`, session, state.body.csrfToken).expect(200);
+    expect(firstFuturePanel.body).toMatchObject({
+      planned: { expenseCents: '8790', resultCents: '-8790' },
+      realized: { expenseCents: '0', resultCents: '0' },
+      charts: { expensesByCategory: [{ categoryId: homeCategoryId, categoryName: 'Moradia', plannedCents: '8790', realizedCents: '0' }] },
+    });
+    const futureEntries = await sessionRequest('get', `/api/entries?month=${nextMonth}`, session, state.body.csrfToken).expect(200);
+    expect(futureEntries.body.entries).toHaveLength(1);
+    expect(futureEntries.body.entries[0]).toMatchObject({ description: 'Serviço recorrente fictício', planned_cents: '8790', recurrence_rule_id: recurrence.body.rule.id });
+    const refreshedPanel = await sessionRequest('get', `/api/dashboard?month=${nextMonth}`, session, state.body.csrfToken).expect(200);
+    expect(refreshedPanel.body.planned.expenseCents).toBe('8790');
+
+    const beyondMonth = shiftMonth(currentMonth, 13);
+    await insertEntry({ kind: 'expense', description: 'Despesa manual além do horizonte', competenceOn: beyondMonth, dueOn: beyondMonth.replace('-01', '-18'), plannedCents: 4500, categoryId: homeCategoryId });
+    const beyondHorizon = await sessionRequest('get', `/api/dashboard?month=${shiftMonth(currentMonth, 13).slice(0, 7)}`, session, state.body.csrfToken).expect(200);
+    expect(beyondHorizon.body.planned.expenseCents).toBe('4500');
+    const manualBeyondHorizon = await sessionRequest('get', `/api/entries?month=${beyondMonth.slice(0, 7)}`, session, state.body.csrfToken).expect(200);
+    expect(manualBeyondHorizon.body.entries).toHaveLength(1);
+    expect(manualBeyondHorizon.body.entries[0]).toMatchObject({ description: 'Despesa manual além do horizonte', planned_cents: '4500' });
   });
 });

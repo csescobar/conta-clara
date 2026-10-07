@@ -23,6 +23,16 @@ function renderPages(path: string) {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('monthly recurrence pages', () => {
+  it('explains the 13-competence horizon and preservation behavior', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({ rules: [] })));
+    renderPages('/recorrencias');
+
+    expect(await screen.findByText(/até 13 competências: o mês atual e os próximos 12/i)).toBeInTheDocument();
+    expect(screen.getByText(/atualiza ou retira projeções futuras automáticas ainda em aberto/i)).toBeInTheDocument();
+    expect(screen.getByText(/pagamentos, ajustes individuais e exclusões manuais são preservados/i)).toBeInTheDocument();
+    expect(screen.getByText(/novas projeções recorrentes não são garantidas/i)).toBeInTheDocument();
+  });
+
   it('creates a monthly expense and serializes the month, due day, and cents', async () => {
     const fetchMock = vi.fn().mockImplementation(async (input: string, init?: RequestInit) => {
       if (input === '/api/catalog/categories') return response({ categories });

@@ -80,7 +80,10 @@ export function DashboardPage() {
         const cached = await currentOffline.getSnapshot<DashboardData>(path).catch(() => null);
         if (active) {
           if (cached) setDashboard(cached);
-          else setError('Este mês ainda não foi carregado neste aparelho. Conecte-se para consultar o painel.');
+          else {
+            setDashboard(null);
+            setError('Este mês ainda não foi carregado neste aparelho. Conecte-se para consultar o painel.');
+          }
           setLoading(false);
         }
         return;
@@ -102,7 +105,10 @@ export function DashboardPage() {
           const cached = await currentOffline.getSnapshot<DashboardData>(path).catch(() => null);
           if (active) {
             if (cached) setDashboard(cached);
-            else setError('Este mês ainda não foi carregado neste aparelho. Conecte-se para consultar o painel.');
+            else {
+              setDashboard(null);
+              setError('Este mês ainda não foi carregado neste aparelho. Conecte-se para consultar o painel.');
+            }
           }
         } else if (active) {
           setError(loadError instanceof Error ? loadError.message : 'Não foi possível carregar o painel.');
@@ -155,6 +161,7 @@ export function DashboardPage() {
         </CardContent></Card>
       </section>
       <p className="mt-4 rounded-xl border border-border bg-card px-4 py-3 text-xs leading-5 text-muted-foreground">O resultado do período resume lançamentos previstos ou realizados. Não representa o saldo de uma conta bancária.</p>
+      <p className="mt-2 rounded-xl border border-border bg-card px-4 py-3 text-xs leading-5 text-muted-foreground">Regras recorrentes projetam o mês atual e os próximos 12 meses. {month > moveMonth(currentMonthInputValue(), 12) ? 'O mês selecionado está além desse horizonte: lançamentos manuais continuam consultáveis, mas novas projeções recorrentes não são garantidas.' : 'Cada mês do painel é salvo no aparelho quando aberto online; os demais meses precisam de conexão para serem carregados.'}</p>
     </div>}
   </>;
 }

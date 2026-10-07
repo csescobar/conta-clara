@@ -90,6 +90,32 @@ describe('financial dashboard', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/dashboard?month=2025-12', { credentials: 'same-origin', cache: 'no-store' });
   });
 
+  it('shows future recurrence forecast totals in the monthly summary and category chart', async () => {
+    const currentMonth = currentMonthInputValue();
+    const [year, month] = currentMonth.split('-').map(Number);
+    const futureMonth = new Date(Date.UTC(year, month, 1)).toISOString().slice(0, 7);
+    const forecast = {
+      ...emptyDashboard(futureMonth),
+      planned: { incomeCents: '0', expenseCents: '15600', investmentCents: '0', resultCents: '-15600' },
+      charts: { expensesByCategory: [{ categoryId: 'home', categoryName: 'Moradia', plannedCents: '15600', realizedCents: '0' }] },
+    };
+    const fetchMock = vi.fn().mockImplementation(async (input: string) => {
+      const requestedMonth = new URL(input, window.location.origin).searchParams.get('month') ?? currentMonth;
+      return response(requestedMonth === futureMonth ? forecast : emptyDashboard(requestedMonth));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    renderPage();
+
+    fireEvent.change(screen.getByLabelText('Mês do painel'), { target: { value: futureMonth } });
+    const summary = await screen.findByRole('table', { name: /Valores previstos e realizados/ });
+    const expenses = await within(summary).findByRole('row', { name: /Despesas/ });
+    expect(within(expenses).getByText(/156,00/)).toBeInTheDocument();
+    expect(within(expenses).getByText(/0,00/)).toBeInTheDocument();
+    expect(await screen.findByText(/1 categorias; previsto R\$\s+156,00, realizado R\$\s+0,00/i)).toBeInTheDocument();
+    expect(screen.getByText(/Regras recorrentes projetam o mês atual e os próximos 12 meses/)).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(`/api/dashboard?month=${futureMonth}`, { credentials: 'same-origin', cache: 'no-store' });
+  });
+
   it('shows zeros for an empty month and moves backward across a year boundary', async () => {
     const fetchMock = vi.fn().mockImplementation(async (input: string) => {
       const month = new URL(input, window.location.origin).searchParams.get('month') ?? '2026-01';
