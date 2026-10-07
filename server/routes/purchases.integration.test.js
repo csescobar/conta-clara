@@ -97,8 +97,11 @@ describe.skipIf(!testDatabaseUrl)('card purchase routes with PostgreSQL', () => 
     expect(shared.body.purchases.map(({ id }) => id)).toContain(purchaseId);
     expect((await sessionRequest('get', '/api/purchases', otherSpace.sessionToken).expect(200)).body.purchases).toEqual([]);
 
-    const firstInstallment = created.body.purchase.installments[0];
-    await sessionRequest('post', `/api/entries/${firstInstallment.id}/confirm`, owner.sessionToken, { actualCents: 334, realizedOn: '2026-11-05' }).expect(200);
+    const novemberInvoice = (await sessionRequest('get', '/api/invoices?month=2026-11', owner.sessionToken).expect(200)).body.invoices[0];
+    await sessionRequest('post', '/api/sync/operations', owner.sessionToken, {
+      entity: 'invoice', cardId, invoiceMonth: '2026-11', operationId: randomUUID(), kind: 'pay', baseVersion: novemberInvoice.version,
+      payload: { actualCents: 334, paidOn: '2026-11-05', paymentMethodId: null },
+    }).expect(200);
     const updatedSeries = {
       purchase: { ...initial.purchase, description: 'Compra ajustada', firstInvoiceOn: '2026-12-01' },
       installments: created.body.purchase.installments.map((installment, index) => ({
@@ -110,7 +113,8 @@ describe.skipIf(!testDatabaseUrl)('card purchase routes with PostgreSQL', () => 
       entity: 'purchase', purchaseId, operationId: randomUUID(), kind: 'update', baseVersion: 1, payload: updatedSeries,
     }).expect(200);
     expect(seriesEdit.body.purchase).toMatchObject({ version: 2, description: 'Compra ajustada', first_invoice_on: '2026-12-01', total_cents: '1001' });
-    expect(seriesEdit.body.purchase.installments[0]).toMatchObject({ actual_cents: '334', invoice_on: '2026-11-01', description: 'Compra de teste (1/3)' });
+    expect(seriesEdit.body.purchase.installments[0]).toMatchObject({ actual_cents: null, invoice_on: '2026-11-01', description: 'Compra ajustada (1/3)' });
+    expect((await sessionRequest('get', '/api/invoices?month=2026-11', owner.sessionToken).expect(200)).body.invoices[0]).toMatchObject({ status: 'needs_review', actual_cents: null });
     expect(seriesEdit.body.purchase.installments.slice(1).map(({ invoice_on }) => invoice_on)).toEqual(['2026-12-01', '2027-01-01']);
 
     const afterSeries = seriesEdit.body.purchase;
@@ -133,9 +137,8 @@ describe.skipIf(!testDatabaseUrl)('card purchase routes with PostgreSQL', () => 
       entity: 'purchase', purchaseId, operationId: randomUUID(), kind: 'delete', baseVersion: 3, payload: null,
     }).expect(200);
     expect(canceled.body.purchase.canceled_at).toBeTruthy();
-    expect(canceled.body.purchase.installments).toHaveLength(1);
-    expect(canceled.body.purchase.installments[0]).toMatchObject({ id: firstInstallment.id, actual_cents: '334' });
-    expect(await pool.query('SELECT count(*)::integer AS count FROM financial_entries WHERE card_purchase_id = $1', [purchaseId])).toMatchObject({ rows: [{ count: 1 }] });
+    expect(canceled.body.purchase.installments).toHaveLength(0);
+    expect(await pool.query('SELECT count(*)::integer AS count FROM financial_entries WHERE card_purchase_id = $1', [purchaseId])).toMatchObject({ rows: [{ count: 0 }] });
 
     const noPaidPurchaseId = randomUUID();
     const noPaidPayload = payloadFor({ cardId, categoryId, totalCents: 100, amounts: [100], months: ['2026-11-01'], description: 'Compra cancelada antes do pagamento' });
@@ -155,6 +158,6 @@ describe.skipIf(!testDatabaseUrl)('card purchase routes with PostgreSQL', () => 
     expect(rejected.body.error).toMatch(/cartão ativo/i);
 
     const audit = await pool.query("SELECT action, count(*)::integer AS count FROM financial_entry_audit WHERE space_id = $1 GROUP BY action", [owner.spaceId]);
-    expect(Object.fromEntries(audit.rows.map((row) => [row.action, row.count]))).toMatchObject({ created: 4, updated: 3, deleted: 3, confirmed: 1 });
+    expect(Object.fromEntries(audit.rows.map((row) => [row.action, row.count]))).toMatchObject({ created: 4, updated: 4, deleted: 4, confirmed: 1, unconfirmed: 1 });
   });
 });

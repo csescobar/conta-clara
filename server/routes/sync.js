@@ -4,11 +4,33 @@ import { parseEntry, selectEntry, validateReferences } from './entries.js';
 import { parseCard, selectCard, validateCardHolder } from './cards.js';
 import { recordEntryAudit } from '../services/financial-entry-audit.js';
 import { cancelPurchase, createPurchase, parsePurchaseSnapshot, selectPurchase, updatePurchase } from '../services/card-purchases.js';
+import { isInvoiceMonth, lockCardInvoiceKeys, selectCardInvoice, updateInvoicePayment } from '../services/card-invoices.js';
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 const kinds = new Set(['create', 'update', 'delete']);
 
+function isIsoDate(value) {
+  if (typeof value !== 'string' || !datePattern.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === value;
+}
+
 function parseOperation(body) {
+  if (body?.entity === 'invoice') {
+    if (!uuidPattern.test(body.cardId ?? '') || !uuidPattern.test(body.operationId ?? '') || !isInvoiceMonth(body.invoiceMonth) || !['pay', 'reverse'].includes(body.kind)) return null;
+    if (!Number.isSafeInteger(body.baseVersion) || body.baseVersion < 1) return null;
+    if (body.kind === 'reverse') {
+      if (body.payload !== null) return null;
+      return { entity: 'invoice', operationId: body.operationId, cardId: body.cardId, invoiceMonth: body.invoiceMonth, kind: body.kind, baseVersion: body.baseVersion, payload: null };
+    }
+    const payload = body.payload;
+    const paymentMethodId = payload?.paymentMethodId === undefined || payload?.paymentMethodId === null || payload?.paymentMethodId === ''
+      ? null : payload.paymentMethodId;
+    if (!Number.isSafeInteger(payload?.actualCents) || payload.actualCents <= 0 || !isIsoDate(payload.paidOn)
+      || (paymentMethodId !== null && !uuidPattern.test(paymentMethodId)) || (payload?.replacePaid !== undefined && typeof payload.replacePaid !== 'boolean')) return null;
+    return { entity: 'invoice', operationId: body.operationId, cardId: body.cardId, invoiceMonth: body.invoiceMonth, kind: body.kind, baseVersion: body.baseVersion, payload: { actualCents: payload.actualCents, paidOn: payload.paidOn, paymentMethodId, replacePaid: payload.replacePaid === true } };
+  }
   if (body?.entity === 'purchase') {
     if (!uuidPattern.test(body.purchaseId ?? '') || !uuidPattern.test(body.operationId ?? '') || !['create', 'update', 'delete'].includes(body.kind)) return null;
     const baseVersion = body.baseVersion;
@@ -62,7 +84,10 @@ async function applyOperation(client, request, operation) {
   const userId = request.auth.id;
   const normalizedRequest = {
     operationId: operation.operationId,
-    ...(operation.entity === 'card' ? { entity: 'card', cardId: operation.cardId } : operation.entity === 'purchase' ? { entity: 'purchase', purchaseId: operation.purchaseId } : { entryId: operation.entryId }),
+    ...(operation.entity === 'card' ? { entity: 'card', cardId: operation.cardId }
+      : operation.entity === 'purchase' ? { entity: 'purchase', purchaseId: operation.purchaseId }
+        : operation.entity === 'invoice' ? { entity: 'invoice', cardId: operation.cardId, invoiceMonth: operation.invoiceMonth }
+          : { entryId: operation.entryId }),
     kind: operation.kind,
     baseVersion: operation.baseVersion,
     payload: operation.payload,
@@ -77,10 +102,15 @@ async function applyOperation(client, request, operation) {
     if (previous.actor_user_id !== userId || !previous.same_request) {
       const sameResource = previous.actor_user_id === userId
         && previous.request.entity === operation.entity
-        && (operation.entity === 'card' ? previous.request.cardId === operation.cardId : operation.entity === 'purchase' ? previous.request.purchaseId === operation.purchaseId : previous.request.entryId === operation.entryId);
-      const resourceName = operation.entity === 'card' ? 'card' : operation.entity === 'purchase' ? 'purchase' : 'entry';
+        && (operation.entity === 'card' ? previous.request.cardId === operation.cardId
+          : operation.entity === 'purchase' ? previous.request.purchaseId === operation.purchaseId
+            : operation.entity === 'invoice' ? previous.request.cardId === operation.cardId && previous.request.invoiceMonth === operation.invoiceMonth
+              : previous.request.entryId === operation.entryId);
+      const resourceName = operation.entity === 'card' ? 'card' : operation.entity === 'purchase' ? 'purchase' : operation.entity === 'invoice' ? 'invoice' : 'entry';
       const serverResource = sameResource ? previous.response_body[resourceName] ?? null : null;
-      const resourceFields = operation.entity === 'card' ? { serverCard: serverResource } : operation.entity === 'purchase' ? { serverPurchase: serverResource } : { serverEntry: serverResource };
+      const resourceFields = operation.entity === 'card' ? { serverCard: serverResource }
+        : operation.entity === 'purchase' ? { serverPurchase: serverResource }
+          : operation.entity === 'invoice' ? { serverInvoice: serverResource } : { serverEntry: serverResource };
       return { status: 409, body: { status: 'conflict', reason: 'idempotency_key_reused', ...resourceFields, error: 'Esta operação já foi usada com outros dados.' } };
     }
     return { status: Number(previous.response_status), body: previous.response_body };
@@ -145,6 +175,18 @@ async function applyOperation(client, request, operation) {
     } else {
       result = await cancelPurchase(client, { spaceId, userId, actorName: request.auth.name, purchaseId: operation.purchaseId, baseVersion: operation.baseVersion });
     }
+    if (result.status !== 200) return result;
+    const body = { ...result.body, operationId: operation.operationId };
+    await storeReceipt(client, { spaceId, userId, operation, request: normalizedRequest, body });
+    return { status: 200, body };
+  }
+
+  if (operation.entity === 'invoice') {
+    await lockCardInvoiceKeys(client, spaceId, [{ cardId: operation.cardId, invoiceMonth: operation.invoiceMonth }]);
+    const result = await updateInvoicePayment(client, {
+      spaceId, userId, actorName: request.auth.name, cardId: operation.cardId,
+      month: operation.invoiceMonth, action: operation.kind, baseVersion: operation.baseVersion, payload: operation.payload,
+    });
     if (result.status !== 200) return result;
     const body = { ...result.body, operationId: operation.operationId };
     await storeReceipt(client, { spaceId, userId, operation, request: normalizedRequest, body });

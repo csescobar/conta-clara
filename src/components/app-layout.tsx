@@ -1,16 +1,17 @@
-import { ArrowLeftRight, CreditCard, History, House, LogOut, RefreshCw, Repeat2, Settings, WalletCards } from 'lucide-react';
+import { ArrowLeftRight, CreditCard, FileText, History, House, LogOut, RefreshCw, Repeat2, Settings, WalletCards } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 import { Button } from './ui/button';
 import type { AuthUser } from '../auth/auth-page';
 import { cn } from '../lib/utils';
 import { useOfflineWorkspace } from '../offline/offline-context';
-import { formatBrazilianMoney, formatBrazilianMonth } from '../lib/finance';
+import { formatBrazilianDate, formatBrazilianMoney, formatBrazilianMonth } from '../lib/finance';
 
 const links = [
   { to: '/', label: 'Visão geral', Icon: House, end: true },
   { to: '/lancamentos', label: 'Lançamentos', Icon: ArrowLeftRight, end: false },
   { to: '/compras', label: 'Compras', Icon: CreditCard, end: false },
+  { to: '/faturas', label: 'Faturas', Icon: FileText, end: false },
   { to: '/recorrencias', label: 'Recorrências', Icon: Repeat2, end: false },
   { to: '/historico', label: 'Histórico', Icon: History, end: false },
   { to: '/configuracoes', label: 'Configurações', Icon: Settings, end: false },
@@ -27,7 +28,7 @@ function Brand() {
 
 function Navigation({ mobile = false }: { mobile?: boolean }) {
   return (
-    <nav aria-label={mobile ? 'Navegação principal móvel' : 'Navegação principal'} className={mobile ? 'grid grid-cols-6' : 'grid gap-1'}>
+    <nav aria-label={mobile ? 'Navegação principal móvel' : 'Navegação principal'} className={mobile ? 'grid grid-cols-7' : 'grid gap-1'}>
       {links.map(({ to, label, Icon, end }) => (
         <NavLink
           key={to}
@@ -66,6 +67,7 @@ export function AppLayout({ user, csrfToken, onLogout, notice, children }: { use
   const conflicts = offline?.operations.filter((operation) => operation.conflict) ?? [];
   const cardConflicts = offline?.cardOperations.filter((operation) => operation.conflict) ?? [];
   const purchaseConflicts = offline?.purchaseOperations.filter((operation) => operation.conflict) ?? [];
+  const invoiceConflicts = offline?.invoiceOperations.filter((operation) => operation.conflict) ?? [];
 
   return (
     <div className="min-h-screen lg:flex">
@@ -140,6 +142,22 @@ export function AppLayout({ user, csrfToken, onLogout, notice, children }: { use
                 <div className="flex flex-wrap gap-2">
                   <Button type="button" size="sm" variant="outline" disabled={offline.syncing} onClick={() => void offline.resolvePurchaseConflict(operation.operationId, 'local').then(() => typeof navigator !== 'undefined' && navigator.onLine && csrfToken ? offline.sync(csrfToken) : undefined)}>{operation.kind === 'delete' ? 'Manter cancelamento' : !serverPurchase || operation.conflict!.reason === 'id_collision' || operation.conflict!.reason === 'server_deleted' ? 'Recriar minha compra' : 'Usar versão local'}</Button>
                   <Button type="button" size="sm" variant="outline" disabled={offline.syncing} onClick={() => void offline.resolvePurchaseConflict(operation.operationId, 'server').then(() => typeof navigator !== 'undefined' && navigator.onLine && csrfToken ? offline.sync(csrfToken) : undefined)}>{serverPurchase ? 'Usar versão do servidor' : 'Descartar versão local'}</Button>
+                </div>
+              </article>;
+            })}
+          </section>}
+          {offline && invoiceConflicts.length > 0 && <section aria-labelledby="invoice-sync-conflicts-heading" className="mb-5 grid gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+            <div><h2 id="invoice-sync-conflicts-heading" className="font-semibold">Revise as quitações que mudaram offline</h2><p className="mt-1 text-xs leading-5">A fatura ou sua quitação mudou em outro aparelho. Compare os valores antes de escolher qual versão manter.</p></div>
+            {invoiceConflicts.map((operation) => {
+              const localInvoice = offline.invoices.find((invoice) => invoice.card_id === operation.cardId && invoice.invoice_month.startsWith(operation.invoiceMonth));
+              const serverInvoice = operation.conflict!.serverInvoice;
+              const summary = (invoice: NonNullable<typeof serverInvoice>) => `${invoice.card_name} · ${formatBrazilianMonth(invoice.invoice_month)} · previsto ${formatBrazilianMoney(invoice.planned_cents)} · ${invoice.payment_status === 'paid' ? `quitada por ${formatBrazilianMoney(invoice.actual_cents ?? '0')} em ${formatBrazilianDate(invoice.paid_on)}` : invoice.status === 'needs_review' ? 'quitação precisa ser revisada' : 'em aberto'}`;
+              return <article key={operation.operationId} className="grid gap-2 rounded-xl border border-amber-200 bg-white/70 p-3">
+                <h3 className="font-medium">{localInvoice?.card_name ?? serverInvoice?.card_name ?? 'Fatura removida'} · {formatBrazilianMonth(`${operation.invoiceMonth}-01`)}</h3>
+                <div className="grid gap-1 text-xs sm:grid-cols-2"><p><strong>Sua versão:</strong> {localInvoice ? summary(localInvoice) : operation.kind === 'reverse' ? 'Desfazer quitação' : 'Registrar quitação'}</p><p><strong>Servidor:</strong> {serverInvoice ? summary(serverInvoice) : 'A fatura foi removida do servidor.'}</p></div>
+                <div className="flex flex-wrap gap-2">
+                  {serverInvoice && <Button type="button" size="sm" variant="outline" disabled={offline.syncing} onClick={() => void offline.resolveInvoiceConflict(operation.operationId, 'local').then(() => typeof navigator !== 'undefined' && navigator.onLine && csrfToken ? offline.sync(csrfToken) : undefined)}>{operation.kind === 'pay' ? 'Confirmar minha quitação' : 'Repetir o estorno'}</Button>}
+                  <Button type="button" size="sm" variant="outline" disabled={offline.syncing} onClick={() => void offline.resolveInvoiceConflict(operation.operationId, 'server').then(() => typeof navigator !== 'undefined' && navigator.onLine && csrfToken ? offline.sync(csrfToken) : undefined)}>{serverInvoice ? 'Manter versão do servidor' : 'Descartar alteração local'}</Button>
                 </div>
               </article>;
             })}

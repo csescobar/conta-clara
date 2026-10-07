@@ -10,15 +10,22 @@ export type CsvFinancialEntry = {
   payment_method_name: string | null;
   status: 'pending' | 'late' | 'paid';
   notes: string | null;
+  card_name?: string | null;
+  invoice_month?: string | null;
+  installment_number?: number | null;
+  installment_count?: number | null;
+  invoice_status?: 'open' | 'paid' | 'needs_review' | null;
 };
 
 const headers = [
   'Tipo', 'Descrição', 'Categoria', 'Competência (AAAA-MM-DD)', 'Vencimento (AAAA-MM-DD)',
   'Valor previsto (R$)', 'Valor realizado (R$)', 'Realizado em (AAAA-MM-DD)',
-  'Forma de pagamento', 'Situação', 'Observações',
+  'Forma de pagamento', 'Situação', 'Observações', 'Cartão', 'Fatura (MM/AAAA)',
+  'Parcela', 'Situação da fatura',
 ];
 const kindLabels = { income: 'Receita', expense: 'Despesa', investment: 'Aporte' } as const;
 const statusLabels = { pending: 'Em aberto', late: 'Atrasado', paid: 'Pago' } as const;
+const invoiceStatusLabels = { open: 'Em aberto', paid: 'Quitada', needs_review: 'Revisar quitação' } as const;
 
 function centsAsDecimal(value: string | number | null) {
   if (value === null) return '';
@@ -51,8 +58,12 @@ export function serializeEntriesCsv(entries: readonly CsvFinancialEntry[]) {
     entry.payment_method_name ?? '',
     statusLabels[entry.status],
     entry.notes ?? '',
+    entry.card_name ?? '',
+    entry.invoice_month ? `${entry.invoice_month.slice(5, 7)}/${entry.invoice_month.slice(0, 4)}` : '',
+    entry.installment_number && entry.installment_count ? `${entry.installment_number}/${entry.installment_count}` : '',
+    entry.invoice_status ? invoiceStatusLabels[entry.invoice_status] : '',
   ]);
-  return `\uFEFF${[headers.map((header) => csvField(header)).join(';'), ...rows.map((row) => row.map((value, index) => csvField(value, [0, 1, 2, 8, 9, 10].includes(index))).join(';'))].join('\r\n')}\r\n`;
+  return `\uFEFF${[headers.map((header) => csvField(header)).join(';'), ...rows.map((row) => row.map((value, index) => csvField(value, [0, 1, 2, 8, 9, 10, 11, 14].includes(index))).join(';'))].join('\r\n')}\r\n`;
 }
 
 export function downloadCsv(csv: string, filename: string) {

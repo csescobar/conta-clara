@@ -40,4 +40,14 @@ describe('CSV export', () => {
     expect(entriesCsvFilename('2026-10')).toBe('conta-clara-lancamentos-2026-10.csv');
     expect(entriesCsvFilename('')).toBe('conta-clara-lancamentos.csv');
   });
+
+  it('adds card invoice details and protects card names from spreadsheet formulas', () => {
+    const csv = serializeEntriesCsv([{
+      ...entry,
+      card_name: '=Cartão fictício', invoice_month: '2026-11-01',
+      installment_number: 2, installment_count: 3, invoice_status: 'paid',
+    }]);
+    expect(csv).toContain('"Cartão";"Fatura (MM/AAAA)";"Parcela";"Situação da fatura"');
+    expect(csv).toContain('"\'=Cartão fictício";"11/2026";"2/3";"Quitada"');
+  });
 });

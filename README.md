@@ -2,7 +2,7 @@
 
 Controle financeiro familiar local, com finanças compartilhadas e uso pelo computador e celular. A primeira versão reúne autenticação individual, espaço compartilhado, cadastro e confirmação de lançamentos, histórico, recorrências, painel previsto versus realizado, importação revisada, exportação CSV e PWA com armazenamento e sincronização offline.
 
-A V2 permite cadastrar cartões compartilhados e registrar compras à vista ou parceladas. As parcelas aparecem como despesas nas faturas previstas; o cadastro não guarda número, validade, CVV ou limite. Consulta e quitação integral de faturas permanecem no roadmap.
+A V2 permite cadastrar cartões compartilhados, registrar compras à vista ou parceladas, consultar faturas e registrar sua quitação integral, inclusive offline. As parcelas aparecem como despesas nas faturas previstas; o cadastro não guarda número, validade, CVV ou limite.
 
 ## Instalação
 

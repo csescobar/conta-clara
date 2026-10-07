@@ -51,6 +51,65 @@ describe.skipIf(!testDatabaseUrl)('PostgreSQL schema integration', () => {
     expect(status.find(({ name }) => name === '007_spreadsheet_import_batches.sql')?.status).toBe('applied');
     expect(status.find(({ name }) => name === '008_entry_versions_and_sync_receipts.sql')?.status).toBe('applied');
     expect(status.find(({ name }) => name === '009_credit_cards.sql')?.status).toBe('applied');
+    expect(status.find(({ name }) => name === '010_card_purchases.sql')?.status).toBe('applied');
+    expect(status.find(({ name }) => name === '011_card_invoices.sql')?.status).toBe('applied');
+  });
+
+  it('backfills one invoice when different members created purchases for the same card and month', async () => {
+    // Simulate upgrading a database that has purchases but has not applied migration 011.
+    await pool.query('DROP TABLE card_invoices');
+    await pool.query("DELETE FROM schema_migrations WHERE version = '011'");
+
+    const household = await createSpace('fatura-retroativa');
+    const secondUser = await pool.query(
+      'INSERT INTO users (email, display_name, password_hash) VALUES ($1, $2, $3) RETURNING id',
+      [`${randomUUID()}@example.test`, 'Pessoa membro', 'synthetic-test-hash'],
+    );
+    const secondUserId = secondUser.rows[0].id;
+    await pool.query(
+      'INSERT INTO space_memberships (space_id, user_id, role) VALUES ($1, $2, $3)',
+      [household.spaceId, secondUserId, 'member'],
+    );
+    const category = await pool.query(
+      "INSERT INTO categories (space_id, name, kind) VALUES ($1, $2, 'expense') RETURNING id",
+      [household.spaceId, 'Compras de teste'],
+    );
+    const card = await pool.query(`
+      INSERT INTO credit_cards (
+        space_id, name, holder_user_id, closing_day, due_day, created_by_user_id, updated_by_user_id
+      ) VALUES ($1, 'Cartão fictício', $2, 25, 5, $3, $3) RETURNING id
+    `, [household.spaceId, household.userId, household.userId]);
+    const purchases = [];
+    for (const [userId, amount] of [[household.userId, 10000], [secondUserId, 20000]]) {
+      const purchase = await pool.query(`
+        INSERT INTO card_purchases (
+          space_id, card_id, description, category_id, purchase_on, first_invoice_on,
+          total_cents, installment_count, created_by_user_id, updated_by_user_id
+        ) VALUES ($1, $2, 'Compra fictícia', $3, '2026-10-10', '2026-11-01', $4, 1, $5, $5)
+        RETURNING id
+      `, [household.spaceId, card.rows[0].id, category.rows[0].id, amount, userId]);
+      purchases.push({ id: purchase.rows[0].id, amount, userId });
+    }
+    for (const purchase of purchases) {
+      await pool.query(`
+        INSERT INTO financial_entries (
+          space_id, created_by_user_id, updated_by_user_id, kind, description, category_id,
+          competence_on, due_on, planned_cents, actual_cents, realized_on, card_purchase_id,
+          installment_number, installment_count
+        ) VALUES ($1, $2, $2, 'expense', 'Parcela fictícia', $3, '2026-11-01', '2026-11-05',
+          $4, $4, $5, $6, 1, 1)
+      `, [household.spaceId, purchase.userId, category.rows[0].id, purchase.amount,
+        purchase.userId === household.userId ? '2026-11-05' : '2026-11-06', purchase.id]);
+    }
+
+    await migrate(pool);
+
+    const invoices = await pool.query(`
+      SELECT status, actual_cents, to_char(paid_on, 'YYYY-MM-DD') AS paid_on
+      FROM card_invoices
+      WHERE space_id = $1 AND card_id = $2 AND invoice_month = '2026-11-01'
+    `, [household.spaceId, card.rows[0].id]);
+    expect(invoices.rows).toEqual([{ status: 'paid', actual_cents: '30000', paid_on: '2026-11-06' }]);
   });
 
   it('rejects cross-space categories, invalid money, and non-month competence dates', async () => {

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { recordEntryAudit } from './financial-entry-audit.js';
+import { ensureCardInvoice, invoiceMonthForDate, invalidatePaidInvoices, lockCardInvoiceKeys, touchCardInvoice } from './card-invoices.js';
 import { selectEntry } from '../routes/entries.js';
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -149,6 +150,7 @@ function entryDescription(description, number, count) {
 }
 
 async function insertInstallment(client, { spaceId, userId, actorName, purchaseId, purchase, installment, dueDay }) {
+  const dueOn = dueDate(installment.invoiceOn, dueDay);
   const inserted = await client.query(`
     INSERT INTO financial_entries (
       id, space_id, created_by_user_id, updated_by_user_id, kind, description,
@@ -156,7 +158,8 @@ async function insertInstallment(client, { spaceId, userId, actorName, purchaseI
       installment_number, installment_count
     ) VALUES ($1, $2, $3, $3, 'expense', $4, $5, $6, $7, $8, $9, $10, $11)
     RETURNING id
-  `, [installment.id, spaceId, userId, entryDescription(purchase.description, installment.installmentNumber, purchase.installmentCount), purchase.categoryId, installment.invoiceOn, dueDate(installment.invoiceOn, dueDay), installment.plannedCents, purchaseId, installment.installmentNumber, purchase.installmentCount]);
+  `, [installment.id, spaceId, userId, entryDescription(purchase.description, installment.installmentNumber, purchase.installmentCount), purchase.categoryId, installment.invoiceOn, dueOn, installment.plannedCents, purchaseId, installment.installmentNumber, purchase.installmentCount]);
+  await ensureCardInvoice(client, { spaceId, cardId: purchase.cardId, invoiceMonth: invoiceMonthForDate(dueOn), dueOn, userId });
   const entry = await selectEntry(client, spaceId, inserted.rows[0].id);
   await recordEntryAudit(client, { spaceId, actorUserId: userId, actorName, entry, action: 'created', after: entry });
 }
@@ -167,6 +170,18 @@ export async function createPurchase(client, { spaceId, userId, actorName, purch
   calculateFirstInvoiceMonth(snapshot.purchase.purchaseOn, Number(reference.card.closing_day), Number(reference.card.due_day));
   if (snapshot.installments.some((installment, index) => installment.invoiceOn !== `${shiftMonth(snapshot.purchase.firstInvoiceOn.slice(0, 7), index)}-01`)) {
     return { status: 400, body: { error: 'As parcelas precisam avançar uma fatura por mês a partir da fatura inicial.' } };
+  }
+  const invoiceDates = new Map();
+  for (const installment of snapshot.installments) {
+    const dueOn = dueDate(installment.invoiceOn, Number(reference.card.due_day));
+    const month = invoiceMonthForDate(dueOn);
+    const key = `${snapshot.purchase.cardId}:${month}`;
+    invoiceDates.set(key, { cardId: snapshot.purchase.cardId, invoiceMonth: month, dueOn });
+  }
+  await lockCardInvoiceKeys(client, spaceId, [...invoiceDates.values()]);
+  await invalidatePaidInvoices(client, { spaceId, userId, actorName, keys: [...invoiceDates.values()] });
+  for (const item of invoiceDates.values()) {
+    await touchCardInvoice(client, { spaceId, ...item, userId });
   }
   const inserted = await client.query(`
     INSERT INTO card_purchases (
@@ -193,36 +208,80 @@ export async function updatePurchase(client, { spaceId, userId, actorName, purch
   if (Number(current.version) !== baseVersion) return { status: 409, body: { status: 'conflict', reason: 'version_mismatch', serverPurchase } };
   if (current.canceled_at) return { status: 409, body: { status: 'conflict', reason: 'server_deleted', serverPurchase } };
 
+  const reference = await validateReferences(client, spaceId, snapshot.purchase, { currentCardId: current.card_id, currentCategoryId: current.category_id });
+  if (reference.error) return { status: 400, body: { error: reference.error } };
+  const invoiceLocks = [
+    ...serverPurchase.installments.map((installment) => ({ cardId: current.card_id, invoiceMonth: invoiceMonthForDate(installment.due_on) })),
+    ...snapshot.installments.map((installment) => ({
+      cardId: snapshot.purchase.cardId,
+      invoiceMonth: invoiceMonthForDate(dueDate(installment.invoiceOn, Number(reference.card.due_day))),
+    })),
+  ];
+  await lockCardInvoiceKeys(client, spaceId, invoiceLocks);
+
   const installmentResult = await client.query(`
     SELECT * FROM financial_entries WHERE space_id = $1 AND card_purchase_id = $2 FOR UPDATE
   `, [spaceId, purchaseId]);
-  const existing = installmentResult.rows;
-  const paid = existing.filter((entry) => entry.actual_cents !== null);
-  const paidByNumber = new Map(paid.map((entry) => [Number(entry.installment_number), entry]));
-  const paidPlanned = paid.reduce((sum, entry) => sum + BigInt(entry.planned_cents), 0n);
+  const original = installmentResult.rows;
+  const originalPaid = original.filter((entry) => entry.actual_cents !== null);
+  const paidByNumber = new Map(originalPaid.map((entry) => [Number(entry.installment_number), entry]));
+  const paidPlanned = originalPaid.reduce((sum, entry) => sum + BigInt(entry.planned_cents), 0n);
   if (snapshot.purchase.installmentCount < Math.max(0, ...paidByNumber.keys())) {
     return { status: 400, body: { error: 'A quantidade de parcelas não pode remover uma parcela já paga.' } };
   }
   if (BigInt(snapshot.purchase.totalCents) < paidPlanned) {
     return { status: 400, body: { error: 'O total não pode ser menor que as parcelas já pagas.' } };
   }
-  const reference = await validateReferences(client, spaceId, snapshot.purchase, { currentCardId: current.card_id, currentCategoryId: current.category_id });
-  if (reference.error) return { status: 400, body: { error: reference.error } };
   const desiredByNumber = new Map(snapshot.installments.map((item) => [item.installmentNumber, item]));
   const desiredSum = snapshot.installments.reduce((sum, item) => sum + BigInt(item.plannedCents), 0n);
   if (desiredSum !== BigInt(snapshot.purchase.totalCents)) return { status: 400, body: { error: 'A soma das parcelas deve ser igual ao total da compra.' } };
 
+  const changedInvoices = new Map();
+  const markInvoice = (cardId, dueOn) => {
+    const invoiceMonth = invoiceMonthForDate(dueOn);
+    changedInvoices.set(`${cardId}:${invoiceMonth}`, { cardId, invoiceMonth, dueOn });
+  };
+  for (const entry of original) {
+    const number = Number(entry.installment_number);
+    const desired = desiredByNumber.get(number);
+    const desiredDueOn = desired ? dueDate(desired.invoiceOn, Number(reference.card.due_day)) : null;
+    const changed = current.card_id !== snapshot.purchase.cardId || !desired
+      || entry.description !== entryDescription(snapshot.purchase.description, number, snapshot.purchase.installmentCount)
+      || entry.category_id !== snapshot.purchase.categoryId
+      || dateOnly(entry.competence_on) !== desired.invoiceOn
+      || dateOnly(entry.due_on) !== desiredDueOn
+      || BigInt(entry.planned_cents) !== BigInt(desired.plannedCents)
+      || Number(entry.installment_count) !== snapshot.purchase.installmentCount;
+    if (changed) {
+      markInvoice(current.card_id, dateOnly(entry.due_on));
+      if (desiredDueOn) markInvoice(snapshot.purchase.cardId, desiredDueOn);
+    }
+    desiredByNumber.delete(number);
+  }
+  for (const desired of desiredByNumber.values()) {
+    markInvoice(snapshot.purchase.cardId, dueDate(desired.invoiceOn, Number(reference.card.due_day)));
+  }
+  await invalidatePaidInvoices(client, { spaceId, userId, actorName, keys: [...changedInvoices.values()] });
+  const refreshedExisting = await client.query(`
+    SELECT * FROM financial_entries WHERE space_id = $1 AND card_purchase_id = $2 FOR UPDATE
+  `, [spaceId, purchaseId]);
+  const existing = refreshedExisting.rows;
+  const currentDesiredByNumber = new Map(snapshot.installments.map((item) => [item.installmentNumber, item]));
+
   for (const entry of existing) {
     const number = Number(entry.installment_number);
-    if (entry.actual_cents !== null) continue;
-    const desired = desiredByNumber.get(number);
+    const desired = currentDesiredByNumber.get(number);
+    if (entry.actual_cents !== null) {
+      currentDesiredByNumber.delete(number);
+      continue;
+    }
     if (!desired) {
       const before = await selectEntry(client, spaceId, entry.id);
       await recordEntryAudit(client, { spaceId, actorUserId: userId, actorName, entry: before, action: 'deleted', before });
       await client.query('DELETE FROM financial_entries WHERE id = $1 AND space_id = $2', [entry.id, spaceId]);
       continue;
     }
-    desiredByNumber.delete(number);
+    currentDesiredByNumber.delete(number);
     const desiredDueOn = dueDate(desired.invoiceOn, Number(reference.card.due_day));
     const unchanged = entry.description === entryDescription(snapshot.purchase.description, number, snapshot.purchase.installmentCount)
       && entry.category_id === snapshot.purchase.categoryId
@@ -242,7 +301,7 @@ export async function updatePurchase(client, { spaceId, userId, actorName, purch
     await recordEntryAudit(client, { spaceId, actorUserId: userId, actorName, entry: after, action: 'updated', before, after });
   }
 
-  for (const [number, desired] of desiredByNumber) {
+  for (const [number, desired] of currentDesiredByNumber) {
     if (paidByNumber.has(number)) continue;
     if (desired.id === purchaseId || existing.some((entry) => entry.id === desired.id)) {
       return { status: 400, body: { error: 'Um identificador de parcela já está em uso.' } };
@@ -259,23 +318,41 @@ export async function updatePurchase(client, { spaceId, userId, actorName, purch
       updated_at = now(), version = version + 1
     WHERE id = $9 AND space_id = $10
   `, [snapshot.purchase.cardId, snapshot.purchase.description, snapshot.purchase.categoryId, snapshot.purchase.purchaseOn, snapshot.purchase.firstInvoiceOn, newTotal.toString(), snapshot.purchase.installmentCount, userId, purchaseId, spaceId]);
+  for (const item of changedInvoices.values()) {
+    const dueOn = await client.query(`
+      SELECT min(e.due_on)::text AS due_on
+      FROM financial_entries e JOIN card_purchases p ON p.space_id = e.space_id AND p.id = e.card_purchase_id
+      WHERE e.space_id = $1 AND p.card_id = $2 AND date_trunc('month', e.due_on)::date = $3::date
+    `, [spaceId, item.cardId, `${item.invoiceMonth}-01`]);
+    await touchCardInvoice(client, { spaceId, ...item, dueOn: dueOn.rows[0]?.due_on ?? item.dueOn, userId });
+  }
   return { status: 200, body: { status: 'applied', purchase: await selectPurchase(client, spaceId, purchaseId) } };
 }
 
 export async function cancelPurchase(client, { spaceId, userId, actorName, purchaseId, baseVersion }) {
-  const currentResult = await client.query('SELECT version, canceled_at FROM card_purchases WHERE id = $1 AND space_id = $2 FOR UPDATE', [purchaseId, spaceId]);
+  const currentResult = await client.query('SELECT card_id, version, canceled_at FROM card_purchases WHERE id = $1 AND space_id = $2 FOR UPDATE', [purchaseId, spaceId]);
   const current = currentResult.rows[0];
   if (!current) return { status: 409, body: { status: 'conflict', reason: 'server_deleted', serverPurchase: null } };
   const serverPurchase = await selectPurchase(client, spaceId, purchaseId);
   if (Number(current.version) !== baseVersion) return { status: 409, body: { status: 'conflict', reason: 'version_mismatch', serverPurchase } };
   if (current.canceled_at) return { status: 200, body: { status: 'applied', purchase: serverPurchase } };
-  const unpaid = await client.query('SELECT id FROM financial_entries WHERE space_id = $1 AND card_purchase_id = $2 AND actual_cents IS NULL FOR UPDATE', [spaceId, purchaseId]);
+  await lockCardInvoiceKeys(client, spaceId, serverPurchase.installments.map((installment) => ({
+    cardId: current.card_id,
+    invoiceMonth: invoiceMonthForDate(installment.due_on),
+  })));
+  const unpaid = await client.query('SELECT id, due_on::text AS due_on FROM financial_entries WHERE space_id = $1 AND card_purchase_id = $2 AND actual_cents IS NULL FOR UPDATE', [spaceId, purchaseId]);
+  const changedInvoices = new Map();
   for (const { id } of unpaid.rows) {
     const entry = await selectEntry(client, spaceId, id);
     if (entry) await recordEntryAudit(client, { spaceId, actorUserId: userId, actorName, entry, action: 'deleted', before: entry });
     await client.query('DELETE FROM financial_entries WHERE id = $1 AND space_id = $2', [id, spaceId]);
   }
+  for (const entry of unpaid.rows) {
+    const invoiceMonth = invoiceMonthForDate(entry.due_on);
+    changedInvoices.set(`${current.card_id}:${invoiceMonth}`, { cardId: current.card_id, invoiceMonth, dueOn: entry.due_on });
+  }
   await client.query(`UPDATE card_purchases SET canceled_at = now(), updated_by_user_id = $3, updated_at = now(), version = version + 1 WHERE id = $2 AND space_id = $1`, [spaceId, purchaseId, userId]);
+  for (const item of changedInvoices.values()) await touchCardInvoice(client, { spaceId, ...item, userId });
   return { status: 200, body: { status: 'applied', purchase: await selectPurchase(client, spaceId, purchaseId) } };
 }
 

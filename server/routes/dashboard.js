@@ -37,7 +37,10 @@ export function createDashboardRouter({ pool, secureCookies = false }) {
       const summaryResult = await pool.query(`
         SELECT
           COALESCE(SUM(planned_cents) FILTER (WHERE kind = 'income' AND competence_on >= $2::date AND competence_on < ($2::date + interval '1 month')), 0)::text AS planned_income_cents,
-          COALESCE(SUM(planned_cents) FILTER (WHERE kind = 'expense' AND competence_on >= $2::date AND competence_on < ($2::date + interval '1 month')), 0)::text AS planned_expense_cents,
+          COALESCE(SUM(planned_cents) FILTER (WHERE kind = 'expense' AND (
+            (card_purchase_id IS NOT NULL AND due_on >= $2::date AND due_on < ($2::date + interval '1 month'))
+            OR (card_purchase_id IS NULL AND competence_on >= $2::date AND competence_on < ($2::date + interval '1 month'))
+          )), 0)::text AS planned_expense_cents,
           COALESCE(SUM(planned_cents) FILTER (WHERE kind = 'investment' AND competence_on >= $2::date AND competence_on < ($2::date + interval '1 month')), 0)::text AS planned_investment_cents,
           COALESCE(SUM(actual_cents) FILTER (WHERE kind = 'income' AND realized_on >= $2::date AND realized_on < ($2::date + interval '1 month')), 0)::text AS realized_income_cents,
           COALESCE(SUM(actual_cents) FILTER (WHERE kind = 'expense' AND realized_on >= $2::date AND realized_on < ($2::date + interval '1 month')), 0)::text AS realized_expense_cents,
@@ -46,6 +49,7 @@ export function createDashboardRouter({ pool, secureCookies = false }) {
         WHERE space_id = $1 AND NOT recurrence_skipped
           AND (
             (competence_on >= $2::date AND competence_on < ($2::date + interval '1 month'))
+            OR (card_purchase_id IS NOT NULL AND due_on >= $2::date AND due_on < ($2::date + interval '1 month'))
             OR (realized_on >= $2::date AND realized_on < ($2::date + interval '1 month'))
           )
       `, [request.auth.spaceId, monthStart]);
@@ -73,20 +77,30 @@ export function createDashboardRouter({ pool, secureCookies = false }) {
         pool.query(`
           SELECT c.id AS category_id,
             COALESCE(c.name, 'Sem categoria') AS category_name,
-            COALESCE(SUM(e.planned_cents) FILTER (WHERE e.competence_on >= $2::date AND e.competence_on < ($2::date + interval '1 month')), 0)::text AS planned_cents,
+            COALESCE(SUM(e.planned_cents) FILTER (WHERE
+              (e.card_purchase_id IS NOT NULL AND e.due_on >= $2::date AND e.due_on < ($2::date + interval '1 month'))
+              OR (e.card_purchase_id IS NULL AND e.competence_on >= $2::date AND e.competence_on < ($2::date + interval '1 month'))
+            ), 0)::text AS planned_cents,
             COALESCE(SUM(e.actual_cents) FILTER (WHERE e.realized_on >= $2::date AND e.realized_on < ($2::date + interval '1 month')), 0)::text AS realized_cents
           FROM financial_entries e
           LEFT JOIN categories c ON c.space_id = e.space_id AND c.id = e.category_id
           WHERE e.space_id = $1 AND e.kind = 'expense' AND NOT e.recurrence_skipped
             AND (
               (e.competence_on >= $2::date AND e.competence_on < ($2::date + interval '1 month'))
+              OR (e.card_purchase_id IS NOT NULL AND e.due_on >= $2::date AND e.due_on < ($2::date + interval '1 month'))
               OR (e.realized_on >= $2::date AND e.realized_on < ($2::date + interval '1 month'))
             )
           GROUP BY c.id, c.name
-          HAVING COALESCE(SUM(e.planned_cents) FILTER (WHERE e.competence_on >= $2::date AND e.competence_on < ($2::date + interval '1 month')), 0) > 0
+          HAVING COALESCE(SUM(e.planned_cents) FILTER (WHERE
+              (e.card_purchase_id IS NOT NULL AND e.due_on >= $2::date AND e.due_on < ($2::date + interval '1 month'))
+              OR (e.card_purchase_id IS NULL AND e.competence_on >= $2::date AND e.competence_on < ($2::date + interval '1 month'))
+            ), 0) > 0
             OR COALESCE(SUM(e.actual_cents) FILTER (WHERE e.realized_on >= $2::date AND e.realized_on < ($2::date + interval '1 month')), 0) > 0
           ORDER BY
-            COALESCE(SUM(e.planned_cents) FILTER (WHERE e.competence_on >= $2::date AND e.competence_on < ($2::date + interval '1 month')), 0)
+            COALESCE(SUM(e.planned_cents) FILTER (WHERE
+              (e.card_purchase_id IS NOT NULL AND e.due_on >= $2::date AND e.due_on < ($2::date + interval '1 month'))
+              OR (e.card_purchase_id IS NULL AND e.competence_on >= $2::date AND e.competence_on < ($2::date + interval '1 month'))
+            ), 0)
               + COALESCE(SUM(e.actual_cents) FILTER (WHERE e.realized_on >= $2::date AND e.realized_on < ($2::date + interval '1 month')), 0) DESC,
             lower(COALESCE(c.name, 'Sem categoria'))
         `, [request.auth.spaceId, monthStart]),

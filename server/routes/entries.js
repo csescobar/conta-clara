@@ -76,6 +76,8 @@ export async function selectEntry(client, spaceId, entryId) {
       e.planned_cents, e.actual_cents, e.realized_on::text AS realized_on,
       e.payment_method_id, pm.name AS payment_method_name, e.notes,
       e.card_purchase_id, e.installment_number, e.installment_count,
+      cc.name AS card_name, i.invoice_month::text AS invoice_month,
+      CASE WHEN e.card_purchase_id IS NULL THEN NULL ELSE i.status END AS invoice_status,
       e.recurrence_rule_id, e.recurrence_overridden,
       e.created_by_user_id, e.updated_by_user_id, e.version, e.created_at, e.updated_at,
       CASE
@@ -86,6 +88,10 @@ export async function selectEntry(client, spaceId, entryId) {
     FROM financial_entries e
     LEFT JOIN categories c ON c.space_id = e.space_id AND c.id = e.category_id
     LEFT JOIN payment_methods pm ON pm.space_id = e.space_id AND pm.id = e.payment_method_id
+    LEFT JOIN card_purchases cp ON cp.space_id = e.space_id AND cp.id = e.card_purchase_id
+    LEFT JOIN credit_cards cc ON cc.space_id = cp.space_id AND cc.id = cp.card_id
+    LEFT JOIN card_invoices i ON i.space_id = cp.space_id AND i.card_id = cp.card_id
+      AND i.invoice_month = date_trunc('month', e.due_on)::date
     WHERE e.id = $1 AND e.space_id = $2 AND NOT e.recurrence_skipped
   `, [entryId, spaceId]);
   return result.rows[0] ?? null;
@@ -127,6 +133,8 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
           e.planned_cents, e.actual_cents, e.realized_on::text AS realized_on,
           e.payment_method_id, pm.name AS payment_method_name, e.notes,
           e.card_purchase_id, e.installment_number, e.installment_count,
+          cc.name AS card_name, i.invoice_month::text AS invoice_month,
+          CASE WHEN e.card_purchase_id IS NULL THEN NULL ELSE i.status END AS invoice_status,
           e.recurrence_rule_id, e.recurrence_overridden,
           e.created_by_user_id, e.updated_by_user_id, e.version, e.created_at, e.updated_at,
           CASE
@@ -137,6 +145,10 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
         FROM financial_entries e
         LEFT JOIN categories c ON c.space_id = e.space_id AND c.id = e.category_id
         LEFT JOIN payment_methods pm ON pm.space_id = e.space_id AND pm.id = e.payment_method_id
+        LEFT JOIN card_purchases cp ON cp.space_id = e.space_id AND cp.id = e.card_purchase_id
+        LEFT JOIN credit_cards cc ON cc.space_id = cp.space_id AND cc.id = cp.card_id
+        LEFT JOIN card_invoices i ON i.space_id = cp.space_id AND i.card_id = cp.card_id
+          AND i.invoice_month = date_trunc('month', e.due_on)::date
         WHERE e.space_id = $1 AND NOT e.recurrence_skipped
           AND ($2::date IS NULL OR e.competence_on = $2::date)
           AND ($3::uuid IS NULL OR e.category_id = $3::uuid)
@@ -259,6 +271,10 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
       if (!existing.rows[0]) {
         await client.query('ROLLBACK');
         return response.status(404).json({ error: 'Lançamento não encontrado.' });
+      }
+      if (existing.rows[0].card_purchase_id) {
+        await client.query('ROLLBACK');
+        return response.status(409).json({ error: 'Quite a fatura de cartão para liquidar todas as parcelas em um único pagamento.' });
       }
       const baseVersion = requestedBaseVersion(request);
       if (baseVersion === undefined) {

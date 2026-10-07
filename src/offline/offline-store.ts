@@ -16,6 +16,9 @@ export type OfflineEntry = {
   card_purchase_id?: string | null;
   installment_number?: number | null;
   installment_count?: number | null;
+  card_name?: string | null;
+  invoice_month?: string | null;
+  invoice_status?: 'open' | 'paid' | 'needs_review' | null;
   notes: string | null;
   created_by_user_id: string;
   updated_by_user_id: string;
@@ -51,8 +54,20 @@ export type OfflinePurchase = {
   created_by_user_id: string; updated_by_user_id: string; version: number;
   installments: OfflinePurchaseInstallment[];
 };
+export type OfflineInvoiceEntry = {
+  id: string; description: string; purchase_description: string; category_name: string | null;
+  invoice_on: string; due_on: string; planned_cents: string; actual_cents: string | null;
+  realized_on: string | null; version: number; installment_number: number; installment_count: number;
+};
+export type OfflineInvoice = {
+  id: string; card_id: string; card_name: string; closing_day: number; due_day: number;
+  invoice_month: string; due_on: string; payment_status: 'open' | 'paid' | 'needs_review';
+  status: 'open' | 'late' | 'paid' | 'needs_review'; actual_cents: string | null; paid_on: string | null;
+  payment_method_id: string | null; payment_method_name: string | null; updated_by_user_id: string;
+  version: number; planned_cents: string; installment_count: number; entries: OfflineInvoiceEntry[];
+};
 export type OfflineOperationKind = 'create' | 'update' | 'delete';
-export type OfflineSyncConflict = { reason: 'version_mismatch' | 'server_deleted' | 'id_collision' | 'idempotency_key_reused'; serverEntry: OfflineEntry | null };
+export type OfflineSyncConflict = { reason: 'version_mismatch' | 'server_deleted' | 'id_collision' | 'idempotency_key_reused' | 'state_mismatch'; serverEntry: OfflineEntry | null };
 export type OfflineOperation = {
   operationId: string;
   scope: string;
@@ -83,6 +98,12 @@ export type OfflinePurchaseOperation = {
   payload: Record<string, unknown> | null; queuedAt: string;
   conflict?: { reason: OfflineSyncConflict['reason']; serverPurchase: OfflinePurchase | null };
 };
+export type OfflineInvoiceOperation = {
+  operationId: string; scope: string; userId: string; spaceId: string;
+  cardId: string; invoiceMonth: string; kind: 'pay' | 'reverse'; baseVersion: number;
+  payload: Record<string, unknown> | null; queuedAt: string;
+  conflict?: { reason: 'version_mismatch' | 'server_deleted' | 'idempotency_key_reused' | 'state_mismatch'; serverInvoice: OfflineInvoice | null };
+};
 export type OfflineWorkspaceSnapshot = {
   entries: OfflineEntry[];
   categories: OfflineCategory[];
@@ -93,6 +114,8 @@ export type OfflineWorkspaceSnapshot = {
   cardOperations: OfflineCardOperation[];
   purchases: OfflinePurchase[];
   purchaseOperations: OfflinePurchaseOperation[];
+  invoices: OfflineInvoice[];
+  invoiceOperations: OfflineInvoiceOperation[];
   lastSyncedAt: string | null;
 };
 
@@ -106,16 +129,18 @@ type StoredOperation = OfflineOperation & { key: string };
 type StoredCardOperation = OfflineCardOperation & { key: string };
 type StoredPurchase = ScopedRecord & { purchase: OfflinePurchase };
 type StoredPurchaseOperation = OfflinePurchaseOperation & { key: string };
+type StoredInvoice = ScopedRecord & { invoice: OfflineInvoice };
+type StoredInvoiceOperation = OfflineInvoiceOperation & { key: string };
 type StoredSnapshot = ScopedRecord & { path: string; data: unknown };
 type StoredDeviceSession = ScopedRecord & { user: OfflineUser; verifiedAt: string };
 type StoredDeviceLogout = ScopedRecord & { userId: string; spaceId: string; markedAt: string };
 
 const databaseName = 'conta-clara-offline';
-const databaseVersion = 4;
+const databaseVersion = 5;
 const deviceSessionKey = '@last-authenticated-user';
 const deviceLogoutKey = '@offline-logout';
 export const offlineSessionLeaseMs = 7 * 24 * 60 * 60 * 1000;
-const storeNames = ['entries', 'catalogs', 'operations', 'metadata', 'snapshots', 'creditCards', 'cardMembers', 'cardOperations', 'purchases', 'purchaseOperations'] as const;
+const storeNames = ['entries', 'catalogs', 'operations', 'metadata', 'snapshots', 'creditCards', 'cardMembers', 'cardOperations', 'purchases', 'purchaseOperations', 'cardInvoices', 'invoiceOperations'] as const;
 type StoreName = typeof storeNames[number];
 let databasePromise: Promise<IDBDatabase> | null = null;
 
@@ -207,7 +232,7 @@ export async function loadOfflineWorkspace(scope: OfflineScope): Promise<Offline
   const scopeKey = offlineScopeKey(scope);
   const transaction = database.transaction([...storeNames], 'readonly');
   const done = transactionDone(transaction);
-  const [entries, catalogs, operations, metadata, cards, cardMembers, cardOperations, purchases, purchaseOperations] = await Promise.all([
+  const [entries, catalogs, operations, metadata, cards, cardMembers, cardOperations, purchases, purchaseOperations, invoices, invoiceOperations] = await Promise.all([
     scopedValues<StoredEntry>(transaction, 'entries', scopeKey),
     requestValue(transaction.objectStore('catalogs').get(scopeKey) as IDBRequest<StoredCatalog | undefined>),
     scopedValues<StoredOperation>(transaction, 'operations', scopeKey),
@@ -217,6 +242,8 @@ export async function loadOfflineWorkspace(scope: OfflineScope): Promise<Offline
     scopedValues<StoredCardOperation>(transaction, 'cardOperations', scopeKey),
     scopedValues<StoredPurchase>(transaction, 'purchases', scopeKey),
     scopedValues<StoredPurchaseOperation>(transaction, 'purchaseOperations', scopeKey),
+    scopedValues<StoredInvoice>(transaction, 'cardInvoices', scopeKey),
+    scopedValues<StoredInvoiceOperation>(transaction, 'invoiceOperations', scopeKey),
     done,
   ]);
 
@@ -230,6 +257,8 @@ export async function loadOfflineWorkspace(scope: OfflineScope): Promise<Offline
     cardOperations: cardOperations.sort((left, right) => left.queuedAt.localeCompare(right.queuedAt)).map(({ key: _key, ...operation }) => operation),
     purchases: purchases.map((record) => record.purchase),
     purchaseOperations: purchaseOperations.sort((left, right) => left.queuedAt.localeCompare(right.queuedAt)).map(({ key: _key, ...operation }) => operation),
+    invoices: invoices.map((record) => record.invoice),
+    invoiceOperations: invoiceOperations.sort((left, right) => left.queuedAt.localeCompare(right.queuedAt)).map(({ key: _key, ...operation }) => operation),
     lastSyncedAt: metadata?.lastSyncedAt ?? null,
   };
 }
@@ -658,6 +687,174 @@ export async function resolveOfflinePurchaseConflict(scope: OfflineScope, operat
   await transactionDone(transaction);
 }
 
+function offlineInvoiceKey(cardId: string, invoiceMonth: string) {
+  return `${cardId}:${invoiceMonth.slice(0, 7)}`;
+}
+
+function optimisticallyApplyInvoice(invoice: OfflineInvoice, kind: 'pay' | 'reverse', payload: Record<string, unknown> | null): OfflineInvoice {
+  if (kind === 'reverse') return {
+    ...invoice, status: 'open', payment_status: 'open', actual_cents: null, paid_on: null,
+    payment_method_id: null, payment_method_name: null,
+    entries: invoice.entries.map((entry) => ({ ...entry, actual_cents: null, realized_on: null })),
+  };
+  const actualCents = String(payload?.actualCents ?? invoice.planned_cents);
+  const plannedTotal = invoice.entries.reduce((sum, entry) => sum + BigInt(entry.planned_cents), 0n);
+  const actualTotal = BigInt(actualCents);
+  let allocated = 0n;
+  const entries = invoice.entries.map((entry, index) => {
+    const share = index === invoice.entries.length - 1
+      ? actualTotal - allocated
+      : actualTotal * BigInt(entry.planned_cents) / plannedTotal;
+    allocated += share;
+    return { ...entry, actual_cents: share.toString(), realized_on: String(payload?.paidOn ?? '' ) };
+  });
+  return {
+    ...invoice, status: 'paid', payment_status: 'paid', actual_cents: actualCents,
+    paid_on: String(payload?.paidOn ?? ''), payment_method_id: typeof payload?.paymentMethodId === 'string' ? payload.paymentMethodId : null,
+    payment_method_name: typeof payload?.paymentMethodName === 'string' ? payload.paymentMethodName : null,
+    entries,
+  };
+}
+
+export async function saveOfflineInvoices(scope: OfflineScope, invoices: OfflineInvoice[], now = new Date().toISOString()) {
+  const database = await openDatabase();
+  const scopeKey = offlineScopeKey(scope);
+  const transaction = database.transaction(['cardInvoices', 'invoiceOperations', 'metadata'], 'readwrite');
+  const invoiceStore = transaction.objectStore('cardInvoices');
+  const operationRequest = transaction.objectStore('invoiceOperations').index('scope').getAll(scopeKey) as IDBRequest<StoredInvoiceOperation[]>;
+  const cachedRequest = invoiceStore.index('scope').getAll(scopeKey) as IDBRequest<StoredInvoice[]>;
+  let reads = 0;
+  const save = () => {
+    reads += 1;
+    if (reads < 2) return;
+    const pending = new Set(operationRequest.result.map((operation) => offlineInvoiceKey(operation.cardId, operation.invoiceMonth)));
+    const responseKeys = new Set(invoices.map((invoice) => offlineInvoiceKey(invoice.card_id, invoice.invoice_month)));
+    for (const previous of cachedRequest.result) {
+      const key = offlineInvoiceKey(previous.invoice.card_id, previous.invoice.invoice_month);
+      if (!pending.has(key) && !responseKeys.has(key)) invoiceStore.delete(previous.key);
+    }
+    for (const invoice of invoices) {
+      if (!pending.has(offlineInvoiceKey(invoice.card_id, invoice.invoice_month))) {
+        invoiceStore.put({ key: recordKey(scope, offlineInvoiceKey(invoice.card_id, invoice.invoice_month)), scope: scopeKey, invoice } satisfies StoredInvoice);
+      }
+    }
+    transaction.objectStore('metadata').put({ key: scopeKey, scope: scopeKey, lastSyncedAt: now } satisfies StoredMetadata);
+  };
+  operationRequest.onsuccess = save;
+  cachedRequest.onsuccess = save;
+  await transactionDone(transaction);
+}
+
+export async function queueOfflineInvoiceChange(
+  scope: OfflineScope,
+  invoice: OfflineInvoice,
+  kind: 'pay' | 'reverse',
+  payload: Record<string, unknown> | null,
+  now = new Date().toISOString(),
+) {
+  const database = await openDatabase();
+  const scopeKey = offlineScopeKey(scope);
+  const invoiceId = offlineInvoiceKey(invoice.card_id, invoice.invoice_month);
+  const key = recordKey(scope, invoiceId);
+  const transaction = database.transaction(['cardInvoices', 'invoiceOperations'], 'readwrite');
+  const operationStore = transaction.objectStore('invoiceOperations');
+  const previousRequest = operationStore.get(key) as IDBRequest<StoredInvoiceOperation | undefined>;
+  previousRequest.onsuccess = () => {
+    const previous = previousRequest.result;
+    operationStore.put({
+      key, scope: scopeKey, userId: scope.userId, spaceId: scope.spaceId,
+      cardId: invoice.card_id, invoiceMonth: invoice.invoice_month.slice(0, 7),
+      operationId: previous?.operationId ?? crypto.randomUUID(), kind,
+      baseVersion: previous?.baseVersion ?? invoice.version, payload,
+      queuedAt: previous?.queuedAt ?? now,
+    } satisfies StoredInvoiceOperation);
+    transaction.objectStore('cardInvoices').put({
+      key, scope: scopeKey, invoice: optimisticallyApplyInvoice(invoice, kind, payload),
+    } satisfies StoredInvoice);
+  };
+  await transactionDone(transaction);
+}
+
+export async function markOfflineInvoiceConflict(
+  scope: OfflineScope,
+  sentOperation: OfflineInvoiceOperation,
+  conflict: NonNullable<OfflineInvoiceOperation['conflict']>,
+) {
+  const database = await openDatabase();
+  const transaction = database.transaction(['invoiceOperations'], 'readwrite');
+  const store = transaction.objectStore('invoiceOperations');
+  const request = store.get(recordKey(scope, offlineInvoiceKey(sentOperation.cardId, sentOperation.invoiceMonth))) as IDBRequest<StoredInvoiceOperation | undefined>;
+  request.onsuccess = () => {
+    const current = request.result;
+    if (current?.operationId === sentOperation.operationId && current.baseVersion === sentOperation.baseVersion) store.put({ ...current, conflict } satisfies StoredInvoiceOperation);
+  };
+  await transactionDone(transaction);
+}
+
+export async function acknowledgeOfflineInvoiceOperation(
+  scope: OfflineScope,
+  sentOperation: OfflineInvoiceOperation,
+  result: { invoice?: OfflineInvoice },
+) {
+  const database = await openDatabase();
+  const scopeKey = offlineScopeKey(scope);
+  const key = recordKey(scope, offlineInvoiceKey(sentOperation.cardId, sentOperation.invoiceMonth));
+  const transaction = database.transaction(['cardInvoices', 'invoiceOperations', 'metadata'], 'readwrite');
+  const operationStore = transaction.objectStore('invoiceOperations');
+  const invoiceStore = transaction.objectStore('cardInvoices');
+  const currentRequest = operationStore.get(key) as IDBRequest<StoredInvoiceOperation | undefined>;
+  const localRequest = invoiceStore.get(key) as IDBRequest<StoredInvoice | undefined>;
+  let current: StoredInvoiceOperation | undefined;
+  let local: StoredInvoice | undefined;
+  let reads = 0;
+  const finish = () => {
+    reads += 1;
+    if (reads < 2 || current?.operationId !== sentOperation.operationId) return;
+    const unchanged = current.kind === sentOperation.kind && current.baseVersion === sentOperation.baseVersion && JSON.stringify(current.payload) === JSON.stringify(sentOperation.payload);
+    if (unchanged) operationStore.delete(key);
+    else if (result.invoice) {
+      current.baseVersion = result.invoice.version;
+      current.operationId = crypto.randomUUID();
+      delete current.conflict;
+      operationStore.put(current);
+    }
+    if (result.invoice) invoiceStore.put({ key, scope: scopeKey, invoice: unchanged || !local ? result.invoice : { ...local.invoice, version: result.invoice.version } } satisfies StoredInvoice);
+    transaction.objectStore('metadata').put({ key: scopeKey, scope: scopeKey, lastSyncedAt: new Date().toISOString() } satisfies StoredMetadata);
+  };
+  currentRequest.onsuccess = () => { current = currentRequest.result; finish(); };
+  localRequest.onsuccess = () => { local = localRequest.result; finish(); };
+  await transactionDone(transaction);
+}
+
+export async function resolveOfflineInvoiceConflict(scope: OfflineScope, operationId: string, choice: 'local' | 'server') {
+  const database = await openDatabase();
+  const scopeKey = offlineScopeKey(scope);
+  const transaction = database.transaction(['cardInvoices', 'invoiceOperations'], 'readwrite');
+  const invoiceStore = transaction.objectStore('cardInvoices');
+  const operationStore = transaction.objectStore('invoiceOperations');
+  const request = operationStore.index('scope').getAll(scopeKey) as IDBRequest<StoredInvoiceOperation[]>;
+  request.onsuccess = () => {
+    const operation = request.result.find((item) => item.operationId === operationId && item.conflict);
+    if (!operation) return;
+    const key = recordKey(scope, offlineInvoiceKey(operation.cardId, operation.invoiceMonth));
+    const serverInvoice = operation.conflict!.serverInvoice;
+    if (choice === 'server') {
+      operationStore.delete(key);
+      if (serverInvoice) invoiceStore.put({ key, scope: scopeKey, invoice: serverInvoice } satisfies StoredInvoice);
+      else invoiceStore.delete(key);
+      return;
+    }
+    if (!serverInvoice) return;
+    if (operation.kind === 'pay' && serverInvoice.payment_status === 'paid') operation.payload = { ...operation.payload, replacePaid: true };
+    operationStore.put({ ...operation, operationId: crypto.randomUUID(), baseVersion: serverInvoice.version, conflict: undefined } satisfies StoredInvoiceOperation);
+    const localRequest = invoiceStore.get(key) as IDBRequest<StoredInvoice | undefined>;
+    localRequest.onsuccess = () => {
+      if (localRequest.result) invoiceStore.put({ ...localRequest.result, invoice: { ...localRequest.result.invoice, version: serverInvoice.version } } satisfies StoredInvoice);
+    };
+  };
+  await transactionDone(transaction);
+}
+
 export async function saveOfflineEntries(scope: OfflineScope, entries: OfflineEntry[], now = new Date().toISOString()) {
   const database = await openDatabase();
   const scopeKey = offlineScopeKey(scope);
@@ -964,7 +1161,7 @@ export async function clearOfflineWorkspace(scope: OfflineScope) {
   const scopeKey = offlineScopeKey(scope);
   const transaction = database.transaction([...storeNames], 'readwrite');
   const done = transactionDone(transaction);
-  const scopedStores: StoreName[] = ['entries', 'operations', 'snapshots', 'creditCards', 'cardOperations', 'purchases', 'purchaseOperations'];
+  const scopedStores: StoreName[] = ['entries', 'operations', 'snapshots', 'creditCards', 'cardOperations', 'purchases', 'purchaseOperations', 'cardInvoices', 'invoiceOperations'];
   const deletes = scopedStores.map((name) => {
     const store = transaction.objectStore(name);
     const request = store.index('scope').getAllKeys(scopeKey);

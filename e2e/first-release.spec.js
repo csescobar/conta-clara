@@ -67,6 +67,64 @@ test('administra um espaço compartilhado, importa e sincroniza uma alteração 
   await admin.getByText('Ver parcelas').click();
   await expect(admin.getByText('Parcela 1/3 · fatura 11/2026 · vence 05/11/2026')).toBeVisible();
 
+  await admin.setViewportSize({ width: 390, height: 844 });
+  await admin.getByRole('link', { name: 'Faturas' }).click();
+  await admin.getByLabel('Mês de vencimento').fill('2026-11');
+  await expect(admin.getByText('Compra parcelada fictícia')).toBeVisible();
+  await expect(admin.getByText('3,34', { exact: false }).first()).toBeVisible();
+  expect(await admin.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  const payButton = admin.getByRole('button', { name: 'Quitar fatura' });
+  await payButton.click();
+  await expect(admin.getByRole('dialog', { name: 'Quitar fatura' })).toBeVisible();
+  await admin.keyboard.press('Escape');
+  await expect(admin.getByRole('dialog', { name: 'Quitar fatura' })).toHaveCount(0);
+  await expect(payButton).toBeFocused();
+  await payButton.click();
+  const paymentDialog = admin.getByRole('dialog', { name: 'Quitar fatura' });
+  await expect(paymentDialog).toBeVisible();
+  await expect(admin.getByLabel('Valor efetivamente pago')).toBeFocused();
+  await admin.keyboard.press('Tab');
+  await expect(admin.getByLabel('Data do pagamento')).toBeFocused();
+  await admin.getByLabel('Valor efetivamente pago').fill('3,01');
+  await admin.getByLabel('Data do pagamento').fill('05/11/2026');
+  await expect(admin.getByLabel('Forma de pagamento (opcional)').locator('option')).toHaveCount(2);
+  await admin.getByLabel('Forma de pagamento (opcional)').selectOption({ label: 'Pix fictício' });
+  await admin.getByRole('button', { name: 'Confirmar quitação' }).click();
+  await expect(admin.getByText('Quitada', { exact: true })).toBeVisible();
+  await expect(admin.getByText('Pendente neste aparelho')).toHaveCount(0, { timeout: 20_000 });
+  await admin.setViewportSize({ width: 1280, height: 900 });
+
+  await admin.getByRole('link', { name: 'Visão geral' }).click();
+  const dashboardRequest = admin.waitForResponse((response) => response.url().includes('/api/dashboard?month=2026-11'));
+  await admin.getByLabel('Mês do painel').fill('2026-11');
+  const dashboardResponse = await (await dashboardRequest).json();
+  expect(dashboardResponse).toMatchObject({ planned: { expenseCents: '334' }, realized: { expenseCents: '301' } });
+  const novemberExpenses = admin.getByRole('table').getByRole('row', { name: /Despesas/ });
+  await expect(novemberExpenses).toContainText('3,34');
+  await expect(novemberExpenses).toContainText('3,01');
+
+  await admin.getByRole('link', { name: 'Lançamentos' }).click();
+  await admin.getByLabel('Competência').fill('2026-11');
+  await expect(admin.getByText('Compra parcelada fictícia (1/3)')).toBeVisible();
+  await admin.evaluate(() => {
+    const createObjectURL = URL.createObjectURL.bind(URL);
+    Object.defineProperty(window, '__contaClaraCsv', { value: '', writable: true });
+    URL.createObjectURL = (blob) => {
+      void blob.text().then((content) => { window.__contaClaraCsv = content; });
+      return createObjectURL(blob);
+    };
+  });
+  const [csvDownload] = await Promise.all([
+    admin.waitForEvent('download'),
+    admin.getByRole('button', { name: 'Exportar CSV' }).click(),
+  ]);
+  expect(csvDownload.suggestedFilename()).toBe('conta-clara-lancamentos-2026-11.csv');
+  await expect.poll(() => admin.evaluate(() => window.__contaClaraCsv)).toContain('"Cartão da família fictício"');
+  const csvContent = await admin.evaluate(() => window.__contaClaraCsv);
+  expect(csvContent).toContain('"11/2026"');
+  expect(csvContent).toContain('"1/3"');
+  expect(csvContent).toContain('"Quitada"');
+
   await admin.getByRole('link', { name: 'Configurações' }).click();
   await admin.setViewportSize({ width: 390, height: 844 });
   await expect(admin.getByLabel('Apelido do cartão')).toBeVisible();
@@ -143,6 +201,38 @@ test('administra um espaço compartilhado, importa e sincroniza uma alteração 
   await expect(member.getByText('Cartão da família fictício')).toBeVisible();
   await expect(member.getByRole('button', { name: 'Gerar convite' })).toHaveCount(0);
   await expect(member.getByRole('button', { name: 'Link para redefinir senha' })).toHaveCount(0);
+
+  await member.getByRole('link', { name: 'Faturas' }).click();
+  await member.getByLabel('Mês de vencimento').fill('2026-12');
+  await expect(member.getByRole('button', { name: 'Quitar fatura' })).toBeVisible();
+  await memberContext.setOffline(true);
+  await member.evaluate(() => window.dispatchEvent(new Event('offline')));
+  await expect(member.getByText(/^Sem conexão de rede/)).toBeVisible();
+  await member.getByRole('button', { name: 'Quitar fatura' }).click();
+  await member.getByLabel('Valor efetivamente pago').fill('3,50');
+  await member.getByLabel('Data do pagamento').fill('06/12/2026');
+  await member.getByRole('button', { name: 'Confirmar quitação' }).click();
+  await expect(member.getByText('Pendente neste aparelho')).toBeVisible();
+  await expect(member.getByText('Quitada', { exact: true })).toBeVisible();
+
+  await admin.getByRole('link', { name: 'Faturas' }).click();
+  await admin.getByLabel('Mês de vencimento').fill('2026-12');
+  await admin.getByRole('button', { name: 'Quitar fatura' }).click();
+  await admin.getByLabel('Data do pagamento').fill('05/12/2026');
+  await admin.getByRole('button', { name: 'Confirmar quitação' }).click();
+  await expect(admin.getByText('Quitada', { exact: true })).toBeVisible();
+  await expect(admin.getByText('Pendente neste aparelho')).toHaveCount(0, { timeout: 20_000 });
+
+  await memberContext.setOffline(false);
+  await member.evaluate(() => window.dispatchEvent(new Event('online')));
+  const invoiceConflictHeading = member.getByRole('heading', { name: 'Revise as quitações que mudaram offline' });
+  await expect(invoiceConflictHeading).toBeVisible({ timeout: 20_000 });
+  const invoiceConflict = invoiceConflictHeading.locator('..').locator('..');
+  await expect(invoiceConflict).toContainText('3,34');
+  await expect(invoiceConflict).toContainText('05/12/2026');
+  await member.getByRole('button', { name: 'Manter versão do servidor' }).click();
+  await expect(member.getByText('Rede conectada · nenhuma alteração pendente.')).toBeVisible({ timeout: 20_000 });
+  await expect(member.getByText('Quitada por', { exact: false })).toContainText('3,34');
 
   await member.getByRole('link', { name: 'Lançamentos' }).click();
   await expect(member.getByText('Conta sintética importada')).toBeVisible();

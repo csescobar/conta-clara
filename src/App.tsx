@@ -5,6 +5,7 @@ import { OneTimeAccessPage } from './auth/one-time-access-page';
 import { DashboardPage, SettingsPage } from './pages/pages';
 import { NewTransactionPage, TransactionsPage } from './pages/entries-pages';
 import { CardPurchasesPage } from './pages/card-purchases-page';
+import { InvoicesPage } from './pages/invoices-page';
 import { ActivityPage } from './pages/activity-page';
 import { RecurrenceFormPage, RecurrencesPage } from './pages/recurrence-pages';
 import { LoadingState } from './components/ui/feedback';
@@ -21,6 +22,7 @@ export default function App() {
           <Route index element={<DashboardPage />} />
           <Route path="lancamentos" element={<TransactionsPage />} />
           <Route path="compras" element={<CardPurchasesPage />} />
+          <Route path="faturas" element={<InvoicesPage />} />
           <Route path="lancamentos/novo" element={<NewTransactionPage />} />
           <Route path="lancamentos/:id/editar" element={<NewTransactionPage />} />
           <Route path="importar" element={<Suspense fallback={<LoadingState label="Carregando importador de planilha" />}><SpreadsheetImportPage /></Suspense>} />
