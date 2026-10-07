@@ -62,4 +62,15 @@ Backlog inicial da primeira versão. Concluir dependências antes de iniciar uma
 
 - [x] [Corrigir sobreposição da navegação no celular](https://github.com/csescobar/conta-clara/issues/30) — menu compacto com os outros destinos em “Mais”; validado em 320–430 px, desktop e teclado (`c0e73d0`).
 
+## 8. Previsão e recorrências (V3)
+
+- [ ] [Projetar recorrências até 12 meses](https://github.com/csescobar/conta-clara/issues/32) — dependências: geração mensal da V1 (#12).
+- [ ] [Sincronizar alterações nas regras com as projeções futuras](https://github.com/csescobar/conta-clara/issues/33) — dependências: #32.
+- [ ] [Integrar previsões mensais às telas e ao uso offline](https://github.com/csescobar/conta-clara/issues/34) — dependências: #32, #33.
+- [ ] [Validar integração e documentar previsão de recorrências](https://github.com/csescobar/conta-clara/issues/35) — dependências: #32–#34.
+
+### Acompanhamento da V3
+
+[Issue central da V3](https://github.com/csescobar/conta-clara/issues/36). Atualizar ambos os checklists após cada história concluída.
+
 Contas bancárias e saldos, integração bancária, importação de extratos, pagamento parcial/rotativo e acesso remoto permanecem fora desta etapa.
