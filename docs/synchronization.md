@@ -1,6 +1,6 @@
 # Sincronização offline
 
-O Postgres continua sendo a fonte de verdade. A PWA mantém lançamentos, cartões e operações pendentes no IndexedDB, separados por usuário e espaço financeiro, e os envia depois de confirmar a sessão. Nenhuma rotina de sincronização usa Background Sync do navegador.
+O Postgres continua sendo a fonte de verdade. A PWA mantém lançamentos, cartões, compras com suas parcelas e operações pendentes no IndexedDB, separados por usuário e espaço financeiro, e os envia depois de confirmar a sessão. Nenhuma rotina de sincronização usa Background Sync do navegador.
 
 ## Quando sincroniza
 
@@ -9,13 +9,13 @@ O Postgres continua sendo a fonte de verdade. A PWA mantém lançamentos, cartõ
 - Ao voltar para a janela da aplicação, se o navegador indicar conexão.
 - Pela ação **Sincronizar agora**, disponível enquanto houver operações pendentes.
 
-As operações são enviadas uma por vez. Se houver falha de rede ou a resposta se perder depois da gravação, a fila permanece no aparelho e a mesma operação é repetida com o mesmo UUID. Assim, uma criação já confirmada pelo servidor não cria um segundo lançamento ou cartão. Alterações locais feitas enquanto uma operação está em trânsito são preservadas como uma operação seguinte.
+As operações são enviadas uma por vez. Se houver falha de rede ou a resposta se perder depois da gravação, a fila permanece no aparelho e a mesma operação é repetida com o mesmo UUID. Assim, uma criação já confirmada pelo servidor não cria um segundo lançamento, cartão ou série de compra. A compra e todas as suas parcelas são gravadas em uma única transação. Alterações locais feitas enquanto uma operação está em trânsito são preservadas como uma operação seguinte.
 
 ## Versões e conflitos
 
-Cada lançamento e cartão tem uma versão inteira crescente. Edição, confirmação, reversão da confirmação e exclusão de ocorrência recorrente verificam e avançam a versão dos lançamentos. Alterações offline informam a versão consultada; se outra pessoa alterar ou remover o registro antes da sincronização, o servidor devolve um conflito com a versão atual, sem sobrescrevê-la silenciosamente.
+Cada lançamento, cartão e série de compra tem uma versão inteira crescente. Edição, confirmação, reversão da confirmação e exclusão de ocorrência recorrente verificam e avançam a versão dos lançamentos. Edições da série verificam a versão da compra; uma parcela futura também permanece vinculada ao identificador e ao número de sua parcela. Se outra pessoa alterar ou cancelar a compra antes da sincronização, o servidor devolve um conflito com a versão atual, sem sobrescrevê-la silenciosamente. Parcelas já pagas não são alteradas ao editar ou cancelar uma série.
 
-A aplicação mostra um resumo da versão local e da versão do servidor para lançamentos e cartões. A pessoa pode manter a versão local, adotar a versão do servidor ou, se o servidor já removeu o registro, recriar a versão local com um novo identificador. Uma exclusão local de lançamento também pode ser mantida quando o servidor ainda tem o lançamento. A fila só é removida depois que o servidor confirma a operação ou que a pessoa escolhe descartar a versão local.
+A aplicação mostra um resumo da versão local e da versão do servidor para lançamentos, cartões e compras. A pessoa pode manter a versão local, adotar a versão do servidor ou, se a compra foi cancelada/removida no servidor, recriar a versão local com novos identificadores. Uma exclusão local de lançamento também pode ser mantida quando o servidor ainda tem o lançamento. A fila só é removida depois que o servidor confirma a operação ou que a pessoa escolhe descartar a versão local.
 
 O autor de cada criação, edição ou exclusão vem da sessão autenticada no servidor. Identificadores, autoria e espaço enviados pelo cliente não definem a permissão. Um membro desativado não consegue sincronizar; as alterações locais continuam guardadas até a pessoa entrar com uma conta ativa do espaço correto.
 
@@ -25,6 +25,6 @@ O servidor grava a operação aplicada, seu autor, a requisição normalizada e 
 
 ## Verificações e limites
 
-`src/offline/offline-store.test.ts` verifica versão-base, resolução local/servidor e preservação de edição feita durante envio. `src/pages/card-settings.test.tsx` verifica que a fila de cartões sobrevive à expiração da sessão e sincroniza depois que a autenticação retorna. `src/offline/offline-workflow.test.tsx` verifica repetição após resposta perdida, reconexão, fila por usuário e interface de conflito. `server/routes/sync.integration.test.js` usa Postgres descartável para cobrir operações duplicadas concorrentes, repetição tardia, reutilização de chave, edições concorrentes, edição versus exclusão, autoria da sessão e membro desativado. Execute `npm test`, `npm run typecheck`, `npm run build` e `npm run test:db`.
+`src/offline/offline-store.test.ts` verifica versão-base, resolução local/servidor e preservação de edição feita durante envio, incluindo compras. `src/pages/card-settings.test.tsx` verifica sincronização offline de cartões; `src/pages/card-purchases-page.test.tsx` verifica a criação de uma compra e suas parcelas. `src/offline/offline-workflow.test.tsx` verifica repetição após resposta perdida, reconexão, fila por usuário e interface de conflito. `server/routes/sync.integration.test.js` e `server/routes/purchases.integration.test.js` usam Postgres descartável para cobrir idempotência, datas de fatura, auditoria, isolamento do espaço, parcelas pagas, cancelamento e sincronização. Execute `npm test`, `npm run typecheck`, `npm run build` e `npm run test:db`.
 
 A fila é limitada ao navegador e não constitui backup. O envio exige abrir ou focar a PWA, reconectar ou escolher a ação manual; o navegador pode suspender ou remover armazenamento local. Não existe sincronização em segundo plano, resolução automática por campo, histórico para desfazer uma sincronização nem limpeza automática de recibos.

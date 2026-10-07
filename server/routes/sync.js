@@ -3,11 +3,24 @@ import { requireAuth, requireCsrf } from './auth.js';
 import { parseEntry, selectEntry, validateReferences } from './entries.js';
 import { parseCard, selectCard, validateCardHolder } from './cards.js';
 import { recordEntryAudit } from '../services/financial-entry-audit.js';
+import { cancelPurchase, createPurchase, parsePurchaseSnapshot, selectPurchase, updatePurchase } from '../services/card-purchases.js';
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const kinds = new Set(['create', 'update', 'delete']);
 
 function parseOperation(body) {
+  if (body?.entity === 'purchase') {
+    if (!uuidPattern.test(body.purchaseId ?? '') || !uuidPattern.test(body.operationId ?? '') || !['create', 'update', 'delete'].includes(body.kind)) return null;
+    const baseVersion = body.baseVersion;
+    if (body.kind === 'create' ? baseVersion !== null : !Number.isSafeInteger(baseVersion) || baseVersion < 1) return null;
+    if (body.kind === 'delete') {
+      if (body.payload !== null) return null;
+      return { entity: 'purchase', operationId: body.operationId, purchaseId: body.purchaseId, kind: body.kind, baseVersion, payload: null };
+    }
+    const payload = parsePurchaseSnapshot(body.payload);
+    if (!payload) return null;
+    return { entity: 'purchase', operationId: body.operationId, purchaseId: body.purchaseId, kind: body.kind, baseVersion, payload };
+  }
   if (body?.entity === 'card') {
     if (!uuidPattern.test(body.cardId ?? '') || !uuidPattern.test(body.operationId ?? '') || !['create', 'update'].includes(body.kind)) return null;
     const baseVersion = body.baseVersion;
@@ -31,7 +44,7 @@ function parseOperation(body) {
 
 async function selectSyncRow(client, spaceId, entryId) {
   const result = await client.query(`
-    SELECT id, category_id, payment_method_id, recurrence_rule_id, recurrence_skipped, version
+    SELECT id, category_id, payment_method_id, recurrence_rule_id, recurrence_skipped, card_purchase_id, version
     FROM financial_entries WHERE id = $1 AND space_id = $2 FOR UPDATE
   `, [entryId, spaceId]);
   return result.rows[0] ?? null;
@@ -49,7 +62,7 @@ async function applyOperation(client, request, operation) {
   const userId = request.auth.id;
   const normalizedRequest = {
     operationId: operation.operationId,
-    ...(operation.entity === 'card' ? { entity: 'card', cardId: operation.cardId } : { entryId: operation.entryId }),
+    ...(operation.entity === 'card' ? { entity: 'card', cardId: operation.cardId } : operation.entity === 'purchase' ? { entity: 'purchase', purchaseId: operation.purchaseId } : { entryId: operation.entryId }),
     kind: operation.kind,
     baseVersion: operation.baseVersion,
     payload: operation.payload,
@@ -64,9 +77,10 @@ async function applyOperation(client, request, operation) {
     if (previous.actor_user_id !== userId || !previous.same_request) {
       const sameResource = previous.actor_user_id === userId
         && previous.request.entity === operation.entity
-        && (operation.entity === 'card' ? previous.request.cardId === operation.cardId : previous.request.entryId === operation.entryId);
-      const serverResource = sameResource ? previous.response_body[operation.entity === 'card' ? 'card' : 'entry'] ?? null : null;
-      const resourceFields = operation.entity === 'card' ? { serverCard: serverResource } : { serverEntry: serverResource };
+        && (operation.entity === 'card' ? previous.request.cardId === operation.cardId : operation.entity === 'purchase' ? previous.request.purchaseId === operation.purchaseId : previous.request.entryId === operation.entryId);
+      const resourceName = operation.entity === 'card' ? 'card' : operation.entity === 'purchase' ? 'purchase' : 'entry';
+      const serverResource = sameResource ? previous.response_body[resourceName] ?? null : null;
+      const resourceFields = operation.entity === 'card' ? { serverCard: serverResource } : operation.entity === 'purchase' ? { serverPurchase: serverResource } : { serverEntry: serverResource };
       return { status: 409, body: { status: 'conflict', reason: 'idempotency_key_reused', ...resourceFields, error: 'Esta operação já foi usada com outros dados.' } };
     }
     return { status: Number(previous.response_status), body: previous.response_body };
@@ -122,6 +136,21 @@ async function applyOperation(client, request, operation) {
     return { status: 200, body };
   }
 
+  if (operation.entity === 'purchase') {
+    let result;
+    if (operation.kind === 'create') {
+      result = await createPurchase(client, { spaceId, userId, actorName: request.auth.name, purchaseId: operation.purchaseId, snapshot: operation.payload });
+    } else if (operation.kind === 'update') {
+      result = await updatePurchase(client, { spaceId, userId, actorName: request.auth.name, purchaseId: operation.purchaseId, baseVersion: operation.baseVersion, snapshot: operation.payload });
+    } else {
+      result = await cancelPurchase(client, { spaceId, userId, actorName: request.auth.name, purchaseId: operation.purchaseId, baseVersion: operation.baseVersion });
+    }
+    if (result.status !== 200) return result;
+    const body = { ...result.body, operationId: operation.operationId };
+    await storeReceipt(client, { spaceId, userId, operation, request: normalizedRequest, body });
+    return { status: 200, body };
+  }
+
   if (operation.kind === 'create') {
     const referenceError = await validateReferences(client, spaceId, operation.payload);
     if (referenceError) return { status: 400, body: { error: referenceError } };
@@ -153,6 +182,9 @@ async function applyOperation(client, request, operation) {
   }
   if (!current || current.recurrence_skipped) {
     return { status: 409, body: { status: 'conflict', reason: 'server_deleted', serverEntry: null } };
+  }
+  if (current.card_purchase_id) {
+    return { status: 400, body: { error: 'Altere parcelas pela compra de cartão vinculada.' } };
   }
 
   const serverEntry = await selectEntry(client, spaceId, operation.entryId);
@@ -219,6 +251,9 @@ export function createSyncRouter({ pool, secureCookies = false, csrfSecret }) {
       if (client) await client.query('ROLLBACK').catch(() => {});
       if (operation.entity === 'card' && error.code === '23505') {
         return response.status(400).json({ error: 'Já existe um cartão ativo com este apelido.' });
+      }
+      if (operation.entity === 'purchase' && error.code === '23505') {
+        return response.status(400).json({ error: 'Uma das parcelas desta compra já foi registrada.' });
       }
       return next(error);
     } finally {

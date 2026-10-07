@@ -1,4 +1,4 @@
-import { ArrowLeftRight, History, House, LogOut, RefreshCw, Repeat2, Settings, WalletCards } from 'lucide-react';
+import { ArrowLeftRight, CreditCard, History, House, LogOut, RefreshCw, Repeat2, Settings, WalletCards } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 import { Button } from './ui/button';
@@ -10,6 +10,7 @@ import { formatBrazilianMoney, formatBrazilianMonth } from '../lib/finance';
 const links = [
   { to: '/', label: 'Visão geral', Icon: House, end: true },
   { to: '/lancamentos', label: 'Lançamentos', Icon: ArrowLeftRight, end: false },
+  { to: '/compras', label: 'Compras', Icon: CreditCard, end: false },
   { to: '/recorrencias', label: 'Recorrências', Icon: Repeat2, end: false },
   { to: '/historico', label: 'Histórico', Icon: History, end: false },
   { to: '/configuracoes', label: 'Configurações', Icon: Settings, end: false },
@@ -26,7 +27,7 @@ function Brand() {
 
 function Navigation({ mobile = false }: { mobile?: boolean }) {
   return (
-    <nav aria-label={mobile ? 'Navegação principal móvel' : 'Navegação principal'} className={mobile ? 'grid grid-cols-5' : 'grid gap-1'}>
+    <nav aria-label={mobile ? 'Navegação principal móvel' : 'Navegação principal'} className={mobile ? 'grid grid-cols-6' : 'grid gap-1'}>
       {links.map(({ to, label, Icon, end }) => (
         <NavLink
           key={to}
@@ -64,6 +65,7 @@ export function AppLayout({ user, csrfToken, onLogout, notice, children }: { use
           : 'Rede conectada · nenhuma alteração pendente.';
   const conflicts = offline?.operations.filter((operation) => operation.conflict) ?? [];
   const cardConflicts = offline?.cardOperations.filter((operation) => operation.conflict) ?? [];
+  const purchaseConflicts = offline?.purchaseOperations.filter((operation) => operation.conflict) ?? [];
 
   return (
     <div className="min-h-screen lg:flex">
@@ -120,6 +122,24 @@ export function AppLayout({ user, csrfToken, onLogout, notice, children }: { use
                 <div className="flex flex-wrap gap-2">
                   <Button type="button" size="sm" variant="outline" disabled={offline.syncing} onClick={() => void offline.resolveCardConflict(operation.operationId, 'local').then(() => typeof navigator !== 'undefined' && navigator.onLine && csrfToken ? offline.sync(csrfToken) : undefined)}>{serverCard ? 'Usar versão local' : 'Recriar minha versão'}</Button>
                   <Button type="button" size="sm" variant="outline" disabled={offline.syncing} onClick={() => void offline.resolveCardConflict(operation.operationId, 'server').then(() => typeof navigator !== 'undefined' && navigator.onLine && csrfToken ? offline.sync(csrfToken) : undefined)}>{serverCard ? 'Usar versão do servidor' : 'Descartar versão local'}</Button>
+                </div>
+              </article>;
+            })}
+          </section>}
+          {offline && purchaseConflicts.length > 0 && <section aria-labelledby="purchase-sync-conflicts-heading" className="mb-5 grid gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+            <div><h2 id="purchase-sync-conflicts-heading" className="font-semibold">Escolha como resolver {purchaseConflicts.length === 1 ? 'este conflito de compra' : 'estes conflitos de compra'}</h2><p className="mt-1 text-xs leading-5">A compra mudou em outro aparelho enquanto você estava offline. Compare as versões; parcelas já pagas permanecem protegidas pelo servidor.</p></div>
+            {purchaseConflicts.map((operation) => {
+              const localPurchase = offline.purchases.find((purchase) => purchase.id === operation.purchaseId);
+              const serverPurchase = operation.conflict!.serverPurchase;
+              const summarize = (purchase: NonNullable<typeof serverPurchase>) => `${purchase.description} · ${formatBrazilianMoney(purchase.total_cents)} · ${purchase.installment_count} ${purchase.installment_count === 1 ? 'parcela' : 'parcelas'}`;
+              const localDescription = operation.kind === 'delete' ? 'Cancelar parcelas ainda não pagas' : localPurchase ? summarize(localPurchase) : 'Versão local indisponível';
+              const serverDescription = serverPurchase?.canceled_at ? `${summarize(serverPurchase)} · cancelada no servidor` : serverPurchase ? summarize(serverPurchase) : operation.conflict!.reason === 'id_collision' ? 'Outra compra usa este identificador.' : 'A compra foi removida do servidor.';
+              return <article key={operation.operationId} className="grid gap-2 rounded-xl border border-amber-200 bg-white/70 p-3">
+                <h3 className="font-medium">{localPurchase?.description ?? serverPurchase?.description ?? 'Compra removida'}</h3>
+                <div className="grid gap-1 text-xs sm:grid-cols-2"><p><strong>Sua versão:</strong> {localDescription}</p><p><strong>Servidor:</strong> {serverDescription}</p></div>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" size="sm" variant="outline" disabled={offline.syncing} onClick={() => void offline.resolvePurchaseConflict(operation.operationId, 'local').then(() => typeof navigator !== 'undefined' && navigator.onLine && csrfToken ? offline.sync(csrfToken) : undefined)}>{operation.kind === 'delete' ? 'Manter cancelamento' : !serverPurchase || operation.conflict!.reason === 'id_collision' || operation.conflict!.reason === 'server_deleted' ? 'Recriar minha compra' : 'Usar versão local'}</Button>
+                  <Button type="button" size="sm" variant="outline" disabled={offline.syncing} onClick={() => void offline.resolvePurchaseConflict(operation.operationId, 'server').then(() => typeof navigator !== 'undefined' && navigator.onLine && csrfToken ? offline.sync(csrfToken) : undefined)}>{serverPurchase ? 'Usar versão do servidor' : 'Descartar versão local'}</Button>
                 </div>
               </article>;
             })}

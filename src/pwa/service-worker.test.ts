@@ -104,12 +104,16 @@ describe('PWA shell', () => {
     expect(self.clients.claim).toHaveBeenCalledOnce();
   });
 
-  it('serves only the cached app shell for offline navigation', async () => {
+  it('serves the cached app shell and scripts after offline navigation', async () => {
     const handlers: Record<string, (event: any) => void> = {};
     const store = new Map([[
       'conta-clara-shell-test-build',
-      new Map([['/', new Response('<main>Conta Clara</main>')]]),
+      new Map([
+        ['/', new Response('<main>Conta Clara</main>')],
+        ['/assets/app.js', new Response('cached /assets/app.js')],
+      ]),
     ]]);
+    const matchOptions: unknown[] = [];
     const caches = {
       open: async (name: string) => ({
         async addAll() {},
@@ -119,7 +123,8 @@ describe('PWA shell', () => {
         },
         async put() {},
       }),
-      async match(request: string | { url: string }) {
+      async match(request: string | { url: string }, options?: unknown) {
+        matchOptions.push(options);
         const key = typeof request === 'string' ? request : new URL(request.url).pathname;
         return store.get('conta-clara-shell-test-build')?.get(key)?.clone();
       },
@@ -142,5 +147,13 @@ describe('PWA shell', () => {
     });
     expect(await (await navigationResponse).text()).toContain('Conta Clara');
     expect(fetch).toHaveBeenCalledOnce();
+
+    let assetResponse!: Promise<Response>;
+    handlers.fetch({
+      request: { method: 'GET', url: 'https://conta-clara.local/assets/app.js', mode: 'cors' },
+      respondWith: (promise: Promise<Response>) => { assetResponse = promise; },
+    });
+    expect(await (await assetResponse).text()).toBe('cached /assets/app.js');
+    expect(matchOptions).toContainEqual({ ignoreVary: true });
   });
 });

@@ -1,20 +1,26 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   acknowledgeOfflineCardOperation,
+  acknowledgeOfflinePurchaseOperation,
   acknowledgeOfflineOperation,
   clearOfflineWorkspace,
   loadOfflineSnapshot,
   loadOfflineWorkspace,
   markOfflineConflict,
   markOfflineCardConflict,
+  markOfflinePurchaseConflict,
   queueOfflineCardChange,
+  queueOfflinePurchaseChange,
+  queueOfflinePurchaseDelete,
   queueOfflineEntryChange,
   queueOfflineEntryDelete,
   removeCachedOfflineEntry,
   resolveOfflineConflict,
   resolveOfflineCardConflict,
+  resolveOfflinePurchaseConflict,
   saveOfflineCatalogs,
   saveOfflineCards,
+  saveOfflinePurchases,
   saveOfflineEntries,
   saveOfflineSnapshot,
   type OfflineCategory,
@@ -22,6 +28,8 @@ import {
   type OfflineCardMember,
   type OfflineEntry,
   type OfflinePaymentMethod,
+  type OfflinePurchase,
+  type OfflinePurchaseOperation,
   type OfflineScope,
   type OfflineWorkspaceSnapshot,
 } from './offline-store';
@@ -38,21 +46,25 @@ export type OfflineWorkspace = OfflineWorkspaceSnapshot & {
   cacheEntries: (entries: OfflineEntry[]) => Promise<void>;
   cacheCatalogs: (categories: OfflineCategory[], paymentMethods: OfflinePaymentMethod[]) => Promise<void>;
   cacheCards: (cards: OfflineCard[], members: OfflineCardMember[]) => Promise<void>;
+  cachePurchases: (purchases: OfflinePurchase[]) => Promise<void>;
   cacheSnapshot: (path: string, data: unknown) => Promise<void>;
   getSnapshot: <T>(path: string) => Promise<T | null>;
   queueChange: (entry: OfflineEntry, kind: 'create' | 'update') => Promise<void>;
   queueDelete: (entry: OfflineEntry) => Promise<void>;
   queueCardChange: (card: OfflineCard, kind: 'create' | 'update') => Promise<void>;
+  queuePurchaseChange: (purchase: OfflinePurchase, kind: 'create' | 'update', payload: Record<string, unknown>) => Promise<void>;
+  queuePurchaseDelete: (purchase: OfflinePurchase) => Promise<void>;
   sync: (csrfToken: string) => Promise<void>;
   resolveConflict: (operationId: string, choice: 'local' | 'server') => Promise<void>;
   resolveCardConflict: (operationId: string, choice: 'local' | 'server') => Promise<void>;
+  resolvePurchaseConflict: (operationId: string, choice: 'local' | 'server') => Promise<void>;
   removeCachedEntry: (entryId: string) => Promise<void>;
   clear: () => Promise<void>;
   setOnline: (online: boolean) => void;
   invalidateSession: () => void;
 };
 
-const emptySnapshot: OfflineWorkspaceSnapshot = { entries: [], categories: [], paymentMethods: [], cards: [], cardMembers: [], operations: [], cardOperations: [], lastSyncedAt: null };
+const emptySnapshot: OfflineWorkspaceSnapshot = { entries: [], categories: [], paymentMethods: [], cards: [], cardMembers: [], operations: [], cardOperations: [], purchases: [], purchaseOperations: [], lastSyncedAt: null };
 const OfflineWorkspaceContext = createContext<OfflineWorkspace | null>(null);
 
 export function OfflineWorkspaceProvider({ scope, children }: { scope: OfflineScope; children: ReactNode }) {
@@ -126,6 +138,17 @@ export function OfflineWorkspaceProvider({ scope, children }: { scope: OfflineSc
     }
   }, [refresh, stableScope, supported]);
 
+  const cachePurchases = useCallback(async (purchases: OfflinePurchase[]) => {
+    if (!supported) return;
+    try {
+      await saveOfflinePurchases(stableScope, purchases);
+      await refresh();
+    } catch (error) {
+      setSupported(false);
+      setStorageError(error instanceof Error ? error.message : 'Não foi possível salvar as compras offline.');
+    }
+  }, [refresh, stableScope, supported]);
+
   const cacheSnapshot = useCallback(async (path: string, data: unknown) => {
     if (!supported) return;
     try {
@@ -154,6 +177,16 @@ export function OfflineWorkspaceProvider({ scope, children }: { scope: OfflineSc
     await refresh();
   }, [refresh, stableScope]);
 
+  const queuePurchaseChange = useCallback(async (purchase: OfflinePurchase, kind: 'create' | 'update', payload: Record<string, unknown>) => {
+    await queueOfflinePurchaseChange(stableScope, purchase, kind, payload);
+    await refresh();
+  }, [refresh, stableScope]);
+
+  const queuePurchaseDelete = useCallback(async (purchase: OfflinePurchase) => {
+    await queueOfflinePurchaseDelete(stableScope, purchase);
+    await refresh();
+  }, [refresh, stableScope]);
+
   const invalidateSession = useCallback(() => {
     window.dispatchEvent(new Event('conta-clara:session-expired'));
   }, []);
@@ -171,20 +204,22 @@ export function OfflineWorkspaceProvider({ scope, children }: { scope: OfflineSc
           const current = await loadOfflineWorkspace(stableScope);
           const entryOperation = current.operations.find((item) => !item.conflict && !attempted.has(item.operationId));
           const cardOperation = current.cardOperations.find((item) => !item.conflict && !attempted.has(item.operationId));
-          const operation = !entryOperation
-            ? cardOperation
-            : !cardOperation || entryOperation.queuedAt <= cardOperation.queuedAt ? entryOperation : cardOperation;
+          const purchaseOperation = current.purchaseOperations.find((item) => !item.conflict && !attempted.has(item.operationId));
+          const operation = [entryOperation, cardOperation, purchaseOperation]
+            .filter((item) => item !== undefined)
+            .sort((left, right) => left.queuedAt.localeCompare(right.queuedAt))[0];
           if (!operation) break;
           attempted.add(operation.operationId);
           const isCardOperation = 'cardId' in operation;
+          const isPurchaseOperation = 'purchaseId' in operation;
           const response = await fetch('/api/sync/operations', {
             method: 'POST',
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
             body: JSON.stringify({
-              ...(isCardOperation ? { entity: 'card', cardId: operation.cardId } : {}),
+              ...(isCardOperation ? { entity: 'card', cardId: operation.cardId } : isPurchaseOperation ? { entity: 'purchase', purchaseId: operation.purchaseId } : {}),
               operationId: operation.operationId,
-              ...(!isCardOperation ? { entryId: operation.entryId } : {}),
+              ...(!isCardOperation && !isPurchaseOperation ? { entryId: operation.entryId } : {}),
               kind: operation.kind,
               baseVersion: operation.baseVersion,
               payload: operation.payload,
@@ -198,6 +233,8 @@ export function OfflineWorkspaceProvider({ scope, children }: { scope: OfflineSc
             serverEntry?: OfflineEntry | null;
             card?: OfflineCard;
             serverCard?: OfflineCard | null;
+            purchase?: OfflinePurchase;
+            serverPurchase?: OfflinePurchase | null;
             deleted?: boolean;
           };
           if (response.status === 401) {
@@ -209,6 +246,8 @@ export function OfflineWorkspaceProvider({ scope, children }: { scope: OfflineSc
             const reason = reasons.has(result.reason ?? '') ? result.reason as 'version_mismatch' | 'server_deleted' | 'id_collision' | 'idempotency_key_reused' : 'version_mismatch';
             if (isCardOperation) {
               await markOfflineCardConflict(stableScope, operation, { reason, serverCard: result.serverCard ?? null });
+            } else if (isPurchaseOperation) {
+              await markOfflinePurchaseConflict(stableScope, operation as OfflinePurchaseOperation, { reason, serverPurchase: result.serverPurchase ?? null });
             } else {
               await markOfflineConflict(stableScope, operation, { reason, serverEntry: result.serverEntry ?? null });
             }
@@ -220,6 +259,7 @@ export function OfflineWorkspaceProvider({ scope, children }: { scope: OfflineSc
             break;
           }
           if (isCardOperation) await acknowledgeOfflineCardOperation(stableScope, operation, { card: result.card });
+          else if (isPurchaseOperation) await acknowledgeOfflinePurchaseOperation(stableScope, operation as OfflinePurchaseOperation, { purchase: result.purchase });
           else await acknowledgeOfflineOperation(stableScope, operation, { entry: result.entry, deleted: result.deleted });
           await refresh();
         }
@@ -251,6 +291,12 @@ export function OfflineWorkspaceProvider({ scope, children }: { scope: OfflineSc
     await refresh();
   }, [refresh, stableScope]);
 
+  const resolvePurchaseConflict = useCallback(async (operationId: string, choice: 'local' | 'server') => {
+    await resolveOfflinePurchaseConflict(stableScope, operationId, choice);
+    setSyncError('');
+    await refresh();
+  }, [refresh, stableScope]);
+
   const removeCachedEntry = useCallback(async (entryId: string) => {
     if (!supported) return;
     try {
@@ -273,26 +319,30 @@ export function OfflineWorkspaceProvider({ scope, children }: { scope: OfflineSc
     ready,
     supported,
     storageError,
-    pendingCount: snapshot.operations.length + snapshot.cardOperations.length,
+    pendingCount: snapshot.operations.length + snapshot.cardOperations.length + snapshot.purchaseOperations.length,
     syncing,
     syncError,
     refresh,
     cacheEntries,
     cacheCatalogs,
     cacheCards,
+    cachePurchases,
     cacheSnapshot,
     getSnapshot,
     queueChange,
     queueDelete,
     queueCardChange,
+    queuePurchaseChange,
+    queuePurchaseDelete,
     sync,
     resolveConflict,
     resolveCardConflict,
+    resolvePurchaseConflict,
     removeCachedEntry,
     clear,
     setOnline,
     invalidateSession,
-  }), [snapshot, online, ready, supported, storageError, syncing, syncError, refresh, cacheEntries, cacheCatalogs, cacheCards, cacheSnapshot, getSnapshot, queueChange, queueDelete, queueCardChange, sync, resolveConflict, resolveCardConflict, removeCachedEntry, clear, invalidateSession]);
+  }), [snapshot, online, ready, supported, storageError, syncing, syncError, refresh, cacheEntries, cacheCatalogs, cacheCards, cachePurchases, cacheSnapshot, getSnapshot, queueChange, queueDelete, queueCardChange, queuePurchaseChange, queuePurchaseDelete, sync, resolveConflict, resolveCardConflict, resolvePurchaseConflict, removeCachedEntry, clear, invalidateSession]);
 
   return <OfflineWorkspaceContext.Provider value={value}>{children}</OfflineWorkspaceContext.Provider>;
 }

@@ -39,7 +39,9 @@ self.addEventListener('fetch', (event) => {
   if (!isStaticAsset) return;
 
   event.respondWith((async () => {
-    const cached = await caches.match(request);
+    // Hashed same-origin assets are immutable for this build; Vary: Origin
+    // must not make the precached copy miss after an offline navigation.
+    const cached = await caches.match(request, { ignoreVary: true });
     if (cached) return cached;
 
     const response = await fetch(request);

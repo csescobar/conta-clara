@@ -75,6 +75,7 @@ export async function selectEntry(client, spaceId, entryId) {
       e.competence_on::text AS competence_on, e.due_on::text AS due_on,
       e.planned_cents, e.actual_cents, e.realized_on::text AS realized_on,
       e.payment_method_id, pm.name AS payment_method_name, e.notes,
+      e.card_purchase_id, e.installment_number, e.installment_count,
       e.recurrence_rule_id, e.recurrence_overridden,
       e.created_by_user_id, e.updated_by_user_id, e.version, e.created_at, e.updated_at,
       CASE
@@ -125,6 +126,7 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
           e.competence_on::text AS competence_on, e.due_on::text AS due_on,
           e.planned_cents, e.actual_cents, e.realized_on::text AS realized_on,
           e.payment_method_id, pm.name AS payment_method_name, e.notes,
+          e.card_purchase_id, e.installment_number, e.installment_count,
           e.recurrence_rule_id, e.recurrence_overridden,
           e.created_by_user_id, e.updated_by_user_id, e.version, e.created_at, e.updated_at,
           CASE
@@ -203,10 +205,14 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
     try {
       client = await pool.connect();
       await client.query('BEGIN');
-      const existing = await client.query('SELECT id, category_id, payment_method_id, recurrence_rule_id, version FROM financial_entries WHERE id = $1 AND space_id = $2 AND NOT recurrence_skipped FOR UPDATE', [request.params.id, request.auth.spaceId]);
+      const existing = await client.query('SELECT id, category_id, payment_method_id, recurrence_rule_id, card_purchase_id, version FROM financial_entries WHERE id = $1 AND space_id = $2 AND NOT recurrence_skipped FOR UPDATE', [request.params.id, request.auth.spaceId]);
       if (!existing.rows[0]) {
         await client.query('ROLLBACK');
         return response.status(404).json({ error: 'Lançamento não encontrado.' });
+      }
+      if (existing.rows[0].card_purchase_id) {
+        await client.query('ROLLBACK');
+        return response.status(409).json({ error: 'Edite esta parcela na compra de cartão vinculada.' });
       }
       const before = await selectEntry(client, request.auth.spaceId, request.params.id);
       if (baseVersion !== null && Number(existing.rows[0].version) !== baseVersion) {
@@ -249,7 +255,7 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
     try {
       client = await pool.connect();
       await client.query('BEGIN');
-      const existing = await client.query('SELECT actual_cents, version FROM financial_entries WHERE id = $1 AND space_id = $2 FOR UPDATE', [request.params.id, request.auth.spaceId]);
+      const existing = await client.query('SELECT actual_cents, planned_cents, card_purchase_id, version FROM financial_entries WHERE id = $1 AND space_id = $2 FOR UPDATE', [request.params.id, request.auth.spaceId]);
       if (!existing.rows[0]) {
         await client.query('ROLLBACK');
         return response.status(404).json({ error: 'Lançamento não encontrado.' });
@@ -267,6 +273,10 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
       if (existing.rows[0].actual_cents !== null) {
         await client.query('ROLLBACK');
         return response.status(409).json({ error: 'Este lançamento já foi confirmado. Desfaça a confirmação antes de alterar o valor realizado.' });
+      }
+      if (existing.rows[0].card_purchase_id && BigInt(existing.rows[0].planned_cents) !== BigInt(realization.actualCents)) {
+        await client.query('ROLLBACK');
+        return response.status(400).json({ error: 'Confirme a parcela pelo valor integral previsto.' });
       }
       await client.query(`
         UPDATE financial_entries
@@ -291,7 +301,7 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
     try {
       client = await pool.connect();
       await client.query('BEGIN');
-      const existing = await client.query('SELECT actual_cents, version FROM financial_entries WHERE id = $1 AND space_id = $2 FOR UPDATE', [request.params.id, request.auth.spaceId]);
+      const existing = await client.query('SELECT actual_cents, card_purchase_id, version FROM financial_entries WHERE id = $1 AND space_id = $2 FOR UPDATE', [request.params.id, request.auth.spaceId]);
       if (!existing.rows[0]) {
         await client.query('ROLLBACK');
         return response.status(404).json({ error: 'Lançamento não encontrado.' });
@@ -309,6 +319,10 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
       if (existing.rows[0].actual_cents === null) {
         await client.query('ROLLBACK');
         return response.status(409).json({ error: 'Este lançamento ainda não foi confirmado.' });
+      }
+      if (existing.rows[0].card_purchase_id) {
+        await client.query('ROLLBACK');
+        return response.status(409).json({ error: 'A confirmação de uma parcela de cartão não pode ser desfeita.' });
       }
       await client.query(`
         UPDATE financial_entries
@@ -333,10 +347,14 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
     try {
       client = await pool.connect();
       await client.query('BEGIN');
-      const existing = await client.query('SELECT id, recurrence_rule_id, version FROM financial_entries WHERE id = $1 AND space_id = $2 AND NOT recurrence_skipped FOR UPDATE', [request.params.id, request.auth.spaceId]);
+      const existing = await client.query('SELECT id, recurrence_rule_id, card_purchase_id, version FROM financial_entries WHERE id = $1 AND space_id = $2 AND NOT recurrence_skipped FOR UPDATE', [request.params.id, request.auth.spaceId]);
       if (!existing.rows[0]) {
         await client.query('ROLLBACK');
         return response.status(404).json({ error: 'Lançamento não encontrado.' });
+      }
+      if (existing.rows[0].card_purchase_id) {
+        await client.query('ROLLBACK');
+        return response.status(409).json({ error: 'Cancele a compra de cartão vinculada para remover parcelas futuras.' });
       }
       const baseVersion = requestedBaseVersion(request);
       if (baseVersion === undefined) {

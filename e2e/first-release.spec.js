@@ -44,6 +44,30 @@ test('administra um espaço compartilhado, importa e sincroniza uma alteração 
   await admin.getByLabel('Dia de vencimento').fill('5');
   await admin.getByRole('button', { name: 'Adicionar cartão' }).click();
   await expect(admin.getByText('Administradora fictícia · fecha dia 31 · vence dia 5')).toBeVisible();
+
+  await admin.getByRole('link', { name: 'Compras' }).click();
+  await admin.getByRole('button', { name: 'Nova compra' }).click();
+  const purchaseCard = admin.getByLabel('Cartão', { exact: true });
+  const purchaseCategory = admin.getByLabel('Categoria de despesa', { exact: true });
+  await purchaseCard.selectOption({ label: 'Cartão da família fictício · vence dia 5' });
+  await purchaseCategory.selectOption({ label: 'Moradia fictícia' });
+  await admin.getByLabel('Descrição').fill('Compra parcelada fictícia');
+  await admin.getByLabel('Data da compra').fill('2026-10-31');
+  await admin.getByLabel('Valor total (R$)').fill('10,01');
+  await admin.getByLabel('Quantidade de parcelas').fill('3');
+  await expect(admin.getByLabel('Primeira fatura')).toHaveValue('2026-11');
+  await admin.setViewportSize({ width: 390, height: 844 });
+  expect(await admin.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await purchaseCard.focus();
+  await admin.keyboard.press('Tab');
+  await expect(purchaseCategory).toBeFocused();
+  await admin.setViewportSize({ width: 1280, height: 900 });
+  await admin.getByRole('button', { name: 'Salvar compra' }).click();
+  await expect(admin.getByText('Compra parcelada fictícia')).toBeVisible();
+  await admin.getByText('Ver parcelas').click();
+  await expect(admin.getByText('Parcela 1/3 · fatura 11/2026 · vence 05/11/2026')).toBeVisible();
+
+  await admin.getByRole('link', { name: 'Configurações' }).click();
   await admin.setViewportSize({ width: 390, height: 844 });
   await expect(admin.getByLabel('Apelido do cartão')).toBeVisible();
   await expect(admin.getByText('Cartão da família fictício')).toBeVisible();
@@ -104,6 +128,15 @@ test('administra um espaço compartilhado, importa e sincroniza uma alteração 
   await member.getByLabel('Confirme a senha').fill('senha-ficticia-membro-2026');
   await member.getByRole('button', { name: 'Ativar acesso' }).click();
   await expect(member.getByRole('heading', { name: 'Visão geral' })).toBeVisible();
+  await expect.poll(() => member.evaluate(() => Boolean(navigator.serviceWorker?.controller))).toBe(true);
+  const cachedUrls = await member.evaluate(async () => (await Promise.all((await caches.keys()).map(async (name) =>
+    (await (await caches.open(name)).keys()).map((request) => new URL(request.url).pathname),
+  ))).flat());
+  expect(cachedUrls).toContain('/');
+  expect(cachedUrls.some((url) => url.endsWith('.js'))).toBe(true);
+
+  await member.getByRole('link', { name: 'Compras' }).click();
+  await expect(member.getByText('Compra parcelada fictícia')).toBeVisible();
 
   await member.getByRole('link', { name: 'Configurações' }).click();
   await expect(member.getByRole('list').getByText('Administradora fictícia')).toBeVisible();
@@ -129,6 +162,20 @@ test('administra um espaço compartilhado, importa e sincroniza uma alteração 
   await expect(member.getByText('Despesa offline fictícia')).toBeVisible();
   await expect(member.getByText(/Pendente neste aparelho/)).toBeVisible();
 
+  await member.getByRole('link', { name: 'Compras' }).click();
+  await member.getByRole('button', { name: 'Nova compra' }).click();
+  await member.getByLabel('Cartão', { exact: true }).selectOption({ label: 'Cartão da família fictício · vence dia 5' });
+  await member.getByLabel('Categoria de despesa', { exact: true }).selectOption({ label: 'Moradia fictícia' });
+  await member.getByLabel('Descrição').fill('Compra offline fictícia');
+  await member.getByLabel('Data da compra').fill('2026-10-26');
+  await member.getByLabel('Valor total (R$)').fill('20,00');
+  await member.getByRole('button', { name: 'Salvar compra' }).click();
+  await expect(member.getByText('Compra offline fictícia')).toBeVisible();
+  await expect(member.getByText(/Pendente neste aparelho/)).toBeVisible();
+  await member.reload();
+  await expect(member.getByText('Compra offline fictícia')).toBeVisible();
+  await expect(member.getByText(/Pendente neste aparelho/)).toBeVisible();
+
   await member.getByRole('link', { name: 'Configurações' }).click();
   await member.getByRole('button', { name: 'Editar cartão Cartão da família fictício' }).click();
   await member.getByLabel('Apelido do cartão').fill('Cartão da família atualizado offline');
@@ -136,13 +183,16 @@ test('administra um espaço compartilhado, importa e sincroniza uma alteração 
   await expect(member.getByText('Cartão da família atualizado offline')).toBeVisible();
   await member.getByRole('button', { name: 'Arquivar cartão Cartão da família atualizado offline' }).click();
   await expect(member.getByText('Arquivado')).toBeVisible();
-  await expect(member.getByText(/1 alteração.*aguardam sincronização/)).toBeVisible();
+  await expect(member.getByText(/3 alterações.*aguardam sincronização/)).toBeVisible();
 
   await memberContext.setOffline(false);
   await member.evaluate(() => window.dispatchEvent(new Event('online')));
   await expect(member.getByText('Rede conectada · nenhuma alteração pendente.')).toBeVisible({ timeout: 20_000 });
   await member.getByRole('link', { name: 'Lançamentos' }).click();
   await expect(member.getByText('Despesa offline fictícia')).toBeVisible();
+  await expect(member.getByText(/Pendente neste aparelho/)).toHaveCount(0, { timeout: 20_000 });
+  await member.getByRole('link', { name: 'Compras' }).click();
+  await expect(member.getByText('Compra offline fictícia')).toBeVisible();
   await expect(member.getByText(/Pendente neste aparelho/)).toHaveCount(0, { timeout: 20_000 });
   await member.reload();
   await member.getByRole('link', { name: 'Configurações' }).click();

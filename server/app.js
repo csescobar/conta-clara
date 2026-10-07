@@ -7,6 +7,7 @@ import { createAuthRouter } from './routes/auth.js';
 import { createActivityRouter } from './routes/activity.js';
 import { createCatalogRouter } from './routes/catalog.js';
 import { createCardsRouter } from './routes/cards.js';
+import { createPurchasesRouter } from './routes/purchases.js';
 import { createEntriesRouter } from './routes/entries.js';
 import { createMembersRouter } from './routes/members.js';
 import { createRecurrencesRouter } from './routes/recurrences.js';
@@ -34,6 +35,7 @@ export function createApp({ pool, secureCookies = process.env.COOKIE_SECURE === 
     app.use('/api/activity', createActivityRouter({ pool, secureCookies }));
     app.use('/api/catalog', createCatalogRouter({ pool, secureCookies, csrfSecret }));
     app.use('/api/cards', createCardsRouter({ pool, secureCookies, csrfSecret }));
+    app.use('/api/purchases', createPurchasesRouter({ pool, secureCookies }));
     app.use('/api/entries', createEntriesRouter({ pool, secureCookies, csrfSecret }));
     app.use('/api/sync', createSyncRouter({ pool, secureCookies, csrfSecret }));
     app.use('/api/members', createMembersRouter({ pool, secureCookies, csrfSecret }));

@@ -9,20 +9,27 @@ import {
   loadOfflineWorkspace,
   markOfflineConflict,
   markOfflineCardConflict,
+  acknowledgeOfflinePurchaseOperation,
+  markOfflinePurchaseConflict,
   offlineScopeKey,
   queueOfflineEntryChange,
   queueOfflineEntryDelete,
   queueOfflineCardChange,
+  queueOfflinePurchaseChange,
+  queueOfflinePurchaseDelete,
   resolveOfflineConflict,
   resolveOfflineCardConflict,
+  resolveOfflinePurchaseConflict,
   rememberOfflineUser,
   offlineSessionLeaseMs,
   saveOfflineCatalogs,
   saveOfflineCards,
+  saveOfflinePurchases,
   saveOfflineEntries,
   saveOfflineSnapshot,
   type OfflineEntry,
   type OfflineCard,
+  type OfflinePurchase,
   type OfflineScope,
 } from './offline-store';
 
@@ -42,6 +49,29 @@ function card(id: string, name = 'Cartão fictício', version = 1): OfflineCard 
   return {
     id, name, holder_user_id: admin.userId, holder_name: 'Pessoa titular', closing_day: 25, due_day: 5,
     archived_at: null, created_by_user_id: admin.userId, updated_by_user_id: admin.userId, version,
+  };
+}
+
+function purchase(id: string, description = 'Compra fictícia', version = 1): OfflinePurchase {
+  return {
+    id, card_id: 'card-fixture', card_name: 'Cartão fictício', description,
+    category_id: 'home-fixture', category_name: 'Moradia', purchase_on: '2026-10-25', first_invoice_on: '2026-11-01',
+    total_cents: '1001', installment_count: 2, canceled_at: null,
+    created_by_user_id: admin.userId, updated_by_user_id: admin.userId, version,
+    installments: [1, 2].map((number) => ({
+      id: `${id}-entry-${number}`, description: `${description} (${number}/2)`, category_id: 'home-fixture', category_name: 'Moradia',
+      invoice_on: number === 1 ? '2026-11-01' : '2026-12-01', due_on: number === 1 ? '2026-11-05' : '2026-12-05',
+      planned_cents: number === 1 ? '501' : '500', actual_cents: null, realized_on: null,
+      created_by_user_id: admin.userId, updated_by_user_id: admin.userId, version: 1,
+      installment_number: number, installment_count: 2, status: 'pending',
+    })),
+  };
+}
+
+function purchasePayload(item: OfflinePurchase) {
+  return {
+    purchase: { cardId: item.card_id, categoryId: item.category_id, description: item.description, purchaseOn: item.purchase_on, firstInvoiceOn: item.first_invoice_on, totalCents: Number(item.total_cents), installmentCount: item.installment_count },
+    installments: item.installments.map((installment) => ({ id: installment.id, installmentNumber: installment.installment_number, plannedCents: Number(installment.planned_cents), invoiceOn: installment.invoice_on })),
   };
 }
 
@@ -100,6 +130,74 @@ describe('scoped IndexedDB workspace', () => {
     await markOfflineCardConflict(scope, localPending, { reason: 'version_mismatch', serverCard: server });
     await resolveOfflineCardConflict(scope, localPending.operationId, 'server');
     expect(await loadOfflineWorkspace(scope)).toMatchObject({ cards: [server], cardOperations: [] });
+  });
+
+  it('caches purchase installments as expenses and protects offline changes from stale reads', async () => {
+    const scope = { userId: admin.userId, spaceId: 'purchase-cache-fixture' };
+    const original = purchase('purchase-local');
+    await saveOfflinePurchases(scope, [original], '2026-10-06T12:00:00.000Z');
+    const changed = { ...original, description: 'Compra alterada offline', installments: original.installments.map((item) => ({ ...item, description: `Compra alterada offline (${item.installment_number}/2)` })) };
+    await queueOfflinePurchaseChange(scope, changed, 'update', purchasePayload(changed));
+    await saveOfflinePurchases(scope, [original], '2026-10-06T12:01:00.000Z');
+    const snapshot = await loadOfflineWorkspace(scope);
+    expect(snapshot.purchases).toMatchObject([{ id: original.id, description: 'Compra alterada offline' }]);
+    expect(snapshot.entries).toMatchObject([
+      expect.objectContaining({ id: `${original.id}-entry-1`, kind: 'expense', card_purchase_id: original.id, installment_number: 1 }),
+      expect.objectContaining({ id: `${original.id}-entry-2`, kind: 'expense', card_purchase_id: original.id, installment_number: 2 }),
+    ]);
+    expect(snapshot.purchaseOperations).toMatchObject([expect.objectContaining({ purchaseId: original.id, kind: 'update', baseVersion: 1 })]);
+  });
+
+  it('cancels a synced purchase offline without losing paid installments or its original total', async () => {
+    const scope = { userId: admin.userId, spaceId: 'purchase-cancel-fixture' };
+    const original = purchase('purchase-cancel-local');
+    original.installments[0]!.actual_cents = '334';
+    original.installments[0]!.realized_on = '2026-11-05';
+    original.installments[0]!.status = 'paid';
+    await saveOfflinePurchases(scope, [original]);
+    await queueOfflinePurchaseDelete(scope, original, '2026-10-07T12:00:00.000Z');
+
+    const snapshot = await loadOfflineWorkspace(scope);
+    expect(snapshot.purchases).toMatchObject([{ id: original.id, total_cents: '1001', canceled_at: '2026-10-07T12:00:00.000Z', installments: [{ id: original.installments[0]?.id, actual_cents: '334' }] }]);
+    expect(snapshot.purchaseOperations).toMatchObject([{ purchaseId: original.id, kind: 'delete', baseVersion: 1 }]);
+    expect(snapshot.entries).toMatchObject([expect.objectContaining({ id: original.installments[0]?.id, actual_cents: '334' })]);
+  });
+
+  it('acknowledges, conflicts, and resolves purchase operations without replacing local follow-up edits', async () => {
+    const scope = { userId: admin.userId, spaceId: 'purchase-sync-fixture' };
+    const local = purchase('purchase-sync-local');
+    await queueOfflinePurchaseChange(scope, local, 'create', purchasePayload(local));
+    const sent = (await loadOfflineWorkspace(scope)).purchaseOperations[0]!;
+    const applied = { ...local, version: 1 };
+    const changed = { ...local, description: 'Edição durante envio', version: 1, installments: local.installments.map((item) => ({ ...item, description: `Edição durante envio (${item.installment_number}/2)` })) };
+    await queueOfflinePurchaseChange(scope, changed, 'update', purchasePayload(changed));
+    await acknowledgeOfflinePurchaseOperation(scope, sent, { purchase: applied });
+    expect((await loadOfflineWorkspace(scope)).purchaseOperations).toMatchObject([expect.objectContaining({ kind: 'update', baseVersion: 1, payload: expect.objectContaining({ purchase: expect.objectContaining({ description: 'Edição durante envio' }) }) })]);
+
+    const pending = (await loadOfflineWorkspace(scope)).purchaseOperations[0]!;
+    const server = { ...applied, description: 'Versão do servidor', version: 2 };
+    await markOfflinePurchaseConflict(scope, pending, { reason: 'version_mismatch', serverPurchase: server });
+    await resolveOfflinePurchaseConflict(scope, pending.operationId, 'local');
+    expect((await loadOfflineWorkspace(scope)).purchaseOperations).toMatchObject([expect.objectContaining({ baseVersion: 2, conflict: undefined })]);
+    const localPending = (await loadOfflineWorkspace(scope)).purchaseOperations[0]!;
+    await markOfflinePurchaseConflict(scope, localPending, { reason: 'version_mismatch', serverPurchase: server });
+    await resolveOfflinePurchaseConflict(scope, localPending.operationId, 'server');
+    expect(await loadOfflineWorkspace(scope)).toMatchObject({ purchases: [server], purchaseOperations: [] });
+  });
+
+  it('recreates a locally retained purchase collision with matching installment identifiers', async () => {
+    const scope = { userId: admin.userId, spaceId: 'purchase-collision-fixture' };
+    const local = purchase('purchase-collision');
+    await queueOfflinePurchaseChange(scope, local, 'create', purchasePayload(local));
+    const pending = (await loadOfflineWorkspace(scope)).purchaseOperations[0]!;
+    await markOfflinePurchaseConflict(scope, pending, { reason: 'id_collision', serverPurchase: purchase(local.id, 'Compra diferente') });
+    await resolveOfflinePurchaseConflict(scope, pending.operationId, 'local');
+    const snapshot = await loadOfflineWorkspace(scope);
+    expect(snapshot.purchases).toHaveLength(1);
+    expect(snapshot.purchases[0]?.id).not.toBe(local.id);
+    expect(snapshot.purchaseOperations[0]).toMatchObject({ kind: 'create', baseVersion: null, purchaseId: snapshot.purchases[0]?.id });
+    const payload = snapshot.purchaseOperations[0]?.payload as ReturnType<typeof purchasePayload>;
+    expect(payload.installments.map((item) => item.id)).toEqual(snapshot.purchases[0]?.installments.map((item) => item.id));
   });
 
   it('isolates cached data and queued edits by both user and shared space', async () => {
@@ -228,7 +326,7 @@ describe('scoped IndexedDB workspace', () => {
 
     await saveOfflineEntries(scopeB, [entry('entry-member')]);
     await clearOfflineWorkspace(scopeA);
-    expect(await loadOfflineWorkspace(scopeA)).toMatchObject({ entries: [], categories: [], operations: [], cards: [], cardMembers: [], cardOperations: [], lastSyncedAt: null });
+    expect(await loadOfflineWorkspace(scopeA)).toMatchObject({ entries: [], categories: [], operations: [], cards: [], cardMembers: [], cardOperations: [], purchases: [], purchaseOperations: [], lastSyncedAt: null });
     expect(await loadOfflineSnapshot(scopeA, '/api/dashboard?month=2026-10')).toBeNull();
     expect(await loadOfflineSnapshot(scopeB, '/api/dashboard?month=2026-10')).toEqual({ planned: { expenseCents: '67890' } });
     expect((await loadOfflineWorkspace(scopeB)).entries).toHaveLength(1);

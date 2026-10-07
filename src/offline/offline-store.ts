@@ -13,6 +13,9 @@ export type OfflineEntry = {
   realized_on: string | null;
   payment_method_id: string | null;
   payment_method_name: string | null;
+  card_purchase_id?: string | null;
+  installment_number?: number | null;
+  installment_count?: number | null;
   notes: string | null;
   created_by_user_id: string;
   updated_by_user_id: string;
@@ -34,6 +37,20 @@ export type OfflineCard = {
   version: number;
 };
 export type OfflineCardMember = { id: string; name: string; is_active: boolean };
+export type OfflinePurchaseInstallment = {
+  id: string; description: string; category_id: string; category_name: string;
+  invoice_on: string; due_on: string; planned_cents: string; actual_cents: string | null;
+  realized_on: string | null; created_by_user_id: string; updated_by_user_id: string;
+  version: number; installment_number: number; installment_count: number;
+  status: 'pending' | 'late' | 'paid';
+};
+export type OfflinePurchase = {
+  id: string; card_id: string; card_name: string; description: string;
+  category_id: string; category_name: string; purchase_on: string; first_invoice_on: string;
+  total_cents: string; installment_count: number; canceled_at: string | null;
+  created_by_user_id: string; updated_by_user_id: string; version: number;
+  installments: OfflinePurchaseInstallment[];
+};
 export type OfflineOperationKind = 'create' | 'update' | 'delete';
 export type OfflineSyncConflict = { reason: 'version_mismatch' | 'server_deleted' | 'id_collision' | 'idempotency_key_reused'; serverEntry: OfflineEntry | null };
 export type OfflineOperation = {
@@ -60,6 +77,12 @@ export type OfflineCardOperation = {
   queuedAt: string;
   conflict?: { reason: OfflineSyncConflict['reason']; serverCard: OfflineCard | null };
 };
+export type OfflinePurchaseOperation = {
+  operationId: string; scope: string; userId: string; spaceId: string;
+  purchaseId: string; kind: 'create' | 'update' | 'delete'; baseVersion: number | null;
+  payload: Record<string, unknown> | null; queuedAt: string;
+  conflict?: { reason: OfflineSyncConflict['reason']; serverPurchase: OfflinePurchase | null };
+};
 export type OfflineWorkspaceSnapshot = {
   entries: OfflineEntry[];
   categories: OfflineCategory[];
@@ -68,6 +91,8 @@ export type OfflineWorkspaceSnapshot = {
   cardMembers: OfflineCardMember[];
   operations: OfflineOperation[];
   cardOperations: OfflineCardOperation[];
+  purchases: OfflinePurchase[];
+  purchaseOperations: OfflinePurchaseOperation[];
   lastSyncedAt: string | null;
 };
 
@@ -79,16 +104,18 @@ type StoredCardMembers = ScopedRecord & { members: OfflineCardMember[] };
 type StoredMetadata = ScopedRecord & { lastSyncedAt: string | null };
 type StoredOperation = OfflineOperation & { key: string };
 type StoredCardOperation = OfflineCardOperation & { key: string };
+type StoredPurchase = ScopedRecord & { purchase: OfflinePurchase };
+type StoredPurchaseOperation = OfflinePurchaseOperation & { key: string };
 type StoredSnapshot = ScopedRecord & { path: string; data: unknown };
 type StoredDeviceSession = ScopedRecord & { user: OfflineUser; verifiedAt: string };
 type StoredDeviceLogout = ScopedRecord & { userId: string; spaceId: string; markedAt: string };
 
 const databaseName = 'conta-clara-offline';
-const databaseVersion = 3;
+const databaseVersion = 4;
 const deviceSessionKey = '@last-authenticated-user';
 const deviceLogoutKey = '@offline-logout';
 export const offlineSessionLeaseMs = 7 * 24 * 60 * 60 * 1000;
-const storeNames = ['entries', 'catalogs', 'operations', 'metadata', 'snapshots', 'creditCards', 'cardMembers', 'cardOperations'] as const;
+const storeNames = ['entries', 'catalogs', 'operations', 'metadata', 'snapshots', 'creditCards', 'cardMembers', 'cardOperations', 'purchases', 'purchaseOperations'] as const;
 type StoreName = typeof storeNames[number];
 let databasePromise: Promise<IDBDatabase> | null = null;
 
@@ -180,7 +207,7 @@ export async function loadOfflineWorkspace(scope: OfflineScope): Promise<Offline
   const scopeKey = offlineScopeKey(scope);
   const transaction = database.transaction([...storeNames], 'readonly');
   const done = transactionDone(transaction);
-  const [entries, catalogs, operations, metadata, cards, cardMembers, cardOperations] = await Promise.all([
+  const [entries, catalogs, operations, metadata, cards, cardMembers, cardOperations, purchases, purchaseOperations] = await Promise.all([
     scopedValues<StoredEntry>(transaction, 'entries', scopeKey),
     requestValue(transaction.objectStore('catalogs').get(scopeKey) as IDBRequest<StoredCatalog | undefined>),
     scopedValues<StoredOperation>(transaction, 'operations', scopeKey),
@@ -188,6 +215,8 @@ export async function loadOfflineWorkspace(scope: OfflineScope): Promise<Offline
     scopedValues<StoredCard>(transaction, 'creditCards', scopeKey),
     requestValue(transaction.objectStore('cardMembers').get(scopeKey) as IDBRequest<StoredCardMembers | undefined>),
     scopedValues<StoredCardOperation>(transaction, 'cardOperations', scopeKey),
+    scopedValues<StoredPurchase>(transaction, 'purchases', scopeKey),
+    scopedValues<StoredPurchaseOperation>(transaction, 'purchaseOperations', scopeKey),
     done,
   ]);
 
@@ -199,6 +228,8 @@ export async function loadOfflineWorkspace(scope: OfflineScope): Promise<Offline
     cardMembers: cardMembers?.members ?? [],
     operations: operations.sort((left, right) => left.queuedAt.localeCompare(right.queuedAt)).map(({ key: _key, ...operation }) => operation),
     cardOperations: cardOperations.sort((left, right) => left.queuedAt.localeCompare(right.queuedAt)).map(({ key: _key, ...operation }) => operation),
+    purchases: purchases.map((record) => record.purchase),
+    purchaseOperations: purchaseOperations.sort((left, right) => left.queuedAt.localeCompare(right.queuedAt)).map(({ key: _key, ...operation }) => operation),
     lastSyncedAt: metadata?.lastSyncedAt ?? null,
   };
 }
@@ -373,6 +404,255 @@ export async function resolveOfflineCardConflict(scope: OfflineScope, operationI
     const localRequest = cardStore.get(key) as IDBRequest<StoredCard | undefined>;
     localRequest.onsuccess = () => {
       if (localRequest.result) cardStore.put({ ...localRequest.result, card: { ...localRequest.result.card, version: serverCard.version } } satisfies StoredCard);
+    };
+  };
+  await transactionDone(transaction);
+}
+
+function purchaseAsEntry(purchase: OfflinePurchase, installment: OfflinePurchaseInstallment): OfflineEntry {
+  return {
+    id: installment.id, kind: 'expense', description: installment.description,
+    category_id: installment.category_id, category_name: installment.category_name,
+    competence_on: installment.invoice_on, due_on: installment.due_on,
+    planned_cents: installment.planned_cents, actual_cents: installment.actual_cents,
+    realized_on: installment.realized_on, payment_method_id: null, payment_method_name: null,
+    notes: null, created_by_user_id: installment.created_by_user_id,
+    updated_by_user_id: installment.updated_by_user_id, status: installment.status,
+    card_purchase_id: purchase.id, installment_number: installment.installment_number,
+    installment_count: installment.installment_count,
+    version: installment.version,
+  };
+}
+
+export async function saveOfflinePurchases(scope: OfflineScope, purchases: OfflinePurchase[], now = new Date().toISOString()) {
+  const database = await openDatabase();
+  const scopeKey = offlineScopeKey(scope);
+  const transaction = database.transaction(['purchases', 'purchaseOperations', 'entries', 'operations', 'metadata'], 'readwrite');
+  const purchaseOperationsRequest = transaction.objectStore('purchaseOperations').index('scope').getAll(scopeKey) as IDBRequest<StoredPurchaseOperation[]>;
+  const entryOperationsRequest = transaction.objectStore('operations').index('scope').getAll(scopeKey) as IDBRequest<StoredOperation[]>;
+  const cachedPurchasesRequest = transaction.objectStore('purchases').index('scope').getAll(scopeKey) as IDBRequest<StoredPurchase[]>;
+  const purchaseStore = transaction.objectStore('purchases');
+  const entryStore = transaction.objectStore('entries');
+  let completed = 0;
+  const save = () => {
+    completed += 1;
+    if (completed < 3) return;
+    const protectedPurchases = new Set(purchaseOperationsRequest.result.map((operation) => operation.purchaseId));
+    const protectedEntries = new Set(entryOperationsRequest.result.map((operation) => operation.entryId));
+    for (const purchase of purchases) {
+      if (protectedPurchases.has(purchase.id)) continue;
+      const previous = cachedPurchasesRequest.result.find((record) => record.purchase.id === purchase.id)?.purchase;
+      purchaseStore.put({ key: recordKey(scope, purchase.id), scope: scopeKey, purchase } satisfies StoredPurchase);
+      const installmentIds = new Set(purchase.installments.map((installment) => installment.id));
+      for (const installment of purchase.installments) {
+        const entry = purchaseAsEntry(purchase, installment);
+        if (!protectedEntries.has(entry.id)) entryStore.put({ key: recordKey(scope, entry.id), scope: scopeKey, entry, isLocal: false } satisfies StoredEntry);
+      }
+      for (const installment of previous?.installments ?? []) {
+        if (!installmentIds.has(installment.id) && !protectedEntries.has(installment.id)) entryStore.delete(recordKey(scope, installment.id));
+      }
+    }
+    transaction.objectStore('metadata').put({ key: scopeKey, scope: scopeKey, lastSyncedAt: now } satisfies StoredMetadata);
+  };
+  purchaseOperationsRequest.onsuccess = save;
+  entryOperationsRequest.onsuccess = save;
+  cachedPurchasesRequest.onsuccess = save;
+  transaction.objectStore('metadata').put({ key: scopeKey, scope: scopeKey, lastSyncedAt: now } satisfies StoredMetadata);
+  await transactionDone(transaction);
+}
+
+export async function queueOfflinePurchaseChange(
+  scope: OfflineScope,
+  purchase: OfflinePurchase,
+  kind: 'create' | 'update',
+  payload: Record<string, unknown>,
+  now = new Date().toISOString(),
+) {
+  const database = await openDatabase();
+  const scopeKey = offlineScopeKey(scope);
+  const key = recordKey(scope, purchase.id);
+  const transaction = database.transaction(['purchases', 'purchaseOperations', 'entries'], 'readwrite');
+  const operationStore = transaction.objectStore('purchaseOperations');
+  const previousRequest = operationStore.get(key) as IDBRequest<StoredPurchaseOperation | undefined>;
+  const previousPurchaseRequest = transaction.objectStore('purchases').get(key) as IDBRequest<StoredPurchase | undefined>;
+  let previous: StoredPurchaseOperation | undefined;
+  let previousPurchase: StoredPurchase | undefined;
+  let reads = 0;
+  const apply = () => {
+    reads += 1;
+    if (reads < 2) return;
+    const operationKind = previous?.kind === 'create' ? 'create' : kind;
+    operationStore.put({
+      key, scope: scopeKey, userId: scope.userId, spaceId: scope.spaceId,
+      purchaseId: purchase.id, operationId: previous?.operationId ?? crypto.randomUUID(),
+      kind: operationKind, baseVersion: previous ? previous.baseVersion : operationKind === 'create' ? null : purchase.version,
+      payload, queuedAt: previous?.queuedAt ?? now, ...(previous?.conflict ? { conflict: previous.conflict } : {}),
+    } satisfies StoredPurchaseOperation);
+    transaction.objectStore('purchases').put({ key, scope: scopeKey, purchase } satisfies StoredPurchase);
+    const entries = transaction.objectStore('entries');
+    const newIds = new Set(purchase.installments.map((installment) => installment.id));
+    for (const installment of previousPurchase?.purchase.installments ?? []) if (!newIds.has(installment.id)) entries.delete(recordKey(scope, installment.id));
+    for (const installment of purchase.installments) {
+      const entry = purchaseAsEntry(purchase, installment);
+      entries.put({ key: recordKey(scope, entry.id), scope: scopeKey, entry, isLocal: true } satisfies StoredEntry);
+    }
+  };
+  previousRequest.onsuccess = () => { previous = previousRequest.result; apply(); };
+  previousPurchaseRequest.onsuccess = () => { previousPurchase = previousPurchaseRequest.result; apply(); };
+  await transactionDone(transaction);
+}
+
+export async function queueOfflinePurchaseDelete(scope: OfflineScope, purchase: OfflinePurchase, now = new Date().toISOString()) {
+  const database = await openDatabase();
+  const scopeKey = offlineScopeKey(scope);
+  const key = recordKey(scope, purchase.id);
+  const transaction = database.transaction(['purchases', 'purchaseOperations', 'entries'], 'readwrite');
+  const operations = transaction.objectStore('purchaseOperations');
+  const previousRequest = operations.get(key) as IDBRequest<StoredPurchaseOperation | undefined>;
+  previousRequest.onsuccess = () => {
+    const previous = previousRequest.result;
+    const entries = transaction.objectStore('entries');
+    if (previous?.kind === 'create') {
+      operations.delete(key);
+      transaction.objectStore('purchases').delete(key);
+      for (const installment of purchase.installments) entries.delete(recordKey(scope, installment.id));
+      return;
+    }
+    const kept = purchase.installments.filter((installment) => installment.actual_cents !== null);
+    for (const installment of purchase.installments) if (installment.actual_cents === null) entries.delete(recordKey(scope, installment.id));
+    const canceled = { ...purchase, canceled_at: now, installments: kept };
+    operations.put({
+      key, scope: scopeKey, userId: scope.userId, spaceId: scope.spaceId,
+      purchaseId: purchase.id, operationId: previous?.operationId ?? crypto.randomUUID(),
+      kind: 'delete', baseVersion: previous?.baseVersion ?? purchase.version, payload: null,
+      queuedAt: previous?.queuedAt ?? now,
+    } satisfies StoredPurchaseOperation);
+    transaction.objectStore('purchases').put({ key, scope: scopeKey, purchase: canceled } satisfies StoredPurchase);
+  };
+  await transactionDone(transaction);
+}
+
+export async function markOfflinePurchaseConflict(
+  scope: OfflineScope,
+  sentOperation: OfflinePurchaseOperation,
+  conflict: NonNullable<OfflinePurchaseOperation['conflict']>,
+) {
+  const database = await openDatabase();
+  const transaction = database.transaction(['purchaseOperations'], 'readwrite');
+  const store = transaction.objectStore('purchaseOperations');
+  const request = store.get(recordKey(scope, sentOperation.purchaseId)) as IDBRequest<StoredPurchaseOperation | undefined>;
+  request.onsuccess = () => {
+    const current = request.result;
+    if (current?.operationId === sentOperation.operationId && current.baseVersion === sentOperation.baseVersion) store.put({ ...current, conflict } satisfies StoredPurchaseOperation);
+  };
+  await transactionDone(transaction);
+}
+
+export async function acknowledgeOfflinePurchaseOperation(
+  scope: OfflineScope,
+  sentOperation: OfflinePurchaseOperation,
+  result: { purchase?: OfflinePurchase },
+) {
+  const database = await openDatabase();
+  const scopeKey = offlineScopeKey(scope);
+  const key = recordKey(scope, sentOperation.purchaseId);
+  const transaction = database.transaction(['purchases', 'purchaseOperations', 'entries', 'metadata'], 'readwrite');
+  const operationStore = transaction.objectStore('purchaseOperations');
+  const purchaseStore = transaction.objectStore('purchases');
+  const currentRequest = operationStore.get(key) as IDBRequest<StoredPurchaseOperation | undefined>;
+  const localRequest = purchaseStore.get(key) as IDBRequest<StoredPurchase | undefined>;
+  let current: StoredPurchaseOperation | undefined;
+  let local: StoredPurchase | undefined;
+  let reads = 0;
+  const finish = () => {
+    reads += 1;
+    if (reads < 2 || current?.operationId !== sentOperation.operationId) return;
+    const unchanged = current.kind === sentOperation.kind && current.baseVersion === sentOperation.baseVersion && JSON.stringify(current.payload) === JSON.stringify(sentOperation.payload);
+    if (unchanged) operationStore.delete(key);
+    else if (result.purchase) {
+      if (current.kind === 'create') current.kind = 'update';
+      current.baseVersion = result.purchase.version;
+      current.operationId = crypto.randomUUID();
+      delete current.conflict;
+      operationStore.put(current);
+    }
+    if (result.purchase) {
+      const purchase = unchanged || !local ? result.purchase : { ...local.purchase, version: result.purchase.version };
+      purchaseStore.put({ key, scope: scopeKey, purchase } satisfies StoredPurchase);
+      const entryStore = transaction.objectStore('entries');
+      for (const installment of result.purchase.installments) {
+        const localInstallment = purchase.installments.find((item) => item.id === installment.id);
+        const saved = localInstallment && !unchanged ? localInstallment : installment;
+        const entry = purchaseAsEntry(purchase, saved);
+        entryStore.put({ key: recordKey(scope, entry.id), scope: scopeKey, entry, isLocal: !unchanged } satisfies StoredEntry);
+      }
+    }
+    transaction.objectStore('metadata').put({ key: scopeKey, scope: scopeKey, lastSyncedAt: new Date().toISOString() } satisfies StoredMetadata);
+  };
+  currentRequest.onsuccess = () => { current = currentRequest.result; finish(); };
+  localRequest.onsuccess = () => { local = localRequest.result; finish(); };
+  await transactionDone(transaction);
+}
+
+export async function resolveOfflinePurchaseConflict(scope: OfflineScope, operationId: string, choice: 'local' | 'server') {
+  const database = await openDatabase();
+  const scopeKey = offlineScopeKey(scope);
+  const transaction = database.transaction(['purchases', 'purchaseOperations', 'entries'], 'readwrite');
+  const purchaseStore = transaction.objectStore('purchases');
+  const operationStore = transaction.objectStore('purchaseOperations');
+  const request = operationStore.index('scope').getAll(scopeKey) as IDBRequest<StoredPurchaseOperation[]>;
+  request.onsuccess = () => {
+    const operation = request.result.find((item) => item.operationId === operationId && item.conflict);
+    if (!operation) return;
+    const key = recordKey(scope, operation.purchaseId);
+    const serverPurchase = operation.conflict!.serverPurchase;
+    const localRequest = purchaseStore.get(key) as IDBRequest<StoredPurchase | undefined>;
+    localRequest.onsuccess = () => {
+      const local = localRequest.result?.purchase;
+      if (choice === 'server') {
+        operationStore.delete(key);
+        const entries = transaction.objectStore('entries');
+        for (const installment of local?.installments ?? []) entries.delete(recordKey(scope, installment.id));
+        if (serverPurchase) {
+          purchaseStore.put({ key, scope: scopeKey, purchase: serverPurchase } satisfies StoredPurchase);
+          for (const installment of serverPurchase.installments) {
+            const entry = purchaseAsEntry(serverPurchase, installment);
+            entries.put({ key: recordKey(scope, entry.id), scope: scopeKey, entry, isLocal: false } satisfies StoredEntry);
+          }
+        } else purchaseStore.delete(key);
+        return;
+      }
+      if (!local) return;
+      if (operation.kind === 'delete' && !serverPurchase) {
+        operationStore.delete(key);
+        purchaseStore.delete(key);
+        for (const installment of local.installments) transaction.objectStore('entries').delete(recordKey(scope, installment.id));
+        return;
+      }
+      const recreateLocal = !serverPurchase || operation.conflict!.reason === 'id_collision'
+        || (operation.conflict!.reason === 'server_deleted' && operation.kind !== 'delete');
+      if (recreateLocal) {
+        const newId = crypto.randomUUID();
+        const purchase = { ...local, id: newId, version: 1, installments: local.installments.map((item) => ({ ...item, id: crypto.randomUUID(), version: 1 })) };
+        const payload = operation.payload as { purchase: Record<string, unknown>; installments: Array<Record<string, unknown>> } | null;
+        if (payload) payload.installments = payload.installments.map((item) => ({
+          ...item,
+          id: purchase.installments.find((installment) => installment.installment_number === Number(item.installmentNumber))?.id ?? crypto.randomUUID(),
+        }));
+        purchaseStore.delete(key);
+        operationStore.delete(key);
+        purchaseStore.put({ key: recordKey(scope, newId), scope: scopeKey, purchase } satisfies StoredPurchase);
+        operationStore.put({ ...operation, key: recordKey(scope, newId), purchaseId: newId, operationId: crypto.randomUUID(), kind: 'create', baseVersion: null, payload, conflict: undefined } satisfies StoredPurchaseOperation);
+        const entries = transaction.objectStore('entries');
+        for (const installment of local.installments) entries.delete(recordKey(scope, installment.id));
+        for (const installment of purchase.installments) {
+          const entry = purchaseAsEntry(purchase, installment);
+          entries.put({ key: recordKey(scope, entry.id), scope: scopeKey, entry, isLocal: true } satisfies StoredEntry);
+        }
+        return;
+      }
+      operationStore.put({ ...operation, operationId: crypto.randomUUID(), baseVersion: serverPurchase.version, conflict: undefined } satisfies StoredPurchaseOperation);
+      purchaseStore.put({ key, scope: scopeKey, purchase: { ...local, version: serverPurchase.version } } satisfies StoredPurchase);
     };
   };
   await transactionDone(transaction);
@@ -684,7 +964,7 @@ export async function clearOfflineWorkspace(scope: OfflineScope) {
   const scopeKey = offlineScopeKey(scope);
   const transaction = database.transaction([...storeNames], 'readwrite');
   const done = transactionDone(transaction);
-  const scopedStores: StoreName[] = ['entries', 'operations', 'snapshots', 'creditCards', 'cardOperations'];
+  const scopedStores: StoreName[] = ['entries', 'operations', 'snapshots', 'creditCards', 'cardOperations', 'purchases', 'purchaseOperations'];
   const deletes = scopedStores.map((name) => {
     const store = transaction.objectStore(name);
     const request = store.index('scope').getAllKeys(scopeKey);

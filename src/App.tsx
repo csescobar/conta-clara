@@ -4,6 +4,7 @@ import { AuthGate } from './auth/auth-gate';
 import { OneTimeAccessPage } from './auth/one-time-access-page';
 import { DashboardPage, SettingsPage } from './pages/pages';
 import { NewTransactionPage, TransactionsPage } from './pages/entries-pages';
+import { CardPurchasesPage } from './pages/card-purchases-page';
 import { ActivityPage } from './pages/activity-page';
 import { RecurrenceFormPage, RecurrencesPage } from './pages/recurrence-pages';
 import { LoadingState } from './components/ui/feedback';
@@ -19,6 +20,7 @@ export default function App() {
         <Route element={<AuthGate />}>
           <Route index element={<DashboardPage />} />
           <Route path="lancamentos" element={<TransactionsPage />} />
+          <Route path="compras" element={<CardPurchasesPage />} />
           <Route path="lancamentos/novo" element={<NewTransactionPage />} />
           <Route path="lancamentos/:id/editar" element={<NewTransactionPage />} />
           <Route path="importar" element={<Suspense fallback={<LoadingState label="Carregando importador de planilha" />}><SpreadsheetImportPage /></Suspense>} />
