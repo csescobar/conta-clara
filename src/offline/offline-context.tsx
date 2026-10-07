@@ -1,18 +1,25 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
+  acknowledgeOfflineCardOperation,
   acknowledgeOfflineOperation,
   clearOfflineWorkspace,
   loadOfflineSnapshot,
   loadOfflineWorkspace,
   markOfflineConflict,
+  markOfflineCardConflict,
+  queueOfflineCardChange,
   queueOfflineEntryChange,
   queueOfflineEntryDelete,
   removeCachedOfflineEntry,
   resolveOfflineConflict,
+  resolveOfflineCardConflict,
   saveOfflineCatalogs,
+  saveOfflineCards,
   saveOfflineEntries,
   saveOfflineSnapshot,
   type OfflineCategory,
+  type OfflineCard,
+  type OfflineCardMember,
   type OfflineEntry,
   type OfflinePaymentMethod,
   type OfflineScope,
@@ -30,19 +37,22 @@ export type OfflineWorkspace = OfflineWorkspaceSnapshot & {
   refresh: () => Promise<OfflineWorkspaceSnapshot>;
   cacheEntries: (entries: OfflineEntry[]) => Promise<void>;
   cacheCatalogs: (categories: OfflineCategory[], paymentMethods: OfflinePaymentMethod[]) => Promise<void>;
+  cacheCards: (cards: OfflineCard[], members: OfflineCardMember[]) => Promise<void>;
   cacheSnapshot: (path: string, data: unknown) => Promise<void>;
   getSnapshot: <T>(path: string) => Promise<T | null>;
   queueChange: (entry: OfflineEntry, kind: 'create' | 'update') => Promise<void>;
   queueDelete: (entry: OfflineEntry) => Promise<void>;
+  queueCardChange: (card: OfflineCard, kind: 'create' | 'update') => Promise<void>;
   sync: (csrfToken: string) => Promise<void>;
   resolveConflict: (operationId: string, choice: 'local' | 'server') => Promise<void>;
+  resolveCardConflict: (operationId: string, choice: 'local' | 'server') => Promise<void>;
   removeCachedEntry: (entryId: string) => Promise<void>;
   clear: () => Promise<void>;
   setOnline: (online: boolean) => void;
   invalidateSession: () => void;
 };
 
-const emptySnapshot: OfflineWorkspaceSnapshot = { entries: [], categories: [], paymentMethods: [], operations: [], lastSyncedAt: null };
+const emptySnapshot: OfflineWorkspaceSnapshot = { entries: [], categories: [], paymentMethods: [], cards: [], cardMembers: [], operations: [], cardOperations: [], lastSyncedAt: null };
 const OfflineWorkspaceContext = createContext<OfflineWorkspace | null>(null);
 
 export function OfflineWorkspaceProvider({ scope, children }: { scope: OfflineScope; children: ReactNode }) {
@@ -105,6 +115,17 @@ export function OfflineWorkspaceProvider({ scope, children }: { scope: OfflineSc
     }
   }, [refresh, stableScope, supported]);
 
+  const cacheCards = useCallback(async (cards: OfflineCard[], members: OfflineCardMember[]) => {
+    if (!supported) return;
+    try {
+      await saveOfflineCards(stableScope, cards, members);
+      await refresh();
+    } catch (error) {
+      setSupported(false);
+      setStorageError(error instanceof Error ? error.message : 'Não foi possível salvar os cartões offline.');
+    }
+  }, [refresh, stableScope, supported]);
+
   const cacheSnapshot = useCallback(async (path: string, data: unknown) => {
     if (!supported) return;
     try {
@@ -128,6 +149,11 @@ export function OfflineWorkspaceProvider({ scope, children }: { scope: OfflineSc
     await refresh();
   }, [refresh, stableScope]);
 
+  const queueCardChange = useCallback(async (card: OfflineCard, kind: 'create' | 'update') => {
+    await queueOfflineCardChange(stableScope, card, kind);
+    await refresh();
+  }, [refresh, stableScope]);
+
   const invalidateSession = useCallback(() => {
     window.dispatchEvent(new Event('conta-clara:session-expired'));
   }, []);
@@ -143,16 +169,22 @@ export function OfflineWorkspaceProvider({ scope, children }: { scope: OfflineSc
       try {
         for (let count = 0; count < 500; count += 1) {
           const current = await loadOfflineWorkspace(stableScope);
-          const operation = current.operations.find((item) => !item.conflict && !attempted.has(item.operationId));
+          const entryOperation = current.operations.find((item) => !item.conflict && !attempted.has(item.operationId));
+          const cardOperation = current.cardOperations.find((item) => !item.conflict && !attempted.has(item.operationId));
+          const operation = !entryOperation
+            ? cardOperation
+            : !cardOperation || entryOperation.queuedAt <= cardOperation.queuedAt ? entryOperation : cardOperation;
           if (!operation) break;
           attempted.add(operation.operationId);
+          const isCardOperation = 'cardId' in operation;
           const response = await fetch('/api/sync/operations', {
             method: 'POST',
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
             body: JSON.stringify({
+              ...(isCardOperation ? { entity: 'card', cardId: operation.cardId } : {}),
               operationId: operation.operationId,
-              entryId: operation.entryId,
+              ...(!isCardOperation ? { entryId: operation.entryId } : {}),
               kind: operation.kind,
               baseVersion: operation.baseVersion,
               payload: operation.payload,
@@ -164,6 +196,8 @@ export function OfflineWorkspaceProvider({ scope, children }: { scope: OfflineSc
             error?: string;
             entry?: OfflineEntry;
             serverEntry?: OfflineEntry | null;
+            card?: OfflineCard;
+            serverCard?: OfflineCard | null;
             deleted?: boolean;
           };
           if (response.status === 401) {
@@ -172,10 +206,12 @@ export function OfflineWorkspaceProvider({ scope, children }: { scope: OfflineSc
           }
           if (response.status === 409 && result.status === 'conflict') {
             const reasons = new Set(['version_mismatch', 'server_deleted', 'id_collision', 'idempotency_key_reused']);
-            await markOfflineConflict(stableScope, operation, {
-              reason: reasons.has(result.reason ?? '') ? result.reason as 'version_mismatch' | 'server_deleted' | 'id_collision' | 'idempotency_key_reused' : 'version_mismatch',
-              serverEntry: result.serverEntry ?? null,
-            });
+            const reason = reasons.has(result.reason ?? '') ? result.reason as 'version_mismatch' | 'server_deleted' | 'id_collision' | 'idempotency_key_reused' : 'version_mismatch';
+            if (isCardOperation) {
+              await markOfflineCardConflict(stableScope, operation, { reason, serverCard: result.serverCard ?? null });
+            } else {
+              await markOfflineConflict(stableScope, operation, { reason, serverEntry: result.serverEntry ?? null });
+            }
             await refresh();
             continue;
           }
@@ -183,7 +219,8 @@ export function OfflineWorkspaceProvider({ scope, children }: { scope: OfflineSc
             setSyncError(result.error ?? 'Não foi possível sincronizar as alterações. Elas continuam salvas neste aparelho.');
             break;
           }
-          await acknowledgeOfflineOperation(stableScope, operation, { entry: result.entry, deleted: result.deleted });
+          if (isCardOperation) await acknowledgeOfflineCardOperation(stableScope, operation, { card: result.card });
+          else await acknowledgeOfflineOperation(stableScope, operation, { entry: result.entry, deleted: result.deleted });
           await refresh();
         }
       } catch (error) {
@@ -204,6 +241,12 @@ export function OfflineWorkspaceProvider({ scope, children }: { scope: OfflineSc
 
   const resolveConflict = useCallback(async (operationId: string, choice: 'local' | 'server') => {
     await resolveOfflineConflict(stableScope, operationId, choice);
+    setSyncError('');
+    await refresh();
+  }, [refresh, stableScope]);
+
+  const resolveCardConflict = useCallback(async (operationId: string, choice: 'local' | 'server') => {
+    await resolveOfflineCardConflict(stableScope, operationId, choice);
     setSyncError('');
     await refresh();
   }, [refresh, stableScope]);
@@ -230,23 +273,26 @@ export function OfflineWorkspaceProvider({ scope, children }: { scope: OfflineSc
     ready,
     supported,
     storageError,
-    pendingCount: snapshot.operations.length,
+    pendingCount: snapshot.operations.length + snapshot.cardOperations.length,
     syncing,
     syncError,
     refresh,
     cacheEntries,
     cacheCatalogs,
+    cacheCards,
     cacheSnapshot,
     getSnapshot,
     queueChange,
     queueDelete,
+    queueCardChange,
     sync,
     resolveConflict,
+    resolveCardConflict,
     removeCachedEntry,
     clear,
     setOnline,
     invalidateSession,
-  }), [snapshot, online, ready, supported, storageError, syncing, syncError, refresh, cacheEntries, cacheCatalogs, cacheSnapshot, getSnapshot, queueChange, queueDelete, sync, resolveConflict, removeCachedEntry, clear, invalidateSession]);
+  }), [snapshot, online, ready, supported, storageError, syncing, syncError, refresh, cacheEntries, cacheCatalogs, cacheCards, cacheSnapshot, getSnapshot, queueChange, queueDelete, queueCardChange, sync, resolveConflict, resolveCardConflict, removeCachedEntry, clear, invalidateSession]);
 
   return <OfflineWorkspaceContext.Provider value={value}>{children}</OfflineWorkspaceContext.Provider>;
 }

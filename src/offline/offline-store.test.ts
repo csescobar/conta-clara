@@ -3,20 +3,26 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   clearOfflineWorkspace,
   acknowledgeOfflineOperation,
+  acknowledgeOfflineCardOperation,
   loadRememberedOfflineUser,
   loadOfflineSnapshot,
   loadOfflineWorkspace,
   markOfflineConflict,
+  markOfflineCardConflict,
   offlineScopeKey,
   queueOfflineEntryChange,
   queueOfflineEntryDelete,
+  queueOfflineCardChange,
   resolveOfflineConflict,
+  resolveOfflineCardConflict,
   rememberOfflineUser,
   offlineSessionLeaseMs,
   saveOfflineCatalogs,
+  saveOfflineCards,
   saveOfflineEntries,
   saveOfflineSnapshot,
   type OfflineEntry,
+  type OfflineCard,
   type OfflineScope,
 } from './offline-store';
 
@@ -32,6 +38,13 @@ function entry(id: string, description = 'Despesa fictícia'): OfflineEntry {
   };
 }
 
+function card(id: string, name = 'Cartão fictício', version = 1): OfflineCard {
+  return {
+    id, name, holder_user_id: admin.userId, holder_name: 'Pessoa titular', closing_day: 25, due_day: 5,
+    archived_at: null, created_by_user_id: admin.userId, updated_by_user_id: admin.userId, version,
+  };
+}
+
 beforeAll(() => {
   vi.stubGlobal('indexedDB', new IDBFactory());
   vi.stubGlobal('crypto', { randomUUID: vi.fn(() => `operation-${cryptoId++}`) });
@@ -42,6 +55,53 @@ let cryptoId = 0;
 afterAll(() => vi.unstubAllGlobals());
 
 describe('scoped IndexedDB workspace', () => {
+  it('isolates cached cards and keeps queued card edits over stale server reads', async () => {
+    const scopeA = { userId: admin.userId, spaceId: 'card-isolation-fixture' };
+    const scopeB = { userId: member.userId, spaceId: 'card-isolation-fixture' };
+    const original = card('card-admin');
+    const members = [{ id: admin.userId, name: 'Pessoa titular', is_active: true }];
+    await saveOfflineCards(scopeA, [original], members, '2026-10-06T12:00:00.000Z');
+    await saveOfflineCards(scopeB, [card('card-member', 'Outro cartão')], [{ id: member.userId, name: 'Outra titular', is_active: true }]);
+    await queueOfflineCardChange(scopeA, { ...original, name: 'Edição local' }, 'update');
+    await saveOfflineCards(scopeA, [original], members, '2026-10-06T12:00:00.000Z');
+
+    const adminSnapshot = await loadOfflineWorkspace(scopeA);
+    const memberSnapshot = await loadOfflineWorkspace(scopeB);
+    expect(adminSnapshot.cards).toMatchObject([{ id: original.id, name: 'Edição local' }]);
+    expect(adminSnapshot.cardMembers).toEqual(members);
+    expect(adminSnapshot.cardOperations).toMatchObject([expect.objectContaining({ cardId: original.id, userId: scopeA.userId, spaceId: scopeA.spaceId, kind: 'update' })]);
+    expect(adminSnapshot.lastSyncedAt).toBe('2026-10-06T12:00:00.000Z');
+    expect(memberSnapshot.cards).toMatchObject([{ id: 'card-member', name: 'Outro cartão' }]);
+    expect(memberSnapshot.cardOperations).toEqual([]);
+  });
+
+  it('coalesces local card changes, resolves a conflict, and acknowledges edits made during sync', async () => {
+    const scope = { userId: admin.userId, spaceId: 'card-sync-fixture' };
+    const local = card('card-local', 'Cartão novo');
+    await queueOfflineCardChange(scope, local, 'create');
+    const sent = (await loadOfflineWorkspace(scope)).cardOperations[0]!;
+    await queueOfflineCardChange(scope, { ...local, name: 'Nome corrigido' }, 'update');
+    expect((await loadOfflineWorkspace(scope)).cardOperations).toMatchObject([expect.objectContaining({ operationId: sent.operationId, kind: 'create', baseVersion: null, payload: expect.objectContaining({ name: 'Nome corrigido' }) })]);
+
+    const applied = { ...local, name: 'Cartão novo', version: 1 };
+    await queueOfflineCardChange(scope, { ...local, name: 'Edição durante envio' }, 'update');
+    await acknowledgeOfflineCardOperation(scope, sent, { card: applied });
+    expect((await loadOfflineWorkspace(scope)).cardOperations).toMatchObject([expect.objectContaining({ kind: 'update', baseVersion: 1, payload: expect.objectContaining({ name: 'Edição durante envio' }) })]);
+
+    const pending = (await loadOfflineWorkspace(scope)).cardOperations[0]!;
+    const server = { ...applied, name: 'Versão do servidor', version: 2 };
+    await markOfflineCardConflict(scope, pending, { reason: 'version_mismatch', serverCard: server });
+    await resolveOfflineCardConflict(scope, pending.operationId, 'local');
+    const resolvedLocal = await loadOfflineWorkspace(scope);
+    expect(resolvedLocal.cardOperations).toMatchObject([expect.objectContaining({ kind: 'update', baseVersion: 2, conflict: undefined })]);
+    expect(resolvedLocal.cards[0]).toMatchObject({ name: 'Edição durante envio', version: 2 });
+
+    const localPending = resolvedLocal.cardOperations[0]!;
+    await markOfflineCardConflict(scope, localPending, { reason: 'version_mismatch', serverCard: server });
+    await resolveOfflineCardConflict(scope, localPending.operationId, 'server');
+    expect(await loadOfflineWorkspace(scope)).toMatchObject({ cards: [server], cardOperations: [] });
+  });
+
   it('isolates cached data and queued edits by both user and shared space', async () => {
     const scopeA = { userId: admin.userId, spaceId: 'isolation-fixture' };
     const scopeB = { userId: member.userId, spaceId: 'isolation-fixture' };
@@ -160,16 +220,19 @@ describe('scoped IndexedDB workspace', () => {
     const scopeB = { userId: member.userId, spaceId: 'snapshot-fixture' };
     await saveOfflineSnapshot(scopeA, '/api/dashboard?month=2026-10', { planned: { expenseCents: '12345' } });
     await saveOfflineSnapshot(scopeB, '/api/dashboard?month=2026-10', { planned: { expenseCents: '67890' } });
+    await saveOfflineCards(scopeA, [card('card-clear-a')], [{ id: scopeA.userId, name: 'Pessoa A', is_active: true }]);
+    await saveOfflineCards(scopeB, [card('card-clear-b')], [{ id: scopeB.userId, name: 'Pessoa B', is_active: true }]);
     await rememberOfflineUser({ id: scopeA.userId, name: 'Pessoa A', email: 'a@example.test', role: 'admin', spaceId: scopeA.spaceId }, '2026-10-01T00:00:00.000Z');
     await rememberOfflineUser({ id: scopeB.userId, name: 'Pessoa B', email: 'b@example.test', role: 'member', spaceId: scopeB.spaceId }, '2026-10-02T00:00:00.000Z');
     expect(await loadOfflineSnapshot(scopeA, '/api/dashboard?month=2026-10')).toEqual({ planned: { expenseCents: '12345' } });
 
     await saveOfflineEntries(scopeB, [entry('entry-member')]);
     await clearOfflineWorkspace(scopeA);
-    expect(await loadOfflineWorkspace(scopeA)).toMatchObject({ entries: [], categories: [], operations: [], lastSyncedAt: null });
+    expect(await loadOfflineWorkspace(scopeA)).toMatchObject({ entries: [], categories: [], operations: [], cards: [], cardMembers: [], cardOperations: [], lastSyncedAt: null });
     expect(await loadOfflineSnapshot(scopeA, '/api/dashboard?month=2026-10')).toBeNull();
     expect(await loadOfflineSnapshot(scopeB, '/api/dashboard?month=2026-10')).toEqual({ planned: { expenseCents: '67890' } });
     expect((await loadOfflineWorkspace(scopeB)).entries).toHaveLength(1);
+    expect((await loadOfflineWorkspace(scopeB)).cards).toMatchObject([{ id: 'card-clear-b' }]);
     expect((await loadRememberedOfflineUser())?.user.id).toBe(scopeB.userId);
     await clearOfflineWorkspace(scopeB);
     expect(await loadRememberedOfflineUser()).toBeNull();

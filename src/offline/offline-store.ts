@@ -21,6 +21,19 @@ export type OfflineEntry = {
 };
 export type OfflineCategory = { id: string; name: string; kind: OfflineEntry['kind']; expense_class: 'fixed' | 'variable' | null; archived_at: string | null };
 export type OfflinePaymentMethod = { id: string; name: string; archived_at: string | null };
+export type OfflineCard = {
+  id: string;
+  name: string;
+  holder_user_id: string;
+  holder_name: string;
+  closing_day: number;
+  due_day: number;
+  archived_at: string | null;
+  created_by_user_id: string;
+  updated_by_user_id: string;
+  version: number;
+};
+export type OfflineCardMember = { id: string; name: string; is_active: boolean };
 export type OfflineOperationKind = 'create' | 'update' | 'delete';
 export type OfflineSyncConflict = { reason: 'version_mismatch' | 'server_deleted' | 'id_collision' | 'idempotency_key_reused'; serverEntry: OfflineEntry | null };
 export type OfflineOperation = {
@@ -35,29 +48,47 @@ export type OfflineOperation = {
   queuedAt: string;
   conflict?: OfflineSyncConflict;
 };
+export type OfflineCardOperation = {
+  operationId: string;
+  scope: string;
+  userId: string;
+  spaceId: string;
+  cardId: string;
+  kind: 'create' | 'update';
+  baseVersion: number | null;
+  payload: Record<string, unknown>;
+  queuedAt: string;
+  conflict?: { reason: OfflineSyncConflict['reason']; serverCard: OfflineCard | null };
+};
 export type OfflineWorkspaceSnapshot = {
   entries: OfflineEntry[];
   categories: OfflineCategory[];
   paymentMethods: OfflinePaymentMethod[];
+  cards: OfflineCard[];
+  cardMembers: OfflineCardMember[];
   operations: OfflineOperation[];
+  cardOperations: OfflineCardOperation[];
   lastSyncedAt: string | null;
 };
 
 type ScopedRecord = { key: string; scope: string };
 type StoredEntry = ScopedRecord & { entry: OfflineEntry; isLocal: boolean };
 type StoredCatalog = ScopedRecord & { categories: OfflineCategory[]; paymentMethods: OfflinePaymentMethod[] };
+type StoredCard = ScopedRecord & { card: OfflineCard };
+type StoredCardMembers = ScopedRecord & { members: OfflineCardMember[] };
 type StoredMetadata = ScopedRecord & { lastSyncedAt: string | null };
 type StoredOperation = OfflineOperation & { key: string };
+type StoredCardOperation = OfflineCardOperation & { key: string };
 type StoredSnapshot = ScopedRecord & { path: string; data: unknown };
 type StoredDeviceSession = ScopedRecord & { user: OfflineUser; verifiedAt: string };
 type StoredDeviceLogout = ScopedRecord & { userId: string; spaceId: string; markedAt: string };
 
 const databaseName = 'conta-clara-offline';
-const databaseVersion = 2;
+const databaseVersion = 3;
 const deviceSessionKey = '@last-authenticated-user';
 const deviceLogoutKey = '@offline-logout';
 export const offlineSessionLeaseMs = 7 * 24 * 60 * 60 * 1000;
-const storeNames = ['entries', 'catalogs', 'operations', 'metadata', 'snapshots'] as const;
+const storeNames = ['entries', 'catalogs', 'operations', 'metadata', 'snapshots', 'creditCards', 'cardMembers', 'cardOperations'] as const;
 type StoreName = typeof storeNames[number];
 let databasePromise: Promise<IDBDatabase> | null = null;
 
@@ -149,19 +180,25 @@ export async function loadOfflineWorkspace(scope: OfflineScope): Promise<Offline
   const scopeKey = offlineScopeKey(scope);
   const transaction = database.transaction([...storeNames], 'readonly');
   const done = transactionDone(transaction);
-  const [entries, catalogs, operations, metadata] = await Promise.all([
+  const [entries, catalogs, operations, metadata, cards, cardMembers, cardOperations] = await Promise.all([
     scopedValues<StoredEntry>(transaction, 'entries', scopeKey),
     requestValue(transaction.objectStore('catalogs').get(scopeKey) as IDBRequest<StoredCatalog | undefined>),
     scopedValues<StoredOperation>(transaction, 'operations', scopeKey),
     requestValue(transaction.objectStore('metadata').get(scopeKey) as IDBRequest<StoredMetadata | undefined>),
+    scopedValues<StoredCard>(transaction, 'creditCards', scopeKey),
+    requestValue(transaction.objectStore('cardMembers').get(scopeKey) as IDBRequest<StoredCardMembers | undefined>),
+    scopedValues<StoredCardOperation>(transaction, 'cardOperations', scopeKey),
     done,
-  ]).then(([loadedEntries, loadedCatalogs, loadedOperations, loadedMetadata]) => [loadedEntries, loadedCatalogs, loadedOperations, loadedMetadata] as const);
+  ]);
 
   return {
     entries: entries.map((record) => record.entry),
     categories: catalogs?.categories ?? [],
     paymentMethods: catalogs?.paymentMethods ?? [],
+    cards: cards.map((record) => record.card),
+    cardMembers: cardMembers?.members ?? [],
     operations: operations.sort((left, right) => left.queuedAt.localeCompare(right.queuedAt)).map(({ key: _key, ...operation }) => operation),
+    cardOperations: cardOperations.sort((left, right) => left.queuedAt.localeCompare(right.queuedAt)).map(({ key: _key, ...operation }) => operation),
     lastSyncedAt: metadata?.lastSyncedAt ?? null,
   };
 }
@@ -172,6 +209,172 @@ export async function saveOfflineCatalogs(scope: OfflineScope, categories: Offli
   const transaction = database.transaction(['catalogs', 'metadata'], 'readwrite');
   transaction.objectStore('catalogs').put({ key, scope: key, categories, paymentMethods } satisfies StoredCatalog);
   transaction.objectStore('metadata').put({ key, scope: key, lastSyncedAt: now } satisfies StoredMetadata);
+  await transactionDone(transaction);
+}
+
+export async function saveOfflineCards(scope: OfflineScope, cards: OfflineCard[], members: OfflineCardMember[], now = new Date().toISOString()) {
+  const database = await openDatabase();
+  const scopeKey = offlineScopeKey(scope);
+  const transaction = database.transaction(['creditCards', 'cardMembers', 'cardOperations', 'metadata'], 'readwrite');
+  const operations = transaction.objectStore('cardOperations').index('scope').getAll(scopeKey) as IDBRequest<StoredCardOperation[]>;
+  operations.onsuccess = () => {
+    const protectedIds = new Set(operations.result.map((operation) => operation.cardId));
+    const cardStore = transaction.objectStore('creditCards');
+    for (const card of cards) {
+      if (!protectedIds.has(card.id)) {
+        cardStore.put({ key: recordKey(scope, card.id), scope: scopeKey, card } satisfies StoredCard);
+      }
+    }
+    transaction.objectStore('cardMembers').put({ key: scopeKey, scope: scopeKey, members } satisfies StoredCardMembers);
+    transaction.objectStore('metadata').put({ key: scopeKey, scope: scopeKey, lastSyncedAt: now } satisfies StoredMetadata);
+  };
+  await transactionDone(transaction);
+}
+
+function cardPayload(card: OfflineCard) {
+  return {
+    name: card.name,
+    holderUserId: card.holder_user_id,
+    closingDay: card.closing_day,
+    dueDay: card.due_day,
+    archived: Boolean(card.archived_at),
+  };
+}
+
+export async function queueOfflineCardChange(scope: OfflineScope, card: OfflineCard, kind: 'create' | 'update', now = new Date().toISOString()) {
+  const database = await openDatabase();
+  const scopeKey = offlineScopeKey(scope);
+  const key = recordKey(scope, card.id);
+  const transaction = database.transaction(['creditCards', 'cardOperations'], 'readwrite');
+  const operationStore = transaction.objectStore('cardOperations');
+  const previous = operationStore.get(key) as IDBRequest<StoredCardOperation | undefined>;
+  previous.onsuccess = () => {
+    const prior = previous.result;
+    const operationKind = prior?.kind === 'create' ? 'create' : kind;
+    operationStore.put({
+      key,
+      scope: scopeKey,
+      userId: scope.userId,
+      spaceId: scope.spaceId,
+      cardId: card.id,
+      operationId: prior?.operationId ?? crypto.randomUUID(),
+      kind: operationKind,
+      baseVersion: prior ? prior.baseVersion : operationKind === 'create' ? null : card.version,
+      payload: cardPayload(card),
+      queuedAt: prior?.queuedAt ?? now,
+      ...(prior?.conflict ? { conflict: prior.conflict } : {}),
+    } satisfies StoredCardOperation);
+    transaction.objectStore('creditCards').put({ key, scope: scopeKey, card } satisfies StoredCard);
+  };
+  await transactionDone(transaction);
+}
+
+export async function markOfflineCardConflict(
+  scope: OfflineScope,
+  sentOperation: OfflineCardOperation,
+  conflict: NonNullable<OfflineCardOperation['conflict']>,
+) {
+  const database = await openDatabase();
+  const transaction = database.transaction(['cardOperations'], 'readwrite');
+  const store = transaction.objectStore('cardOperations');
+  const request = store.get(recordKey(scope, sentOperation.cardId)) as IDBRequest<StoredCardOperation | undefined>;
+  request.onsuccess = () => {
+    const current = request.result;
+    if (current?.operationId === sentOperation.operationId && current.baseVersion === sentOperation.baseVersion) {
+      store.put({ ...current, conflict } satisfies StoredCardOperation);
+    }
+  };
+  await transactionDone(transaction);
+}
+
+export async function acknowledgeOfflineCardOperation(
+  scope: OfflineScope,
+  sentOperation: OfflineCardOperation,
+  result: { card?: OfflineCard },
+) {
+  const database = await openDatabase();
+  const scopeKey = offlineScopeKey(scope);
+  const key = recordKey(scope, sentOperation.cardId);
+  const transaction = database.transaction(['creditCards', 'cardOperations', 'metadata'], 'readwrite');
+  const cardStore = transaction.objectStore('creditCards');
+  const operationStore = transaction.objectStore('cardOperations');
+  const currentRequest = operationStore.get(key) as IDBRequest<StoredCardOperation | undefined>;
+  const localCardRequest = cardStore.get(key) as IDBRequest<StoredCard | undefined>;
+  let currentOperation: StoredCardOperation | undefined;
+  let localCard: StoredCard | undefined;
+  let completedReads = 0;
+  const finish = () => {
+    completedReads += 1;
+    if (completedReads < 2 || !currentOperation || currentOperation.operationId !== sentOperation.operationId) return;
+    const unchanged = currentOperation.kind === sentOperation.kind
+      && currentOperation.baseVersion === sentOperation.baseVersion
+      && JSON.stringify(currentOperation.payload) === JSON.stringify(sentOperation.payload);
+    if (unchanged) {
+      operationStore.delete(key);
+      if (result.card) cardStore.put({ key, scope: scopeKey, card: result.card } satisfies StoredCard);
+    } else if (result.card) {
+      if (currentOperation.kind === 'create') currentOperation.kind = 'update';
+      currentOperation.baseVersion = result.card.version;
+      currentOperation.operationId = crypto.randomUUID();
+      delete currentOperation.conflict;
+      operationStore.put(currentOperation);
+      if (localCard) cardStore.put({ ...localCard, card: { ...localCard.card, version: result.card.version } } satisfies StoredCard);
+    }
+    transaction.objectStore('metadata').put({ key: scopeKey, scope: scopeKey, lastSyncedAt: new Date().toISOString() } satisfies StoredMetadata);
+  };
+  currentRequest.onsuccess = () => { currentOperation = currentRequest.result; finish(); };
+  localCardRequest.onsuccess = () => { localCard = localCardRequest.result; finish(); };
+  await transactionDone(transaction);
+}
+
+export async function resolveOfflineCardConflict(scope: OfflineScope, operationId: string, choice: 'local' | 'server') {
+  const database = await openDatabase();
+  const scopeKey = offlineScopeKey(scope);
+  const transaction = database.transaction(['creditCards', 'cardOperations'], 'readwrite');
+  const cardStore = transaction.objectStore('creditCards');
+  const operationStore = transaction.objectStore('cardOperations');
+  const operationsRequest = operationStore.index('scope').getAll(scopeKey) as IDBRequest<StoredCardOperation[]>;
+  operationsRequest.onsuccess = () => {
+    const operation = operationsRequest.result.find((item) => item.operationId === operationId && item.conflict);
+    if (!operation) return;
+    const key = recordKey(scope, operation.cardId);
+    const serverCard = operation.conflict!.serverCard;
+    if (choice === 'server') {
+      operationStore.delete(key);
+      if (serverCard) cardStore.put({ key, scope: scopeKey, card: serverCard } satisfies StoredCard);
+      else cardStore.delete(key);
+      return;
+    }
+
+    if (!serverCard || operation.conflict!.reason === 'id_collision') {
+      const localRequest = cardStore.get(key) as IDBRequest<StoredCard | undefined>;
+      localRequest.onsuccess = () => {
+        if (!localRequest.result) return;
+        const newCardId = crypto.randomUUID();
+        const newKey = recordKey(scope, newCardId);
+        const card = { ...localRequest.result.card, id: newCardId, version: 1 };
+        cardStore.delete(key);
+        cardStore.put({ key: newKey, scope: scopeKey, card } satisfies StoredCard);
+        operationStore.delete(key);
+        operationStore.put({
+          ...operation,
+          key: newKey,
+          cardId: newCardId,
+          operationId: crypto.randomUUID(),
+          kind: 'create',
+          baseVersion: null,
+          conflict: undefined,
+        } satisfies StoredCardOperation);
+      };
+      return;
+    }
+
+    operationStore.put({ ...operation, operationId: crypto.randomUUID(), baseVersion: serverCard.version, conflict: undefined } satisfies StoredCardOperation);
+    const localRequest = cardStore.get(key) as IDBRequest<StoredCard | undefined>;
+    localRequest.onsuccess = () => {
+      if (localRequest.result) cardStore.put({ ...localRequest.result, card: { ...localRequest.result.card, version: serverCard.version } } satisfies StoredCard);
+    };
+  };
   await transactionDone(transaction);
 }
 
@@ -481,7 +684,7 @@ export async function clearOfflineWorkspace(scope: OfflineScope) {
   const scopeKey = offlineScopeKey(scope);
   const transaction = database.transaction([...storeNames], 'readwrite');
   const done = transactionDone(transaction);
-  const scopedStores: StoreName[] = ['entries', 'operations', 'snapshots'];
+  const scopedStores: StoreName[] = ['entries', 'operations', 'snapshots', 'creditCards', 'cardOperations'];
   const deletes = scopedStores.map((name) => {
     const store = transaction.objectStore(name);
     const request = store.index('scope').getAllKeys(scopeKey);
@@ -494,6 +697,7 @@ export async function clearOfflineWorkspace(scope: OfflineScope) {
     });
   });
   transaction.objectStore('catalogs').delete(scopeKey);
+  transaction.objectStore('cardMembers').delete(scopeKey);
   const metadata = transaction.objectStore('metadata');
   metadata.delete(scopeKey);
   const rememberedUser = metadata.get(deviceSessionKey) as IDBRequest<StoredDeviceSession | undefined>;

@@ -136,6 +136,47 @@ describe.skipIf(!testDatabaseUrl)('offline synchronization routes with PostgreSQ
     expect(updatedStored.rows[0]).toMatchObject({ count: 1, description: 'Edição após resposta perdida' });
   });
 
+  it('synchronizes shared card changes idempotently and returns explicit version conflicts', async () => {
+    const admin = await createSpaceUser({ email: 'sync-card-admin@example.test', name: 'Admin cartões offline' });
+    const adminCsrf = (await sameOrigin(request.agent(app), 'get', '/api/auth/state').expect(200)).body.csrfToken;
+    const member = await createMember(admin, adminCsrf, 'Membro cartões offline');
+    const cardId = randomUUID();
+    const createOperation = {
+      entity: 'card', cardId, operationId: randomUUID(), kind: 'create', baseVersion: null,
+      payload: { name: 'Cartão offline fictício', holderUserId: member.user.id, closingDay: 31, dueDay: 5, archived: false, cvv: '123' },
+    };
+
+    const createdResponses = await Promise.all([
+      sessionRequest('post', '/api/sync/operations', admin.sessionToken, adminCsrf, createOperation),
+      sessionRequest('post', '/api/sync/operations', admin.sessionToken, adminCsrf, createOperation),
+    ]);
+    expect(createdResponses.map(({ status }) => status)).toEqual([200, 200]);
+    expect(createdResponses[0].body).toEqual(createdResponses[1].body);
+    expect(createdResponses[0].body).toMatchObject({ status: 'applied', card: { id: cardId, name: 'Cartão offline fictício', holder_user_id: member.user.id, version: 1 } });
+    expect(createdResponses[0].body.card).not.toHaveProperty('cvv');
+    expect(await sessionRequest('post', '/api/sync/operations', admin.sessionToken, adminCsrf, createOperation).then(({ body }) => body)).toEqual(createdResponses[0].body);
+
+    await sessionRequest('put', `/api/cards/${cardId}`, member.sessionToken, member.csrfToken, {
+      name: 'Cartão alterado no outro aparelho', holderUserId: member.user.id, closingDay: 30, dueDay: 6, baseVersion: 1,
+    }).expect(200);
+    const staleOperation = {
+      entity: 'card', cardId, operationId: randomUUID(), kind: 'update', baseVersion: 1,
+      payload: { name: 'Minha alteração offline', holderUserId: member.user.id, closingDay: 28, dueDay: 8, archived: false },
+    };
+    const conflict = await sessionRequest('post', '/api/sync/operations', admin.sessionToken, adminCsrf, staleOperation).expect(409);
+    expect(conflict.body).toMatchObject({
+      status: 'conflict', reason: 'version_mismatch',
+      serverCard: { id: cardId, version: 2, name: 'Cartão alterado no outro aparelho' },
+    });
+
+    const resolved = await sessionRequest('post', '/api/sync/operations', admin.sessionToken, adminCsrf, {
+      ...staleOperation, operationId: randomUUID(), baseVersion: conflict.body.serverCard.version,
+    }).expect(200);
+    expect(resolved.body).toMatchObject({ status: 'applied', card: { id: cardId, version: 3, name: 'Minha alteração offline', updated_by_user_id: admin.id } });
+    const stored = await pool.query('SELECT count(*)::integer AS count, min(version)::integer AS version FROM credit_cards WHERE id = $1', [cardId]);
+    expect(stored.rows[0]).toEqual({ count: 1, version: 3 });
+  });
+
   it('uses versions for concurrent edits and edit-versus-delete decisions', async () => {
     const admin = await createSpaceUser({ email: 'sync-admin@example.test', name: 'Admin versões' });
     const adminCsrf = (await sameOrigin(request.agent(app), 'get', '/api/auth/state').expect(200)).body.csrfToken;

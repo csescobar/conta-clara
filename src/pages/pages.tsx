@@ -10,6 +10,7 @@ import { FormField, Input } from '../components/ui/input';
 import { currentMonthInputValue, formatBrazilianDate } from '../lib/finance';
 import type { ChartSummary, ExpenseCategoryChartEntry } from './dashboard-charts';
 import { CatalogSettings } from './catalog-settings';
+import { CardSettings } from './card-settings';
 import { BackupSettings } from './backup-settings';
 import { PageHeader } from './page-header';
 import { isAuthenticationFailure, isNetworkFailure, useOfflineWorkspace } from '../offline/offline-context';
@@ -303,6 +304,8 @@ export function SettingsPage() {
       </CardContent></Card>}
 
       {isAdmin && <BackupSettings />}
+
+      <CardSettings />
 
       <div className="xl:col-span-1"><CatalogSettings /></div>
     </section>

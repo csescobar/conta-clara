@@ -38,6 +38,20 @@ test('administra um espaço compartilhado, importa e sincroniza uma alteração 
   await admin.getByLabel('Nome da forma de pagamento').fill('Pix fictício');
   await admin.getByRole('button', { name: 'Adicionar forma' }).click();
   await expect(admin.getByText('Pix fictício')).toBeVisible();
+  await admin.getByLabel('Apelido do cartão').fill('Cartão da família fictício');
+  await admin.getByLabel('Titular').selectOption({ label: 'Administradora fictícia' });
+  await admin.getByLabel('Dia de fechamento').fill('31');
+  await admin.getByLabel('Dia de vencimento').fill('5');
+  await admin.getByRole('button', { name: 'Adicionar cartão' }).click();
+  await expect(admin.getByText('Administradora fictícia · fecha dia 31 · vence dia 5')).toBeVisible();
+  await admin.setViewportSize({ width: 390, height: 844 });
+  await expect(admin.getByLabel('Apelido do cartão')).toBeVisible();
+  await expect(admin.getByText('Cartão da família fictício')).toBeVisible();
+  expect(await admin.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await admin.getByLabel('Apelido do cartão').focus();
+  await admin.keyboard.press('Tab');
+  await expect(admin.getByLabel('Titular')).toBeFocused();
+  await admin.setViewportSize({ width: 1280, height: 900 });
 
   await admin.getByRole('link', { name: 'Recorrências' }).click();
   await admin.getByRole('link', { name: 'Nova regra' }).first().click();
@@ -92,7 +106,8 @@ test('administra um espaço compartilhado, importa e sincroniza uma alteração 
   await expect(member.getByRole('heading', { name: 'Visão geral' })).toBeVisible();
 
   await member.getByRole('link', { name: 'Configurações' }).click();
-  await expect(member.getByText('Administradora fictícia')).toBeVisible();
+  await expect(member.getByRole('list').getByText('Administradora fictícia')).toBeVisible();
+  await expect(member.getByText('Cartão da família fictício')).toBeVisible();
   await expect(member.getByRole('button', { name: 'Gerar convite' })).toHaveCount(0);
   await expect(member.getByRole('button', { name: 'Link para redefinir senha' })).toHaveCount(0);
 
@@ -102,7 +117,8 @@ test('administra um espaço compartilhado, importa e sincroniza uma alteração 
   await member.getByRole('link', { name: 'Adicionar lançamento' }).click();
   await expect(member.getByRole('heading', { name: 'Adicionar lançamento' })).toBeVisible();
   await memberContext.setOffline(true);
-  await expect(member.getByRole('status')).toContainText('Sem conexão de rede');
+  await member.evaluate(() => window.dispatchEvent(new Event('offline')));
+  await expect(member.getByText(/^Sem conexão de rede/)).toBeVisible();
   await member.getByLabel('Descrição').fill('Despesa offline fictícia');
   await member.locator('#entry-category').selectOption({ label: 'Moradia fictícia' });
   await member.getByLabel('Valor previsto (R$)').fill('12,00');
@@ -113,9 +129,28 @@ test('administra um espaço compartilhado, importa e sincroniza uma alteração 
   await expect(member.getByText('Despesa offline fictícia')).toBeVisible();
   await expect(member.getByText(/Pendente neste aparelho/)).toBeVisible();
 
+  await member.getByRole('link', { name: 'Configurações' }).click();
+  await member.getByRole('button', { name: 'Editar cartão Cartão da família fictício' }).click();
+  await member.getByLabel('Apelido do cartão').fill('Cartão da família atualizado offline');
+  await member.getByRole('button', { name: 'Salvar cartão' }).click();
+  await expect(member.getByText('Cartão da família atualizado offline')).toBeVisible();
+  await member.getByRole('button', { name: 'Arquivar cartão Cartão da família atualizado offline' }).click();
+  await expect(member.getByText('Arquivado')).toBeVisible();
+  await expect(member.getByText(/1 alteração.*aguardam sincronização/)).toBeVisible();
+
   await memberContext.setOffline(false);
+  await member.evaluate(() => window.dispatchEvent(new Event('online')));
+  await expect(member.getByText('Rede conectada · nenhuma alteração pendente.')).toBeVisible({ timeout: 20_000 });
+  await member.getByRole('link', { name: 'Lançamentos' }).click();
   await expect(member.getByText('Despesa offline fictícia')).toBeVisible();
   await expect(member.getByText(/Pendente neste aparelho/)).toHaveCount(0, { timeout: 20_000 });
+  await member.reload();
+  await member.getByRole('link', { name: 'Configurações' }).click();
+  await member.getByRole('link', { name: 'Configurações' }).click();
+  await expect(member.getByText('Cartão da família atualizado offline')).toBeVisible();
+  await expect(member.getByRole('button', { name: 'Restaurar cartão Cartão da família atualizado offline' })).toBeVisible();
+  await member.getByRole('button', { name: 'Restaurar cartão Cartão da família atualizado offline' }).click();
+  await expect(member.getByRole('button', { name: 'Arquivar cartão Cartão da família atualizado offline' })).toBeVisible();
 
   await memberContext.close();
   await adminContext.close();

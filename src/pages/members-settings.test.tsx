@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -24,6 +24,7 @@ describe('member settings', () => {
   it('lets an administrator create an invitation link and displays it for handoff', async () => {
     const fetchMock = vi.fn().mockImplementation(async (input: string, init?: RequestInit) => {
       if (input === '/api/members') return response({ members });
+      if (input === '/api/cards?includeArchived=true') return response({ cards: [] });
       if (input === '/api/backups/status') return response({
         runState: 'warning',
         lastAttemptAt: '2026-10-06T06:00:00.000Z',
@@ -63,6 +64,7 @@ describe('member settings', () => {
   it('shows the roster to a member but hides administrator-only access controls', async () => {
     const fetchMock = vi.fn().mockImplementation(async (input: string) => {
       if (input === '/api/members') return response({ members: [{ ...members[0], role: 'member' }] });
+      if (input === '/api/cards?includeArchived=true') return response({ cards: [] });
       if (input === '/api/catalog/categories?includeArchived=true') return response({ categories: [] });
       if (input === '/api/catalog/payment-methods?includeArchived=true') return response({ paymentMethods: [] });
       throw new Error(`Unexpected request: ${input}`);
@@ -70,10 +72,10 @@ describe('member settings', () => {
     vi.stubGlobal('fetch', fetchMock);
     renderSettings('member');
 
-    expect(await screen.findByText('Administradora')).toBeInTheDocument();
+    expect(within(await screen.findByRole('list')).getByText('Administradora')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Gerar convite' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Link para redefinir senha' })).not.toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
     expect(fetchMock).not.toHaveBeenCalledWith('/api/members/invitations', expect.anything());
     expect(fetchMock).not.toHaveBeenCalledWith('/api/backups/status', expect.anything());
   });
@@ -82,6 +84,7 @@ describe('member settings', () => {
     const currentMembers = [members[0], { id: 'member-id', name: 'Pessoa convidada', email: 'membro@example.test', role: 'member', is_active: true }];
     const fetchMock = vi.fn().mockImplementation(async (input: string, init?: RequestInit) => {
       if (input === '/api/members') return response({ members: currentMembers });
+      if (input === '/api/cards?includeArchived=true') return response({ cards: [] });
       if (input === '/api/backups/status') return response({ runState: 'never', lastAttemptAt: null, lastSuccessAt: null, lastSuccessDate: null, lastFailureAt: null, lastFailureCode: null, lastFailureMessage: null });
       if (input === '/api/catalog/categories?includeArchived=true') return response({ categories: [] });
       if (input === '/api/catalog/payment-methods?includeArchived=true') return response({ paymentMethods: [] });

@@ -22,7 +22,7 @@ type Entry = OfflineEntry;
 type ApiResponse = { error?: string; entries?: Entry[]; entry?: Entry; categories?: Category[]; paymentMethods?: PaymentMethod[]; conflict?: boolean; serverEntry?: Entry | null };
 const kindLabels: Record<EntryKind, string> = { income: 'Receita', expense: 'Despesa', investment: 'Aporte' };
 const statusLabels: Record<EntryStatus, string> = { pending: 'Em aberto', late: 'Atrasado', paid: 'Pago' };
-const emptyOfflineSnapshot: OfflineWorkspaceSnapshot = { entries: [], categories: [], paymentMethods: [], operations: [], lastSyncedAt: null };
+const emptyOfflineSnapshot: OfflineWorkspaceSnapshot = { entries: [], categories: [], paymentMethods: [], cards: [], cardMembers: [], operations: [], cardOperations: [], lastSyncedAt: null };
 
 async function readApi(response: Response): Promise<ApiResponse> {
   if (response.status === 204) return {};

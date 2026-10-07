@@ -2,6 +2,8 @@
 
 Controle financeiro familiar local, com finanças compartilhadas e uso pelo computador e celular. A primeira versão reúne autenticação individual, espaço compartilhado, cadastro e confirmação de lançamentos, histórico, recorrências, painel previsto versus realizado, importação revisada, exportação CSV e PWA com armazenamento e sincronização offline.
 
+A primeira entrega da V2 permite cadastrar cartões compartilhados por apelido, titular e dias de fechamento e vencimento; o número, a validade, o CVV e o limite não são armazenados. Compras parceladas e faturas continuam no roadmap.
+
 ## Instalação
 
 Para instalar em Docker com PostgreSQL e HTTPS local, siga o [guia de instalação](docs/installation.md). O primeiro acesso cria a conta administradora; convites são gerados como links locais e entregues manualmente.

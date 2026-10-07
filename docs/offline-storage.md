@@ -1,10 +1,11 @@
 # Dados locais e uso offline
 
-O Conta Clara armazena uma cópia de alguns dados financeiros no IndexedDB do navegador, separada pela combinação de usuário e espaço financeiro. Entradas, categorias, formas de pagamento, resumos do painel e alterações ainda não enviadas nunca são compartilhados entre os espaços locais de usuários diferentes.
+O Conta Clara armazena uma cópia de alguns dados financeiros no IndexedDB do navegador, separada pela combinação de usuário e espaço financeiro. Entradas, cartões, titulares disponíveis, categorias, formas de pagamento, resumos do painel e alterações ainda não enviadas nunca são compartilhados entre os espaços locais de usuários diferentes.
 
 ## O que funciona
 
 - Depois de consultar uma página conectado, os lançamentos carregados, os cadastros usados pelos formulários e o resumo do mês do painel ficam disponíveis neste aparelho.
+- Depois de abrir Configurações conectado, os cartões e titulares do espaço ficam disponíveis offline; é possível criar, editar, arquivar e restaurar cartões. As alterações entram na mesma fila local e permanecem separadas por usuário e espaço.
 - Sem rede, é possível filtrar os lançamentos disponíveis e criar, editar ou excluir itens. Cada alteração fica na fila local e sobrevive ao fechamento ou à recarga da página. Alterações repetidas no mesmo item são combinadas; criar e depois excluir um item ainda não enviado remove a operação da fila.
 - A barra de status mostra a conectividade, o número de alterações pendentes e quando os dados foram atualizados online pela última vez.
 - Se a sessão expirar, a aplicação retorna à tela de acesso e preserva os dados e a fila. Após autenticação novamente com o mesmo usuário e espaço, o trabalho local continua disponível.
@@ -20,4 +21,4 @@ A identidade autenticada mais recente é guardada no aparelho para habilitar o a
 
 ## Verificação
 
-`src/offline/offline-store.test.ts` usa IndexedDB de teste para verificar isolamento por usuário e espaço, persistência e combinação de operações, proteção contra leituras antigas do servidor, prazo da identidade offline e limpeza restrita ao espaço selecionado. `src/offline/offline-workflow.test.tsx` exercita leitura e cadastro offline, logout com confirmação de descarte, preservação da fila após expiração da sessão e bloqueio de restauração de uma identidade após logout local. A suíte geral executa junto com typecheck e build.
+`src/offline/offline-store.test.ts` usa IndexedDB de teste para verificar isolamento por usuário e espaço, persistência e combinação de operações, proteção contra leituras antigas do servidor, prazo da identidade offline e limpeza restrita ao espaço selecionado. `src/pages/card-settings.test.tsx` cobre cadastro, edição e arquivamento offline e preservação da fila após expiração de sessão. `src/offline/offline-workflow.test.tsx` exercita leitura e cadastro offline, logout com confirmação de descarte e bloqueio de restauração de uma identidade após logout local. A suíte geral executa junto com typecheck e build.

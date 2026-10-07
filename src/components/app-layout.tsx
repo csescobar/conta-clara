@@ -63,6 +63,7 @@ export function AppLayout({ user, csrfToken, onLogout, notice, children }: { use
           ? `Rede conectada · ${offline.pendingCount} ${offline.pendingCount === 1 ? 'alteração aguarda' : 'alterações aguardam'} sincronização.`
           : 'Rede conectada · nenhuma alteração pendente.';
   const conflicts = offline?.operations.filter((operation) => operation.conflict) ?? [];
+  const cardConflicts = offline?.cardOperations.filter((operation) => operation.conflict) ?? [];
 
   return (
     <div className="min-h-screen lg:flex">
@@ -102,6 +103,23 @@ export function AppLayout({ user, csrfToken, onLogout, notice, children }: { use
                 <div className="flex flex-wrap gap-2">
                   <Button type="button" size="sm" variant="outline" disabled={offline.syncing} onClick={() => void offline.resolveConflict(operation.operationId, 'local').then(() => typeof navigator !== 'undefined' && navigator.onLine && csrfToken ? offline.sync(csrfToken) : undefined)}>{serverEntry ? 'Usar versão local' : operation.kind === 'delete' ? 'Manter exclusão local' : 'Recriar minha versão'}</Button>
                   <Button type="button" size="sm" variant="outline" disabled={offline.syncing} onClick={() => void offline.resolveConflict(operation.operationId, 'server').then(() => typeof navigator !== 'undefined' && navigator.onLine && csrfToken ? offline.sync(csrfToken) : undefined)}>{serverEntry ? 'Usar versão do servidor' : 'Descartar versão local'}</Button>
+                </div>
+              </article>;
+            })}
+          </section>}
+          {offline && cardConflicts.length > 0 && <section aria-labelledby="card-sync-conflicts-heading" className="mb-5 grid gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+            <div><h2 id="card-sync-conflicts-heading" className="font-semibold">Escolha como resolver {cardConflicts.length === 1 ? 'este conflito de cartão' : 'estes conflitos de cartão'}</h2><p className="mt-1 text-xs leading-5">Um cartão mudou em outro aparelho enquanto você estava offline. Compare os dados e escolha qual manter.</p></div>
+            {cardConflicts.map((operation) => {
+              const localCard = offline.cards.find((card) => card.id === operation.cardId);
+              const serverCard = operation.conflict!.serverCard;
+              const localDescription = localCard ? `${localCard.name} · ${localCard.holder_name} · fecha dia ${localCard.closing_day} · vence dia ${localCard.due_day}${localCard.archived_at ? ' · arquivado' : ''}` : 'Versão local indisponível';
+              const serverDescription = serverCard ? `${serverCard.name} · ${serverCard.holder_name} · fecha dia ${serverCard.closing_day} · vence dia ${serverCard.due_day}${serverCard.archived_at ? ' · arquivado' : ''}` : operation.conflict!.reason === 'id_collision' ? 'Outro cartão usa este identificador.' : 'O cartão foi removido do servidor.';
+              return <article key={operation.operationId} className="grid gap-2 rounded-xl border border-amber-200 bg-white/70 p-3">
+                <h3 className="font-medium">{localCard?.name ?? serverCard?.name ?? 'Cartão removido'}</h3>
+                <div className="grid gap-1 text-xs sm:grid-cols-2"><p><strong>Sua versão:</strong> {localDescription}</p><p><strong>Servidor:</strong> {serverDescription}</p></div>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" size="sm" variant="outline" disabled={offline.syncing} onClick={() => void offline.resolveCardConflict(operation.operationId, 'local').then(() => typeof navigator !== 'undefined' && navigator.onLine && csrfToken ? offline.sync(csrfToken) : undefined)}>{serverCard ? 'Usar versão local' : 'Recriar minha versão'}</Button>
+                  <Button type="button" size="sm" variant="outline" disabled={offline.syncing} onClick={() => void offline.resolveCardConflict(operation.operationId, 'server').then(() => typeof navigator !== 'undefined' && navigator.onLine && csrfToken ? offline.sync(csrfToken) : undefined)}>{serverCard ? 'Usar versão do servidor' : 'Descartar versão local'}</Button>
                 </div>
               </article>;
             })}

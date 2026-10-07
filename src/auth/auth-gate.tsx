@@ -47,7 +47,7 @@ function AuthenticatedSession({ user, csrfToken, notice, onLogout, children }: {
     setLocalNotice('');
     await offline?.sync(csrfToken);
     const currentWorkspace = await offline?.refresh();
-    const pendingCount = currentWorkspace?.operations.length ?? 0;
+    const pendingCount = (currentWorkspace?.operations.length ?? 0) + (currentWorkspace?.cardOperations.length ?? 0);
     if (pendingCount && !window.confirm(`Há ${pendingCount} alteração${pendingCount === 1 ? '' : 'ões'} sem sincronização. Sair e descartar essas alterações locais?`)) return;
     const loggedOut = await onLogout(Boolean(offline && !offline.online));
     if (!loggedOut) return;
