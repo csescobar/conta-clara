@@ -50,7 +50,7 @@ Backlog inicial da primeira versão. Concluir dependências antes de iniciar uma
 ## 7. Cartões e faturas (V2)
 
 - [x] [Cadastrar cartões no espaço compartilhado](https://github.com/csescobar/conta-clara/issues/25) — dependências: V1 concluída; cadastro compartilhado, regras de ciclo e sincronização offline publicados em `d632e03`.
-- [ ] [Registrar compras parceladas e gerar parcelas offline](https://github.com/csescobar/conta-clara/issues/26) — dependências: #25.
+- [x] [Registrar compras parceladas e gerar parcelas offline](https://github.com/csescobar/conta-clara/issues/26) — dependências: #25; parcelas, edição, cancelamento e sincronização offline publicados em `5f6c734`.
 - [ ] [Consultar e quitar faturas, integrar painel e exportação CSV](https://github.com/csescobar/conta-clara/issues/27) — dependências: #26.
 - [ ] [Validar integração e documentar cartões e faturas](https://github.com/csescobar/conta-clara/issues/28) — dependências: #25, #26, #27.
 
