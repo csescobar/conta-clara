@@ -1,6 +1,6 @@
-import { ArrowLeftRight, CreditCard, FileText, History, House, LogOut, RefreshCw, Repeat2, Settings, WalletCards } from 'lucide-react';
-import type { ReactNode } from 'react';
-import { Link, NavLink } from 'react-router-dom';
+import { ArrowLeftRight, CreditCard, Ellipsis, FileText, History, House, LogOut, RefreshCw, Repeat2, Settings, WalletCards } from 'lucide-react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Link, NavLink, useLocation } from 'react-router-dom';
 import { Button } from './ui/button';
 import type { AuthUser } from '../auth/auth-page';
 import { cn } from '../lib/utils';
@@ -26,9 +26,9 @@ function Brand() {
   );
 }
 
-function Navigation({ mobile = false }: { mobile?: boolean }) {
+function Navigation() {
   return (
-    <nav aria-label={mobile ? 'Navegação principal móvel' : 'Navegação principal'} className={mobile ? 'grid grid-cols-7' : 'grid gap-1'}>
+    <nav aria-label="Navegação principal" className="grid gap-1">
       {links.map(({ to, label, Icon, end }) => (
         <NavLink
           key={to}
@@ -36,7 +36,7 @@ function Navigation({ mobile = false }: { mobile?: boolean }) {
           end={end}
           className={({ isActive }) => cn(
             'flex items-center rounded-xl text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
-            mobile ? 'min-h-14 flex-col justify-center gap-1 px-1 text-[0.68rem]' : 'min-h-11 gap-3 px-3',
+            'min-h-11 gap-3 px-3',
             isActive ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
           )}
         >
@@ -45,6 +45,103 @@ function Navigation({ mobile = false }: { mobile?: boolean }) {
         </NavLink>
       ))}
     </nav>
+  );
+}
+
+const mobilePrimaryLinks = links.slice(0, 4);
+const mobileMoreLinks = links.slice(4);
+
+function MobileNavigation() {
+  const [moreOpen, setMoreOpen] = useState(false);
+  const location = useLocation();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const moreButtonRef = useRef<HTMLButtonElement>(null);
+  const activeMoreLink = mobileMoreLinks.find(({ to }) => location.pathname === to || location.pathname.startsWith(`${to}/`));
+
+  useEffect(() => {
+    setMoreOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!moreOpen) return;
+
+    const dismissOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setMoreOpen(false);
+      moreButtonRef.current?.focus();
+    };
+    const dismissOnOutsidePress = (event: PointerEvent) => {
+      if (event.target instanceof Node && !containerRef.current?.contains(event.target)) setMoreOpen(false);
+    };
+
+    document.addEventListener('keydown', dismissOnEscape);
+    document.addEventListener('pointerdown', dismissOnOutsidePress);
+    return () => {
+      document.removeEventListener('keydown', dismissOnEscape);
+      document.removeEventListener('pointerdown', dismissOnOutsidePress);
+    };
+  }, [moreOpen]);
+
+  return (
+    <div ref={containerRef} className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-card/95 px-1 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1.5 backdrop-blur lg:hidden">
+      <nav aria-label="Navegação principal móvel" className="grid grid-cols-5">
+        {mobilePrimaryLinks.map(({ to, label, Icon, end }) => (
+          <NavLink
+            key={to}
+            to={to}
+            end={end}
+            className={({ isActive }) => cn(
+              'flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-0.5 text-center text-[0.625rem] font-medium leading-3 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+              isActive ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+            )}
+          >
+            <Icon aria-hidden="true" className="size-5 shrink-0" strokeWidth={1.9} />
+            <span className="max-w-full break-words">{label}</span>
+          </NavLink>
+        ))}
+        <button
+          ref={moreButtonRef}
+          type="button"
+          aria-label={activeMoreLink ? `Mais páginas, página atual: ${activeMoreLink.label}` : 'Mais páginas'}
+          aria-controls="mobile-more-links"
+          aria-expanded={moreOpen}
+          aria-current={activeMoreLink ? 'page' : undefined}
+          onClick={() => setMoreOpen((open) => !open)}
+          className={cn(
+            'flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-0.5 text-center text-[0.625rem] font-medium leading-3 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+            moreOpen || activeMoreLink ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+          )}
+        >
+          <Ellipsis aria-hidden="true" className="size-5 shrink-0" strokeWidth={1.9} />
+          <span>Mais</span>
+        </button>
+      </nav>
+      <nav
+        id="mobile-more-links"
+        aria-label="Mais páginas"
+        hidden={!moreOpen}
+        className={cn('absolute bottom-full right-2 mb-2 w-[min(15rem,calc(100vw-1rem))] rounded-2xl border border-border bg-card p-2 shadow-xl', moreOpen ? 'block' : 'hidden')}
+      >
+        {mobileMoreLinks.map(({ to, label, Icon, end }) => (
+          <NavLink
+            key={to}
+            to={to}
+            end={end}
+            onClick={() => {
+              setMoreOpen(false);
+              moreButtonRef.current?.focus();
+            }}
+            className={({ isActive }) => cn(
+              'flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+              isActive ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+            )}
+          >
+            <Icon aria-hidden="true" className="size-4 shrink-0" strokeWidth={1.9} />
+            <span>{label}</span>
+          </NavLink>
+        ))}
+      </nav>
+    </div>
   );
 }
 
@@ -167,9 +264,7 @@ export function AppLayout({ user, csrfToken, onLogout, notice, children }: { use
         </main>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-card/95 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1.5 backdrop-blur lg:hidden">
-        <Navigation mobile />
-      </div>
+      <MobileNavigation />
     </div>
   );
 }

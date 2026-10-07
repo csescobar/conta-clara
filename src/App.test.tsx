@@ -68,14 +68,34 @@ describe('application navigation and preview screens', () => {
     expect(screen.getByRole('status', { name: 'Nenhuma alteração registrada' })).toBeInTheDocument();
   });
 
-  it('makes the mobile navigation and active entry form clear', async () => {
+  it('keeps the mobile navigation compact and exposes the remaining pages through Mais', async () => {
     const user = userEvent.setup();
     await renderSignedInApp();
 
-    expect(screen.getByRole('navigation', { name: /^Navegação principal móvel$/ })).toBeInTheDocument();
     const mobileNav = screen.getByRole('navigation', { name: /^Navegação principal móvel$/ });
-    await user.click(within(mobileNav).getByRole('link', { name: 'Recorrências' }));
+    expect(within(mobileNav).getByRole('link', { name: 'Visão geral' })).toHaveAttribute('href', '/');
+    expect(within(mobileNav).getByRole('link', { name: 'Lançamentos' })).toHaveAttribute('href', '/lancamentos');
+    expect(within(mobileNav).getByRole('link', { name: 'Compras' })).toHaveAttribute('href', '/compras');
+    expect(within(mobileNav).getByRole('link', { name: 'Faturas' })).toHaveAttribute('href', '/faturas');
+
+    const moreButton = within(mobileNav).getByRole('button', { name: 'Mais páginas' });
+    expect(moreButton).toHaveAttribute('aria-expanded', 'false');
+    await user.click(moreButton);
+    const moreNav = screen.getByRole('navigation', { name: 'Mais páginas' });
+    expect(within(moreNav).getByRole('link', { name: 'Recorrências' })).toHaveAttribute('href', '/recorrencias');
+    expect(within(moreNav).getByRole('link', { name: 'Histórico' })).toHaveAttribute('href', '/historico');
+    expect(within(moreNav).getByRole('link', { name: 'Configurações' })).toHaveAttribute('href', '/configuracoes');
+
+    await user.keyboard('{Escape}');
+    expect(moreButton).toHaveFocus();
+    expect(moreButton).toHaveAttribute('aria-expanded', 'false');
+    await user.click(moreButton);
+    await user.click(within(screen.getByRole('navigation', { name: 'Mais páginas' })).getByRole('link', { name: 'Recorrências' }));
     expect(screen.getByRole('heading', { name: 'Recorrências' })).toBeInTheDocument();
+    expect(moreButton).toHaveFocus();
+    expect(moreButton).toHaveAttribute('aria-expanded', 'false');
+    expect(moreButton).toHaveAttribute('aria-current', 'page');
+    expect(moreButton).toHaveAccessibleName('Mais páginas, página atual: Recorrências');
 
     await user.click(within(mobileNav).getByRole('link', { name: 'Visão geral' }));
     await user.click(screen.getByRole('link', { name: 'Adicionar lançamento' }));

@@ -31,6 +31,59 @@ test('administra um espaço compartilhado, importa e sincroniza uma alteração 
   await admin.getByRole('button', { name: 'Criar meu acesso' }).click();
   await expect(admin.getByRole('heading', { name: 'Visão geral' })).toBeVisible();
 
+  for (const width of [320, 360, 390, 430]) {
+    await admin.setViewportSize({ width, height: 844 });
+    const mobileNav = admin.getByRole('navigation', { name: 'Navegação principal móvel' });
+    await expect(mobileNav).toBeVisible();
+    expect(await admin.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    const navigationItems = await mobileNav.locator('a, button').evaluateAll((items) => items.map((item) => {
+      const rect = item.getBoundingClientRect();
+      return { left: rect.left, right: rect.right, width: rect.width };
+    }));
+    expect(navigationItems).toHaveLength(5);
+    expect(navigationItems.every((item) => item.width >= 44 && item.left >= 0 && item.right <= width)).toBe(true);
+    for (let index = 0; index < navigationItems.length - 1; index += 1) {
+      expect(navigationItems[index].right).toBeLessThanOrEqual(navigationItems[index + 1].left + 1);
+    }
+    const clippedLabels = await mobileNav.locator('span').evaluateAll((labels) => labels.some((label) => label.scrollWidth > label.clientWidth + 1));
+    expect(clippedLabels).toBe(false);
+  }
+
+  await admin.setViewportSize({ width: 390, height: 844 });
+  const mobileNav = admin.getByRole('navigation', { name: 'Navegação principal móvel' });
+  for (const [linkName, headingName] of [
+    ['Lançamentos', 'Lançamentos'],
+    ['Compras', 'Compras parceladas'],
+    ['Faturas', 'Faturas'],
+  ]) {
+    await mobileNav.getByRole('link', { name: linkName }).click();
+    await expect(admin.getByRole('heading', { name: headingName, exact: true })).toBeVisible();
+  }
+  await mobileNav.getByRole('link', { name: 'Visão geral' }).click();
+  await expect(admin.getByRole('heading', { name: 'Visão geral', exact: true })).toBeVisible();
+
+  const moreButton = mobileNav.getByRole('button', { name: /^Mais páginas/ });
+  await moreButton.click();
+  const moreNav = admin.getByRole('navigation', { name: 'Mais páginas' });
+  await expect(moreNav).toBeVisible();
+  await expect(moreNav.getByRole('link', { name: 'Recorrências' })).toBeVisible();
+  await expect(moreNav.getByRole('link', { name: 'Histórico' })).toBeVisible();
+  await expect(moreNav.getByRole('link', { name: 'Configurações' })).toBeVisible();
+  await admin.keyboard.press('Escape');
+  await expect(moreNav).toBeHidden();
+  await expect(moreButton).toBeFocused();
+  for (const pageName of ['Recorrências', 'Histórico', 'Configurações']) {
+    await moreButton.click();
+    await moreNav.getByRole('link', { name: pageName }).click();
+    await expect(admin.getByRole('heading', { name: pageName, exact: true })).toBeVisible();
+  }
+  await expect(moreButton).toBeFocused();
+  await expect(moreButton).toHaveAttribute('aria-current', 'page');
+  await expect(moreButton).toHaveAccessibleName('Mais páginas, página atual: Configurações');
+  await mobileNav.getByRole('link', { name: 'Visão geral' }).click();
+  await expect(admin.getByRole('heading', { name: 'Visão geral', exact: true })).toBeVisible();
+  await admin.setViewportSize({ width: 1280, height: 900 });
+
   await admin.getByRole('link', { name: 'Configurações' }).click();
   await admin.getByLabel('Nome da categoria').fill('Moradia fictícia');
   await admin.getByRole('button', { name: 'Adicionar categoria' }).click();
