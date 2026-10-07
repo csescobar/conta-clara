@@ -59,6 +59,8 @@ Para os filtros, formato e segurança do arquivo CSV, consulte [docs/csv-export.
 
 Para instalação e cache da interface, consulte [docs/pwa.md](docs/pwa.md); [docs/offline-storage.md](docs/offline-storage.md) e [docs/synchronization.md](docs/synchronization.md) explicam os dados locais, a fila e os limites de sincronização.
 
+Para o horizonte de previsão das recorrências, vencimentos ajustados, atualização de regras e consulta offline, consulte [docs/recurring-forecasts.md](docs/recurring-forecasts.md).
+
 Para cadastro de cartões, cálculo do ciclo, parcelas, quitação de faturas, exportação e uso offline, consulte [docs/cards-and-invoices.md](docs/cards-and-invoices.md).
 
 Consulte [docs/design-system.md](docs/design-system.md) para tokens, acessibilidade e componentes visuais.
@@ -73,7 +75,7 @@ Para testar a restauração em um Postgres descartável e recuperar uma cópia e
 
 ## Planejamento e contribuição
 
-Veja [ROADMAP.md](ROADMAP.md), [issues](https://github.com/csescobar/conta-clara/issues), [CONTRIBUTING.md](CONTRIBUTING.md) e [AGENTS.md](AGENTS.md). Contas bancárias, faturas, parcelamentos e acesso remoto ficam fora da primeira versão.
+Veja [ROADMAP.md](ROADMAP.md), [issues](https://github.com/csescobar/conta-clara/issues), [CONTRIBUTING.md](CONTRIBUTING.md) e [AGENTS.md](AGENTS.md). Contas bancárias, integração bancária, pagamentos parciais e acesso remoto permanecem fora do escopo atual.
 
 ## Licença
 

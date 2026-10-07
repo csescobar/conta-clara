@@ -2,8 +2,25 @@ import { expect, test } from '@playwright/test';
 import * as XLSX from 'xlsx';
 
 function currentMonth() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit' })
+    .formatToParts(new Date());
+  const year = parts.find((part) => part.type === 'year').value;
+  const month = parts.find((part) => part.type === 'month').value;
+  return `${year}-${month}`;
+}
+
+function monthAfter(value, offset) {
+  const [year, month] = value.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1 + offset, 1)).toISOString().slice(0, 7);
+}
+
+function brazilianToday() {
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' })
+    .formatToParts(new Date());
+  const day = parts.find((part) => part.type === 'day').value;
+  const month = parts.find((part) => part.type === 'month').value;
+  const year = parts.find((part) => part.type === 'year').value;
+  return `${day}/${month}/${year}`;
 }
 
 function syntheticWorkbook() {
@@ -194,10 +211,85 @@ test('administra um espaço compartilhado, importa e sincroniza uma alteração 
   await admin.locator('#recurrence-category').selectOption({ label: 'Moradia fictícia' });
   await admin.locator('#recurrence-payment-method').selectOption({ label: 'Pix fictício' });
   await admin.getByLabel('Mês de início').fill(month);
-  await admin.getByLabel('Dia de vencimento').fill('15');
+  await admin.getByLabel('Mês de término').fill(monthAfter(month, 4));
+  await admin.getByLabel('Dia de vencimento').fill('31');
   await admin.getByLabel('Valor previsto (R$)').fill('20,00');
   await admin.getByRole('button', { name: 'Criar regra' }).click();
   await expect(admin.getByText('Moradia recorrente fictícia')).toBeVisible();
+
+  const forecastMonth = monthAfter(month, 1);
+  const skippedMonth = monthAfter(month, 2);
+  const restoredMonth = monthAfter(month, 3);
+  const ruleEndMonth = monthAfter(month, 4);
+  await admin.getByRole('link', { name: 'Visão geral' }).click();
+  const forecastRequest = admin.waitForResponse((response) => response.url().includes(`/api/dashboard?month=${forecastMonth}`));
+  await admin.getByLabel('Mês do painel').fill(forecastMonth);
+  const forecastDashboard = await (await forecastRequest).json();
+  const cardInstallmentCents = forecastMonth === '2026-11' ? 334 : 0;
+  expect(forecastDashboard.planned.expenseCents).toBe(String(2000 + cardInstallmentCents));
+  expect(forecastDashboard.charts.expensesByCategory).toContainEqual(expect.objectContaining({
+    categoryName: 'Moradia fictícia', plannedCents: String(2000 + cardInstallmentCents),
+  }));
+
+  await admin.getByRole('link', { name: 'Lançamentos' }).click();
+  await admin.getByLabel('Competência').fill(forecastMonth);
+  await expect(admin.getByText('Moradia recorrente fictícia')).toBeVisible();
+  await admin.getByRole('link', { name: 'Editar Moradia recorrente fictícia' }).click();
+  await admin.getByLabel('Descrição').fill('Moradia ajustada individualmente');
+  await admin.getByLabel('Valor previsto (R$)').fill('22,50');
+  await admin.getByRole('button', { name: 'Salvar alterações' }).click();
+  await expect(admin).toHaveURL(/\/lancamentos$/);
+  await admin.getByLabel('Competência').fill(forecastMonth);
+  await expect(admin.getByLabel('Competência')).toHaveValue(forecastMonth);
+  await expect(admin.getByText('Moradia ajustada individualmente')).toBeVisible();
+
+  await admin.getByRole('link', { name: 'Lançamentos' }).click();
+  await admin.getByLabel('Competência').fill(month);
+  await admin.getByRole('button', { name: 'Confirmar Moradia recorrente fictícia' }).click();
+  const recurrenceConfirmation = admin.getByRole('form', { name: 'Confirmar lançamento Moradia recorrente fictícia' });
+  await recurrenceConfirmation.getByLabel('Valor realizado (R$)').fill('20,00');
+  await recurrenceConfirmation.getByLabel('Data de realização').fill(brazilianToday());
+  await recurrenceConfirmation.getByRole('button', { name: 'Salvar realização' }).click();
+  await expect(admin.getByLabel('Situação: Pago')).toBeVisible();
+
+  await admin.getByRole('link', { name: 'Recorrências' }).click();
+  await admin.getByRole('link', { name: 'Editar regra Moradia recorrente fictícia' }).click();
+  await admin.getByLabel('Valor previsto (R$)').fill('25,00');
+  await admin.getByRole('button', { name: 'Salvar regra' }).click();
+  await expect(admin.getByText('Moradia recorrente fictícia')).toBeVisible();
+
+  await admin.getByRole('link', { name: 'Lançamentos' }).click();
+  await admin.getByLabel('Competência').fill(skippedMonth);
+  await expect(admin.getByText('Moradia recorrente fictícia')).toBeVisible();
+  admin.once('dialog', (dialog) => dialog.accept());
+  await admin.getByRole('button', { name: 'Excluir Moradia recorrente fictícia' }).click();
+  await expect(admin.getByText('Moradia recorrente fictícia')).toHaveCount(0);
+
+  await admin.getByRole('link', { name: 'Recorrências' }).click();
+  await admin.getByRole('link', { name: 'Editar regra Moradia recorrente fictícia' }).click();
+  await admin.getByLabel('Mês de término').fill(skippedMonth);
+  await admin.getByRole('button', { name: 'Salvar regra' }).click();
+  await admin.getByRole('link', { name: 'Lançamentos' }).click();
+  await admin.getByLabel('Competência').fill(restoredMonth);
+  await expect(admin.getByText('Moradia recorrente fictícia')).toHaveCount(0);
+
+  await admin.getByRole('link', { name: 'Recorrências' }).click();
+  await admin.getByRole('link', { name: 'Editar regra Moradia recorrente fictícia' }).click();
+  await admin.getByLabel('Mês de término').fill(ruleEndMonth);
+  await admin.getByRole('button', { name: 'Salvar regra' }).click();
+  await admin.getByRole('link', { name: 'Lançamentos' }).click();
+  await admin.getByLabel('Competência').fill(restoredMonth);
+  const restoredOccurrence = admin.getByText('Moradia recorrente fictícia');
+  await expect(restoredOccurrence).toBeVisible();
+  await expect(restoredOccurrence.locator('..').locator('..')).toContainText('25,00');
+  await admin.getByLabel('Competência').fill(skippedMonth);
+  await expect(admin.getByText('Moradia recorrente fictícia')).toHaveCount(0);
+  await admin.getByLabel('Competência').fill(forecastMonth);
+  await expect(admin.getByText('Moradia ajustada individualmente')).toBeVisible();
+  await expect(admin.getByText('22,50')).toBeVisible();
+  await admin.getByLabel('Competência').fill(month);
+  await expect(admin.getByText('Moradia recorrente fictícia')).toBeVisible();
+  await expect(admin.getByLabel('Situação: Pago')).toBeVisible();
 
   await admin.getByRole('link', { name: 'Lançamentos' }).click();
   await admin.getByRole('link', { name: 'Importar planilha' }).click();
@@ -218,12 +310,13 @@ test('administra um espaço compartilhado, importa e sincroniza uma alteração 
   await admin.getByRole('button', { name: 'Confirmar Conta sintética importada' }).click();
   const confirmation = admin.getByRole('form', { name: 'Confirmar lançamento Conta sintética importada' });
   await confirmation.getByRole('button', { name: 'Salvar realização' }).click();
-  await expect(admin.getByLabel('Situação: Pago')).toBeVisible();
+  const importedEntry = admin.getByRole('listitem').filter({ hasText: 'Conta sintética importada' });
+  await expect(importedEntry.getByLabel('Situação: Pago')).toBeVisible();
 
   await admin.getByRole('link', { name: 'Visão geral' }).click();
   const expenses = admin.getByRole('table').getByRole('row', { name: /Despesas/ });
-  await expect(expenses).toContainText('70,00');
-  await expect(expenses).toContainText('50,00');
+  await expect(expenses.locator('td').nth(0)).toContainText('70,00');
+  await expect(expenses.locator('td').nth(1)).toContainText('70,00');
 
   await admin.getByRole('link', { name: 'Configurações' }).click();
   await admin.getByLabel('E-mail da pessoa').fill('membro@example.test');
@@ -245,6 +338,23 @@ test('administra um espaço compartilhado, importa e sincroniza uma alteração 
   ))).flat());
   expect(cachedUrls).toContain('/');
   expect(cachedUrls.some((url) => url.endsWith('.js'))).toBe(true);
+
+  const memberForecastRequest = member.waitForResponse((response) => response.url().includes(`/api/dashboard?month=${forecastMonth}`));
+  await member.getByLabel('Mês do painel').fill(forecastMonth);
+  const memberForecast = await (await memberForecastRequest).json();
+  const adjustedForecastCents = 2250 + cardInstallmentCents;
+  expect(memberForecast.planned.expenseCents).toBe(String(adjustedForecastCents));
+  await memberContext.setOffline(true);
+  await member.evaluate(() => window.dispatchEvent(new Event('offline')));
+  await expect(member.getByText(/^Sem conexão de rede/)).toBeVisible();
+  await member.getByLabel('Mês do painel').fill(monthAfter(month, 5));
+  await expect(member.getByRole('alert')).toContainText('Este mês ainda não foi carregado neste aparelho.');
+  await member.getByLabel('Mês do painel').fill(forecastMonth);
+  const cachedForecastExpenses = member.getByRole('table').getByRole('row', { name: /Despesas/ });
+  await expect(cachedForecastExpenses).toContainText(forecastMonth === '2026-11' ? '25,84' : '22,50');
+  await memberContext.setOffline(false);
+  await member.evaluate(() => window.dispatchEvent(new Event('online')));
+  await expect(member.getByText('Rede conectada · nenhuma alteração pendente.')).toBeVisible({ timeout: 20_000 });
 
   await member.getByRole('link', { name: 'Compras' }).click();
   await expect(member.getByText('Compra parcelada fictícia')).toBeVisible();
