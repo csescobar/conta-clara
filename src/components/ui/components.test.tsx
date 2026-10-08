@@ -5,12 +5,24 @@ import { StatusBadge } from './badge';
 import { Button } from './button';
 import { ErrorState, EmptyState, LoadingState } from './feedback';
 import { FormField, Input } from './input';
-import { formatBRL } from './money-value';
+import { MoneyValue } from './money-value';
 
 describe('finance UI components', () => {
-  it('formats integer cents as Brazilian reais', () => {
-    expect(formatBRL(2500)).toBe('R$ 25,00');
-    expect(() => formatBRL(25.5)).toThrow(RangeError);
+  it('shows exact reais with tone, sign and a compact variant that keeps the exact value', () => {
+    render(<>
+      <MoneyValue cents={2500} data-testid="plain" />
+      <MoneyValue cents="-123456" tone="balance" data-testid="balance" />
+      <MoneyValue cents={2500} signDisplay="always" tone="income" data-testid="signed" />
+      <MoneyValue cents="123456789" compact data-testid="compact" />
+    </>);
+
+    expect(screen.getByTestId('plain')).toHaveTextContent('R$ 25,00');
+    expect(screen.getByTestId('balance')).toHaveTextContent('-R$ 1.234,56');
+    expect(screen.getByTestId('balance')).toHaveClass('text-destructive', 'tabular-nums');
+    expect(screen.getByTestId('signed')).toHaveTextContent('+R$ 25,00');
+    expect(screen.getByTestId('signed')).toHaveClass('text-success');
+    expect(screen.getByTestId('compact')).toHaveTextContent(/^R\$\s1,2\smi$/);
+    expect(screen.getByTestId('compact')).toHaveAttribute('title', 'R$\u00a01.234.567,89');
   });
 
   it('identifies a status with text as well as its color and icon', () => {

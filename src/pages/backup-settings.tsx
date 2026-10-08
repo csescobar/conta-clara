@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { CloudDownload, RefreshCw } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
+import { formatBrazilianDateTime } from '../lib/finance';
 
 type BackupStatus = {
   runState: 'never' | 'running' | 'success' | 'warning' | 'failed';
@@ -13,16 +14,8 @@ type BackupStatus = {
   lastFailureMessage: string | null;
 };
 
-const dateTime = new Intl.DateTimeFormat('pt-BR', {
-  dateStyle: 'short',
-  timeStyle: 'short',
-  timeZone: 'America/Sao_Paulo',
-});
-
 function displayDate(value: string | null) {
-  if (!value) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : dateTime.format(date);
+  return formatBrazilianDateTime(value);
 }
 
 export function BackupSettings() {

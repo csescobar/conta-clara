@@ -55,7 +55,8 @@ Os componentes reutilizáveis ficam em `src/components/ui`. Seguem a composiçã
 - `Button`: ação principal, secundária, contorno, discreta e destrutiva; foco de teclado visível e estado desabilitado claro.
 - `Card`: superfície para informação relacionada, com título e descrição semânticos.
 - `FormField` e `Input`: rótulo visível ligado ao campo; ajuda e erro vinculados por `aria-describedby`.
-- `MoneyValue`: entrada em centavos inteiros, saída em reais no locale `pt-BR`.
+- `MoneyValue`: recebe centavos inteiros (número, string ou BigInt) e exibe reais com algarismos tabulares. `tone` aplica a cor de receita (`income`), despesa (`expense`), aporte (`investment`) ou resultado (`balance`: sucesso se zero ou positivo, erro se negativo); `signDisplay` mostra `+` quando pedido; `compact` abrevia (ex.: “R$ 1,2 mi”) e mantém o valor exato no `title`. Use-o para valores isolados; em frases corridas, use `formatBrazilianMoney`.
+- Formatação: `src/lib/finance.ts` é a única fonte para dinheiro (`formatBrazilianMoney`, `formatCompactBrazilianMoney`), datas (`formatBrazilianDate`, `formatBrazilianMonth`, `formatBrazilianMonthLong`, `formatBrazilianDateTime`, `brazilianMonthName`) e a data atual em America/Sao_Paulo (`currentSaoPauloDate`, `currentBrazilianDate`, `currentMonthInputValue`). Não criar `Intl.NumberFormat` ou `Intl.DateTimeFormat` nas telas. A exportação CSV mantém seu formato próprio.
 - `StatusBadge`: sempre exibe texto e ícone além da cor.
 - `DashboardCharts`: gráficos responsivos de previsto versus realizado e despesas por categoria, com aportes separados do consumo. Cada gráfico inclui resumo textual, tooltip com valor exato e tabela expansível; a navegação por teclado e leitores de tela permanecem habilitados.
 - `EmptyState`, `LoadingState` e `ErrorState`: mensagens explícitas; carregamento usa anúncio educado, erro usa alerta.

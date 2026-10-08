@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx';
+import { brazilianMonthName } from './finance';
 
 export type ImportKind = 'income' | 'expense' | 'investment';
 export type ImportLocale = 'en_US' | 'pt_BR';
@@ -323,7 +324,7 @@ export function parseSpreadsheetImport(
       skipped.push({ sourceSheet: CASH_FLOW_SHEET, sourceRow, description: 'Receita prevista', reason: 'O mês da receita prevista não pôde ser interpretado.' });
       continue;
     }
-    const monthName = new Intl.DateTimeFormat('pt-BR', { month: 'long', timeZone: 'UTC' }).format(new Date(Date.UTC(year, month - 1, 1)));
+    const monthName = brazilianMonthName(month);
     entries.push({
       id: `${CASH_FLOW_SHEET}:${sourceRow}`,
       sourceSheet: CASH_FLOW_SHEET,

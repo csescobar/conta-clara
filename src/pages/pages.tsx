@@ -7,13 +7,14 @@ import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { EmptyState, LoadingState } from '../components/ui/feedback';
 import { FormField, Input } from '../components/ui/input';
-import { currentMonthInputValue, formatBrazilianDate } from '../lib/finance';
+import { currentMonthInputValue, formatBrazilianDate, formatBrazilianDateTime, formatBrazilianMonthLong } from '../lib/finance';
 import type { ChartSummary, ExpenseCategoryChartEntry } from './dashboard-charts';
 import { CatalogSettings } from './catalog-settings';
 import { CardSettings } from './card-settings';
 import { BackupSettings } from './backup-settings';
 import { PageHeader } from './page-header';
 import { isAuthenticationFailure, isNetworkFailure, useOfflineWorkspace } from '../offline/offline-context';
+import { MoneyValue } from '../components/ui/money-value';
 
 const DashboardCharts = lazy(() => import('./dashboard-charts').then(({ DashboardCharts: charts }) => ({ default: charts })));
 
@@ -28,35 +29,19 @@ type DashboardData = {
 };
 type DashboardApiResponse = DashboardData & { error?: string };
 
-function formatCents(cents: string) {
-  const value = BigInt(cents);
-  const absolute = value < 0n ? -value : value;
-  const whole = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 }).format(absolute / 100n);
-  const fraction = (absolute % 100n).toString().padStart(2, '0');
-  return `${value < 0n ? '-R$' : 'R$'}\u00a0${whole},${fraction}`;
-}
-
-function monthHeading(value: string) {
-  const [year, month] = value.split('-').map(Number);
-  const label = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' })
-    .format(new Date(Date.UTC(year, month - 1, 1)));
-  return `${label.slice(0, 1).toLocaleUpperCase('pt-BR')}${label.slice(1)}`;
-}
-
 function moveMonth(value: string, offset: number) {
   const [year, month] = value.split('-').map(Number);
   return new Date(Date.UTC(year, month - 1 + offset, 1)).toISOString().slice(0, 7);
 }
 
 function DashboardMetric({ title, cents, description }: { title: string; cents: string; description: string }) {
-  const negative = BigInt(cents) < 0n;
-  return <Card><CardContent className="grid gap-3 p-4 sm:p-5"><p className="text-sm font-medium text-muted-foreground">{title}</p><p className={`text-2xl font-semibold tracking-tight tabular-nums sm:text-display ${negative ? 'text-destructive' : 'text-success'}`}>{formatCents(cents)}</p><p className="text-xs leading-5 text-muted-foreground">{description}</p></CardContent></Card>;
+  return <Card><CardContent className="grid gap-3 p-4 sm:p-5"><p className="text-sm font-medium text-muted-foreground">{title}</p><p className="text-2xl font-semibold tracking-tight sm:text-display"><MoneyValue cents={cents} tone="balance" /></p><p className="text-xs leading-5 text-muted-foreground">{description}</p></CardContent></Card>;
 }
 
 function DashboardEntryList({ entries, overdue = false }: { entries: DashboardEntry[]; overdue?: boolean }) {
   return <ul className="divide-y divide-border">{entries.map((entry) => <li key={entry.id} className="flex min-w-0 items-center gap-3 py-3 first:pt-0 last:pb-0 sm:gap-4">
     <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{entry.description}</p><p className={`mt-0.5 text-xs ${overdue ? 'text-destructive' : 'text-muted-foreground'}`}>Vence em {formatBrazilianDate(entry.due_on)}</p></div>
-    <div className="grid shrink-0 justify-items-end gap-1"><p className="text-sm font-semibold tabular-nums">{formatCents(entry.planned_cents)}</p>{overdue && <StatusBadge status="late" />}</div>
+    <div className="grid shrink-0 justify-items-end gap-1"><p className="text-sm font-semibold tabular-nums"><MoneyValue cents={entry.planned_cents} /></p>{overdue && <StatusBadge status="late" />}</div>
   </li>)}</ul>;
 }
 
@@ -121,7 +106,7 @@ export function DashboardPage() {
     return () => { active = false; };
   }, [month, offline?.online]);
 
-  const heading = monthHeading(month);
+  const heading = formatBrazilianMonthLong(month);
   return <>
     <PageHeader eyebrow={heading} title="Visão geral" description="Compare o previsto por competência com os valores efetivamente realizados." action={<div className="flex flex-wrap items-center gap-2"><div className="flex items-center gap-2"><Button type="button" size="icon" variant="outline" aria-label="Mês anterior" onClick={() => setMonth((value) => moveMonth(value, -1))}><ChevronLeft aria-hidden="true" className="size-4" /></Button><Input aria-label="Mês do painel" type="month" required className="w-[10.5rem]" value={month} onChange={(event) => { if (/^\d{4}-(0[1-9]|1[0-2])$/.test(event.target.value)) setMonth(event.target.value); }} /><Button type="button" size="icon" variant="outline" aria-label="Próximo mês" onClick={() => setMonth((value) => moveMonth(value, 1))}><ChevronRight aria-hidden="true" className="size-4" /></Button></div><Button asChild><Link to="/lancamentos/novo"><Plus aria-hidden="true" className="size-4" />Adicionar lançamento</Link></Button></div>} />
     {error && <p role="alert" className="mb-4 rounded-xl bg-destructive-soft px-4 py-3 text-sm font-medium text-destructive">{error}</p>}
@@ -143,8 +128,8 @@ export function DashboardPage() {
                 ['Receitas', dashboard.planned.incomeCents, dashboard.realized.incomeCents],
                 ['Despesas', dashboard.planned.expenseCents, dashboard.realized.expenseCents],
                 ['Aportes', dashboard.planned.investmentCents, dashboard.realized.investmentCents],
-              ] as const).map(([label, planned, realized]) => <tr key={label} className="border-b border-border last:border-0"><th scope="row" className="py-3 pr-4 text-left font-medium">{label}</th><td className="px-4 py-3 text-right tabular-nums">{formatCents(planned)}</td><td className="py-3 pl-4 text-right tabular-nums">{formatCents(realized)}</td></tr>)}
-              <tr className="bg-muted/40"><th scope="row" className="py-3 pr-4 text-left font-semibold">Resultado do período</th><td className="px-4 py-3 text-right font-semibold tabular-nums">{formatCents(dashboard.planned.resultCents)}</td><td className="py-3 pl-4 text-right font-semibold tabular-nums">{formatCents(dashboard.realized.resultCents)}</td></tr>
+              ] as const).map(([label, planned, realized]) => <tr key={label} className="border-b border-border last:border-0"><th scope="row" className="py-3 pr-4 text-left font-medium">{label}</th><td className="px-4 py-3 text-right tabular-nums"><MoneyValue cents={planned} /></td><td className="py-3 pl-4 text-right tabular-nums"><MoneyValue cents={realized} /></td></tr>)}
+              <tr className="bg-muted/40"><th scope="row" className="py-3 pr-4 text-left font-semibold">Resultado do período</th><td className="px-4 py-3 text-right font-semibold tabular-nums"><MoneyValue cents={dashboard.planned.resultCents} /></td><td className="py-3 pl-4 text-right font-semibold tabular-nums"><MoneyValue cents={dashboard.realized.resultCents} /></td></tr>
             </tbody>
           </table>
         </CardContent>
@@ -307,7 +292,7 @@ export function SettingsPage() {
       {isAdmin && <Card><CardHeader><CardTitle><span className="flex items-center gap-2"><Mail aria-hidden="true" className="size-5 text-primary" />Convidar pessoa</span></CardTitle><CardDescription>Gere um link local para a pessoa definir o próprio nome e senha. O link vale por 48 horas.</CardDescription></CardHeader><CardContent className="grid gap-5">
         <form onSubmit={createInvitation} className="flex flex-col gap-3 sm:flex-row sm:items-end"><div className="flex-1"><FormField id="invite-email" label="E-mail da pessoa"><Input type="email" autoComplete="email" required maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} /></FormField></div><Button type="submit" disabled={busy}><Plus aria-hidden="true" className="size-4" />Gerar convite</Button></form>
         {link && <div className="grid gap-2 rounded-xl border border-primary/30 bg-accent/40 p-4"><p className="text-sm font-semibold">{link.label}</p><p className="text-xs text-muted-foreground">{link.expires} Copie e entregue o link à pessoa; ele não será enviado por e-mail.</p><div className="flex flex-col gap-2 sm:flex-row"><Input aria-label="Link de acesso" readOnly value={linkValue} onFocus={(event) => event.currentTarget.select()} /><Button type="button" variant="outline" onClick={() => void copyLink()}><Copy aria-hidden="true" className="size-4" />{copied ? 'Copiado' : 'Copiar link'}</Button></div></div>}
-        <div className="grid gap-2">{invitations === null ? <p className="text-sm text-muted-foreground">Carregando convites…</p> : invitations.length ? invitations.map((invitation) => <div key={invitation.id} className="flex flex-wrap items-center gap-3 border-t border-border pt-3"><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{invitation.email}</p><p className="text-xs text-muted-foreground">{statusText[invitation.status] ?? invitation.status} · expira {new Date(invitation.expires_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</p></div>{invitation.status !== 'accepted' && <><Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => void manageInvitation(invitation.id, 'reissue')}><RefreshCw aria-hidden="true" className="size-4" />Reemitir</Button>{invitation.status === 'pending' && <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => void manageInvitation(invitation.id, 'revoke')}>Invalidar</Button>}</>}</div>) : <p className="text-sm text-muted-foreground">Nenhum convite emitido.</p>}</div>
+        <div className="grid gap-2">{invitations === null ? <p className="text-sm text-muted-foreground">Carregando convites…</p> : invitations.length ? invitations.map((invitation) => <div key={invitation.id} className="flex flex-wrap items-center gap-3 border-t border-border pt-3"><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{invitation.email}</p><p className="text-xs text-muted-foreground">{statusText[invitation.status] ?? invitation.status} · expira {formatBrazilianDateTime(invitation.expires_at)}</p></div>{invitation.status !== 'accepted' && <><Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => void manageInvitation(invitation.id, 'reissue')}><RefreshCw aria-hidden="true" className="size-4" />Reemitir</Button>{invitation.status === 'pending' && <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => void manageInvitation(invitation.id, 'revoke')}>Invalidar</Button>}</>}</div>) : <p className="text-sm text-muted-foreground">Nenhum convite emitido.</p>}</div>
       </CardContent></Card>}
 
       {isAdmin && <BackupSettings />}

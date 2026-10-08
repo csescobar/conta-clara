@@ -8,6 +8,7 @@ import { EmptyState, LoadingState } from '../components/ui/feedback';
 import { FormField, Input } from '../components/ui/input';
 import { currentMonthInputValue, formatBrazilianMoney, parseBrazilianCents } from '../lib/finance';
 import { PageHeader } from './page-header';
+import { MoneyValue } from '../components/ui/money-value';
 
 type EntryKind = 'income' | 'expense' | 'investment';
 type RecurrenceRule = {
@@ -93,7 +94,7 @@ export function RecurrencesPage() {
         {loading ? <LoadingState label="Carregando regras de recorrência" /> : rules.length ? <ul className="divide-y divide-border">{rules.map((rule) => <li key={rule.id} className="flex flex-wrap items-center gap-3 py-4 first:pt-0 last:pb-0 sm:gap-4">
           <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-accent text-accent-foreground"><RefreshCw aria-hidden="true" className="size-[18px]" /></span>
           <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{rule.description}{rule.archived_at ? ' (arquivada)' : ''}</p><p className="mt-0.5 text-xs leading-5 text-muted-foreground">{kindLabels[rule.kind]} · {rule.category_name ?? 'Sem categoria'} · {rule.due_day ? `Dia ${rule.due_day}` : 'Sem vencimento'} · {recurrencePeriod(rule)} · {rule.occurrence_count} {rule.occurrence_count === 1 ? 'ocorrência' : 'ocorrências'}</p></div>
-          <p className="shrink-0 text-sm font-semibold tabular-nums">{formatBrazilianMoney(rule.planned_cents)}</p>
+          <p className="shrink-0 text-sm font-semibold tabular-nums"><MoneyValue cents={rule.planned_cents} /></p>
           {!rule.archived_at && <div className="flex w-full justify-end gap-1 sm:w-auto"><Button asChild size="sm" variant="ghost"><Link aria-label={`Editar regra ${rule.description}`} to={`/recorrencias/${rule.id}/editar`}>Editar</Link></Button><Button type="button" size="sm" variant="ghost" disabled={busyId === rule.id} aria-label={`Arquivar regra ${rule.description}`} onClick={() => void archiveRule(rule)}><Archive aria-hidden="true" className="size-4" />Arquivar</Button></div>}
         </li>)}</ul> : <EmptyState title="Nenhuma regra mensal" description="Crie uma regra para gerar os lançamentos mensais que se repetem." action={<Button asChild><Link to="/recorrencias/novo"><Plus aria-hidden="true" className="size-4" />Nova regra</Link></Button>} />}
       </CardContent>

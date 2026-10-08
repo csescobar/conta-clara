@@ -40,6 +40,7 @@ import {
   type OfflineScope,
   type OfflineWorkspaceSnapshot,
 } from './offline-store';
+import { currentSaoPauloDate } from '../lib/finance';
 
 export type OfflineWorkspace = OfflineWorkspaceSnapshot & {
   online: boolean;
@@ -431,9 +432,7 @@ export function makeOfflineEntry(input: {
   paymentMethodId: string | null;
   notes: string | null;
 }, categories: OfflineCategory[], paymentMethods: OfflinePaymentMethod[], previous?: OfflineEntry): OfflineEntry {
-  const todayParts = new Intl.DateTimeFormat('en', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' })
-    .formatToParts(new Date()).reduce<Record<string, string>>((parts, part) => ({ ...parts, [part.type]: part.value }), {});
-  const today = `${todayParts.year}-${todayParts.month}-${todayParts.day}`;
+  const today = currentSaoPauloDate();
   return {
     id: input.id,
     kind: input.kind,

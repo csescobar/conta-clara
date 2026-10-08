@@ -5,9 +5,10 @@ import { AuthContext } from '../auth/auth-gate';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { FormField, Input } from '../components/ui/input';
-import { formatBrazilianDate, formatBrazilianMoney, currentMonthInputValue } from '../lib/finance';
+import { brazilianMonthName, currentMonthInputValue, formatBrazilianDate } from '../lib/finance';
 import { parseSpreadsheetImport, type ImportKind, type ImportLocale, type SpreadsheetImportEntry, type SpreadsheetImportPreview } from '../lib/spreadsheet-import';
 import { PageHeader } from './page-header';
+import { MoneyValue } from '../components/ui/money-value';
 
 type Category = { id: string; name: string; kind: ImportKind; archived_at: string | null };
 type PaymentMethod = { id: string; name: string; archived_at: string | null };
@@ -26,7 +27,7 @@ function responseJson(response: Response) {
 }
 
 function monthOptions() {
-  return Array.from({ length: 12 }, (_, index) => ({ value: String(index + 1), label: new Intl.DateTimeFormat('pt-BR', { month: 'long', timeZone: 'UTC' }).format(new Date(Date.UTC(2026, index, 1))) }));
+  return Array.from({ length: 12 }, (_, index) => ({ value: String(index + 1), label: brazilianMonthName(index + 1) }));
 }
 
 function defaultCategoryMapping(name: string, categories: Category[]): CategoryMapping {
@@ -215,7 +216,7 @@ export function SpreadsheetImportPage() {
 
             {sourcePaymentMethods.length > 0 && <section className="grid gap-3" aria-labelledby="payment-mapping-title"><h3 id="payment-mapping-title" className="text-sm font-semibold">Formas de pagamento</h3><div className="grid gap-3 sm:grid-cols-2">{sourcePaymentMethods.map((name, index) => <div key={name} className="grid gap-2"><label htmlFor={`import-payment-${index}`} className="text-sm">{name}</label><select id={`import-payment-${index}`} value={paymentMappings[name] ?? ''} onChange={(event) => setPaymentMappings((current) => ({ ...current, [name]: event.target.value }))} className="min-h-11 rounded-xl border border-input bg-card px-3.5 text-sm focus-visible:outline-2 focus-visible:outline-ring"><option value="">Não associar</option>{paymentMethods.filter((method) => !method.archived_at).map((method) => <option key={method.id} value={method.id}>{method.name}</option>)}</select></div>)}</div></section>}
 
-            <div className="overflow-x-auto rounded-xl border border-border"><table className="w-full min-w-[760px] text-left text-sm"><caption className="sr-only">Prévia dos lançamentos importáveis</caption><thead className="bg-muted/50 text-xs text-muted-foreground"><tr><th scope="col" className="px-3 py-2.5">Descrição</th><th scope="col" className="px-3 py-2.5">Tipo</th><th scope="col" className="px-3 py-2.5">Competência</th><th scope="col" className="px-3 py-2.5">Vencimento</th><th scope="col" className="px-3 py-2.5 text-right">Previsto</th></tr></thead><tbody>{preview.entries.map((entry) => <tr key={entry.id} className="border-t border-border align-top"><th scope="row" className="px-3 py-3 font-medium">{entry.description}{entry.warning && <span className="mt-1 block max-w-xs text-xs font-normal text-warning" role="note">{entry.warning}</span>}</th><td className="whitespace-nowrap px-3 py-3">{kindLabels[entry.sourceCategory ? effectiveMapping(entry.sourceCategory, categoryMappings, categories).kind : entry.kind]}</td><td className="whitespace-nowrap px-3 py-3">{formatBrazilianDate(entry.competenceOn)}</td><td className="whitespace-nowrap px-3 py-3">{formatBrazilianDate(entry.dueOn)}</td><td className="whitespace-nowrap px-3 py-3 text-right tabular-nums">{formatBrazilianMoney(entry.plannedCents)}</td></tr>)}</tbody></table></div>
+            <div className="overflow-x-auto rounded-xl border border-border"><table className="w-full min-w-[760px] text-left text-sm"><caption className="sr-only">Prévia dos lançamentos importáveis</caption><thead className="bg-muted/50 text-xs text-muted-foreground"><tr><th scope="col" className="px-3 py-2.5">Descrição</th><th scope="col" className="px-3 py-2.5">Tipo</th><th scope="col" className="px-3 py-2.5">Competência</th><th scope="col" className="px-3 py-2.5">Vencimento</th><th scope="col" className="px-3 py-2.5 text-right">Previsto</th></tr></thead><tbody>{preview.entries.map((entry) => <tr key={entry.id} className="border-t border-border align-top"><th scope="row" className="px-3 py-3 font-medium">{entry.description}{entry.warning && <span className="mt-1 block max-w-xs text-xs font-normal text-warning" role="note">{entry.warning}</span>}</th><td className="whitespace-nowrap px-3 py-3">{kindLabels[entry.sourceCategory ? effectiveMapping(entry.sourceCategory, categoryMappings, categories).kind : entry.kind]}</td><td className="whitespace-nowrap px-3 py-3">{formatBrazilianDate(entry.competenceOn)}</td><td className="whitespace-nowrap px-3 py-3">{formatBrazilianDate(entry.dueOn)}</td><td className="whitespace-nowrap px-3 py-3 text-right tabular-nums"><MoneyValue cents={entry.plannedCents} /></td></tr>)}</tbody></table></div>
 
             {preview.skipped.length > 0 && <details className="rounded-xl border border-border p-3"><summary className="cursor-pointer text-sm font-medium">Linhas ignoradas ({preview.skipped.length})</summary><ul className="mt-3 grid gap-2 text-xs text-muted-foreground">{preview.skipped.map((row) => <li key={`${row.sourceSheet}:${row.sourceRow}`}><span className="font-medium text-foreground">{row.sourceSheet}, linha {row.sourceRow}{row.description ? ` — ${row.description}` : ''}:</span> {row.reason}</li>)}</ul></details>}
 

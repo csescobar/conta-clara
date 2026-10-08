@@ -12,6 +12,8 @@ import {
 } from 'recharts';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { EmptyState } from '../components/ui/feedback';
+import { MoneyValue } from '../components/ui/money-value';
+import { formatBrazilianMoney, formatCompactBrazilianMoney } from '../lib/finance';
 
 export type ChartSummary = { incomeCents: string; expenseCents: string; investmentCents: string; resultCents: string };
 export type ExpenseCategoryChartEntry = { categoryId: string | null; categoryName: string; plannedCents: string; realizedCents: string };
@@ -26,20 +28,12 @@ type ChartPoint = {
 
 type CategoryFilter = 'both' | 'planned' | 'realized';
 
-function formatCents(cents: string) {
-  const value = BigInt(cents);
-  const absolute = value < 0n ? -value : value;
-  const whole = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 }).format(absolute / 100n);
-  const fraction = (absolute % 100n).toString().padStart(2, '0');
-  return `${value < 0n ? '-R$' : 'R$'}\u00a0${whole},${fraction}`;
-}
-
 function chartValue(cents: string) {
   return Number(BigInt(cents)) / 100;
 }
 
 function formatAxisValue(value: number) {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact', maximumFractionDigits: 1 }).format(value);
+  return formatCompactBrazilianMoney(Math.round(value * 100));
 }
 
 function tooltipRows(mode: CategoryFilter, point: Pick<ChartPoint, 'plannedCents' | 'realizedCents'>) {
@@ -53,7 +47,7 @@ function ChartTooltip({ active, payload, label, mode = 'both' }: TooltipContentP
   const point = payload[0].payload as ChartPoint;
   return <div role="status" aria-live="polite" className="rounded-xl border border-border bg-card px-3 py-2 text-sm shadow-lg">
     <p className="mb-1 font-semibold">{label}</p>
-    {tooltipRows(mode, point).map(([name, cents]) => <p key={name} className="text-muted-foreground">{name}: <span className="font-medium text-foreground">{formatCents(cents)}</span></p>)}
+    {tooltipRows(mode, point).map(([name, cents]) => <p key={name} className="text-muted-foreground">{name}: <span className="font-medium text-foreground"><MoneyValue cents={cents} /></span></p>)}
   </div>;
 }
 
@@ -69,7 +63,7 @@ function DataTable({ title, data, mode = 'both' }: { title: string; data: ChartP
           {mode !== 'planned' && <col className={mode === 'both' ? 'w-[33%]' : 'w-[60%]'} />}
         </colgroup>
         <thead><tr className="border-b border-border text-left text-xs text-muted-foreground"><th scope="col" className="break-words py-2 pr-1.5 font-medium sm:pr-3">Grupo</th>{mode !== 'realized' && <th scope="col" className="whitespace-nowrap px-1.5 py-2 text-right font-medium sm:px-3">Previsto</th>}{mode !== 'planned' && <th scope="col" className="whitespace-nowrap py-2 pl-1.5 text-right font-medium sm:pl-3">Realizado</th>}</tr></thead>
-        <tbody>{data.map((point) => <tr key={point.label} className="border-b border-border last:border-0"><th scope="row" className="break-words py-2 pr-1.5 text-left font-medium sm:pr-3">{point.label}</th>{mode !== 'realized' && <td className="whitespace-nowrap px-1.5 py-2 text-right tabular-nums sm:px-3">{formatCents(point.plannedCents)}</td>}{mode !== 'planned' && <td className="whitespace-nowrap py-2 pl-1.5 text-right tabular-nums sm:pl-3">{formatCents(point.realizedCents)}</td>}</tr>)}</tbody>
+        <tbody>{data.map((point) => <tr key={point.label} className="border-b border-border last:border-0"><th scope="row" className="break-words py-2 pr-1.5 text-left font-medium sm:pr-3">{point.label}</th>{mode !== 'realized' && <td className="whitespace-nowrap px-1.5 py-2 text-right tabular-nums sm:px-3"><MoneyValue cents={point.plannedCents} /></td>}{mode !== 'planned' && <td className="whitespace-nowrap py-2 pl-1.5 text-right tabular-nums sm:pl-3"><MoneyValue cents={point.realizedCents} /></td>}</tr>)}</tbody>
       </table>
     </div>
   </details>;
@@ -165,8 +159,8 @@ export function DashboardCharts({ monthLabel, planned, realized, expensesByCateg
           description={categoryFilter === 'planned' ? 'Não há despesas previstas por competência neste período.' : categoryFilter === 'realized' ? 'Não há despesas realizadas neste período.' : 'Não há despesas previstas por competência nem realizadas neste período.'}
         /> : <>
           {categoryFilter === 'both'
-            ? <p aria-live="polite" className="text-xs leading-5 text-muted-foreground">{expensesByCategory.length} categorias; previsto {formatCents(sumCents(expensesByCategory, 'plannedCents'))}, realizado {formatCents(sumCents(expensesByCategory, 'realizedCents'))}.{topCategory ? ` Maior categoria exibida: ${topCategory.label}.` : ''}</p>
-            : <p aria-live="polite" className="text-xs leading-5 text-muted-foreground">Total {categoryFilter === 'planned' ? 'previsto' : 'realizado'}: {formatCents(selectedCategoryTotal ?? '0')}. Os aportes não entram neste gráfico.</p>}
+            ? <p aria-live="polite" className="text-xs leading-5 text-muted-foreground">{expensesByCategory.length} categorias; previsto {formatBrazilianMoney(sumCents(expensesByCategory, 'plannedCents'))}, realizado {formatBrazilianMoney(sumCents(expensesByCategory, 'realizedCents'))}.{topCategory ? ` Maior categoria exibida: ${topCategory.label}.` : ''}</p>
+            : <p aria-live="polite" className="text-xs leading-5 text-muted-foreground">Total {categoryFilter === 'planned' ? 'previsto' : 'realizado'}: {formatBrazilianMoney(selectedCategoryTotal ?? '0')}. Os aportes não entram neste gráfico.</p>}
           <ResponsiveFinanceBarChart data={categoryData} title={`Despesas por categoria em ${monthLabel}`} mode={categoryMode} truncateLabels />
           <DataTable title={`Despesas por categoria em ${monthLabel}`} data={categoryData} mode={categoryMode} />
           {expensesByCategory.length > 6 && <p className="text-xs text-muted-foreground">O gráfico agrupa as categorias menores em “Outras categorias”; a tabela mostra os grupos do gráfico.</p>}

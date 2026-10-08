@@ -5,21 +5,17 @@ import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { FormField, Input } from '../components/ui/input';
 import { LoadingState } from '../components/ui/feedback';
-import { formatBrazilianDate, formatBrazilianMoney, formatBrazilianMonth, parseBrazilianCents } from '../lib/finance';
+import { currentSaoPauloDate, formatBrazilianDate, formatBrazilianMonth, parseBrazilianCents } from '../lib/finance';
 import { creditCardCycleDate } from '../lib/credit-card-cycle';
 import { installmentAmounts, invoiceMonthForInstallment, nextInvoiceMonth } from '../lib/card-purchase-cycle';
 import { isNetworkFailure, useOfflineWorkspace } from '../offline/offline-context';
 import type { OfflineCard, OfflineCategory, OfflinePurchase, OfflinePurchaseInstallment } from '../offline/offline-store';
 import { PageHeader } from './page-header';
+import { MoneyValue } from '../components/ui/money-value';
 
 type CategoriesResponse = { categories?: OfflineCategory[] };
 type CardsResponse = { cards?: OfflineCard[]; error?: string };
 type PurchasesResponse = { purchases?: OfflinePurchase[]; error?: string };
-
-function todayIso() {
-  const parts = Object.fromEntries(new Intl.DateTimeFormat('en', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date()).map(({ type, value }) => [type, value]));
-  return `${parts.year}-${parts.month}-${parts.day}`;
-}
 
 function statusLabel(status: OfflinePurchaseInstallment['status']) {
   return status === 'paid' ? 'Paga' : status === 'late' ? 'Atrasada' : 'Em aberto';
@@ -27,7 +23,7 @@ function statusLabel(status: OfflinePurchaseInstallment['status']) {
 
 function makeInstallment(number: number, count: number, plannedCents: number, invoiceOn: string, dueDay: number, categoryId: string, categoryName: string, userId: string): OfflinePurchaseInstallment {
   const dueOn = creditCardCycleDate(invoiceOn.slice(0, 7), dueDay);
-  const today = todayIso();
+  const today = currentSaoPauloDate();
   return {
     id: crypto.randomUUID(), description: `${categoryName || 'Compra'} ${number}/${count}`,
     category_id: categoryId, category_name: categoryName, invoice_on: invoiceOn, due_on: dueOn,
@@ -68,7 +64,7 @@ export function CardPurchasesPage() {
   const [cardId, setCardId] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [description, setDescription] = useState('');
-  const [purchaseOn, setPurchaseOn] = useState(todayIso);
+  const [purchaseOn, setPurchaseOn] = useState(() => currentSaoPauloDate());
   const [amount, setAmount] = useState('');
   const [installmentCount, setInstallmentCount] = useState('1');
   const [firstInvoiceMonth, setFirstInvoiceMonth] = useState('');
@@ -145,7 +141,7 @@ export function CardPurchasesPage() {
     setCardId('');
     setCategoryId('');
     setDescription('');
-    setPurchaseOn(todayIso());
+    setPurchaseOn(currentSaoPauloDate());
     setAmount('');
     setInstallmentCount('1');
     setFirstInvoiceMonth('');
@@ -344,9 +340,9 @@ export function CardPurchasesPage() {
           const paidCount = purchase.installments.filter((item) => item.actual_cents !== null).length;
           const pendingOperation = offline?.purchaseOperations.find((operation) => operation.purchaseId === purchase.id);
           return <li key={purchase.id} className="py-4 first:pt-0 last:pb-0">
-            <div className="flex flex-wrap items-start gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-accent text-accent-foreground"><CreditCard aria-hidden="true" className="size-5" /></span><div className="min-w-0 flex-1"><p className="font-semibold">{purchase.description}{purchase.canceled_at ? <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">Cancelada</span> : null}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{purchase.card_name} · {purchase.category_name} · Compra em {formatBrazilianDate(purchase.purchase_on)}{pendingOperation ? ' · Pendente neste aparelho' : ''}</p></div><div className="grid justify-items-end gap-1"><p className="font-semibold tabular-nums">{formatBrazilianMoney(purchase.total_cents)}</p><p className="text-xs text-muted-foreground">{purchase.installment_count} {purchase.installment_count === 1 ? 'parcela' : 'parcelas'} · {paidCount} pagas</p></div></div>
+            <div className="flex flex-wrap items-start gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-accent text-accent-foreground"><CreditCard aria-hidden="true" className="size-5" /></span><div className="min-w-0 flex-1"><p className="font-semibold">{purchase.description}{purchase.canceled_at ? <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">Cancelada</span> : null}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{purchase.card_name} · {purchase.category_name} · Compra em {formatBrazilianDate(purchase.purchase_on)}{pendingOperation ? ' · Pendente neste aparelho' : ''}</p></div><div className="grid justify-items-end gap-1"><p className="font-semibold tabular-nums"><MoneyValue cents={purchase.total_cents} /></p><p className="text-xs text-muted-foreground">{purchase.installment_count} {purchase.installment_count === 1 ? 'parcela' : 'parcelas'} · {paidCount} pagas</p></div></div>
             <div className="mt-3 flex flex-wrap justify-end gap-1">{!purchase.canceled_at && <><Button type="button" size="sm" variant="ghost" disabled={busy || Boolean(pendingOperation?.conflict)} onClick={() => editSeries(purchase)}><Pencil aria-hidden="true" className="size-4" />Editar série</Button>{purchase.installments.some((item) => item.actual_cents === null) && <Button type="button" size="sm" variant="ghost" disabled={busy || Boolean(pendingOperation?.conflict)} onClick={() => void cancelPurchase(purchase)}><X aria-hidden="true" className="size-4" />Cancelar compra</Button>}</>}</div>
-            <details className="mt-2 rounded-xl bg-muted/40 px-3.5 py-2.5"><summary className="cursor-pointer text-sm font-medium focus-visible:outline-2 focus-visible:outline-ring">Ver parcelas</summary><ul className="mt-2 grid gap-2">{purchase.installments.map((installment) => <li key={installment.id} className="flex flex-wrap items-center gap-2 border-t border-border/70 py-2 first:border-0"><span className="min-w-0 flex-1 text-sm">Parcela {installment.installment_number}/{installment.installment_count} · fatura {formatBrazilianMonth(installment.invoice_on)} · vence {formatBrazilianDate(installment.due_on)}</span><span className="text-sm font-medium tabular-nums">{formatBrazilianMoney(installment.planned_cents)}</span><span className="rounded-full bg-card px-2 py-1 text-xs">{statusLabel(installment.status)}</span>{!purchase.canceled_at && installment.actual_cents === null && <Button type="button" size="sm" variant="ghost" disabled={busy || Boolean(pendingOperation?.conflict)} aria-label={`Editar parcela ${installment.installment_number} de ${purchase.description}`} onClick={() => editInstallment(purchase, installment)}><Pencil aria-hidden="true" className="size-4" />Editar</Button>}</li>)}</ul></details>
+            <details className="mt-2 rounded-xl bg-muted/40 px-3.5 py-2.5"><summary className="cursor-pointer text-sm font-medium focus-visible:outline-2 focus-visible:outline-ring">Ver parcelas</summary><ul className="mt-2 grid gap-2">{purchase.installments.map((installment) => <li key={installment.id} className="flex flex-wrap items-center gap-2 border-t border-border/70 py-2 first:border-0"><span className="min-w-0 flex-1 text-sm">Parcela {installment.installment_number}/{installment.installment_count} · fatura {formatBrazilianMonth(installment.invoice_on)} · vence {formatBrazilianDate(installment.due_on)}</span><span className="text-sm font-medium tabular-nums"><MoneyValue cents={installment.planned_cents} /></span><span className="rounded-full bg-card px-2 py-1 text-xs">{statusLabel(installment.status)}</span>{!purchase.canceled_at && installment.actual_cents === null && <Button type="button" size="sm" variant="ghost" disabled={busy || Boolean(pendingOperation?.conflict)} aria-label={`Editar parcela ${installment.installment_number} de ${purchase.description}`} onClick={() => editInstallment(purchase, installment)}><Pencil aria-hidden="true" className="size-4" />Editar</Button>}</li>)}</ul></details>
           </li>;
         })}</ul>}
       </CardContent>

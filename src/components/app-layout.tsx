@@ -5,7 +5,7 @@ import { Button } from './ui/button';
 import type { AuthUser } from '../auth/auth-page';
 import { cn } from '../lib/utils';
 import { useOfflineWorkspace } from '../offline/offline-context';
-import { formatBrazilianDate, formatBrazilianMoney, formatBrazilianMonth } from '../lib/finance';
+import { formatBrazilianDate, formatBrazilianDateTime, formatBrazilianMoney, formatBrazilianMonth } from '../lib/finance';
 
 const links = [
   { to: '/', label: 'Visão geral', Icon: House, end: true },
@@ -150,9 +150,7 @@ function MobileNavigation() {
 
 export function AppLayout({ user, csrfToken, onLogout, notice, children }: { user: AuthUser; csrfToken: string; onLogout: () => void; notice?: string; children: ReactNode }) {
   const offline = useOfflineWorkspace();
-  const lastUpdated = offline?.lastSyncedAt
-    ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Sao_Paulo' }).format(new Date(offline.lastSyncedAt))
-    : null;
+  const lastUpdated = formatBrazilianDateTime(offline?.lastSyncedAt);
   const offlineMessage = !offline?.supported
     ? 'Este navegador não permite armazenar dados para uso offline.'
     : !offline.ready

@@ -9,6 +9,7 @@ import { currentBrazilianDate, currentMonthInputValue, formatBrazilianDate, form
 import { isAuthenticationFailure, isNetworkFailure, useOfflineWorkspace } from '../offline/offline-context';
 import type { OfflineInvoice, OfflinePaymentMethod } from '../offline/offline-store';
 import { PageHeader } from './page-header';
+import { MoneyValue } from '../components/ui/money-value';
 
 type ApiResponse = { error?: string; invoices?: OfflineInvoice[]; paymentMethods?: OfflinePaymentMethod[] };
 type InvoiceResponse = { error?: string; invoices?: OfflineInvoice[] };
@@ -237,11 +238,11 @@ export function InvoicesPage() {
               <ul className="divide-y divide-border rounded-xl border border-border px-3.5">
                 {invoice.entries.map((entry) => <li key={entry.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-3 first:pt-3 last:pb-3">
                   <div className="min-w-0 flex-1"><p className="text-sm font-medium">{entry.purchase_description}</p><p className="text-xs text-muted-foreground">Parcela {entry.installment_number}/{entry.installment_count} · {entry.category_name ?? 'Sem categoria'}</p></div>
-                  <span className="text-sm font-semibold tabular-nums">{formatBrazilianMoney(entry.planned_cents)}</span>
+                  <span className="text-sm font-semibold tabular-nums"><MoneyValue cents={entry.planned_cents} /></span>
                 </li>)}
               </ul>
               <div className="flex flex-wrap items-end justify-between gap-3 border-t border-border pt-4">
-                <div><p className="text-xs text-muted-foreground">Total previsto</p><p className="text-xl font-semibold tabular-nums">{formatBrazilianMoney(invoice.planned_cents)}</p>{invoice.status === 'paid' && <p className="mt-1 text-xs text-muted-foreground">Quitada por {formatBrazilianMoney(invoice.actual_cents ?? '0')} em {formatBrazilianDate(invoice.paid_on)}</p>}</div>
+                <div><p className="text-xs text-muted-foreground">Total previsto</p><p className="text-xl font-semibold tabular-nums"><MoneyValue cents={invoice.planned_cents} /></p>{invoice.status === 'paid' && <p className="mt-1 text-xs text-muted-foreground">Quitada por <MoneyValue cents={invoice.actual_cents ?? '0'} /> em {formatBrazilianDate(invoice.paid_on)}</p>}</div>
                 <div className="flex flex-wrap gap-2">
                   {canPay && <Button type="button" disabled={saving || Boolean(pendingOperation)} onClick={(event) => { triggerFocusRef.current = event.currentTarget; openPayment(invoice); }}><CircleCheck aria-hidden="true" className="size-4" />{invoice.status === 'needs_review' ? 'Confirmar novamente' : 'Quitar fatura'}</Button>}
                   {invoice.status === 'paid' && <Button type="button" variant="outline" disabled={saving || Boolean(pendingOperation)} onClick={(event) => { triggerFocusRef.current = event.currentTarget; setReversalInvoice(invoice); }}><RotateCcw aria-hidden="true" className="size-4" />Desfazer quitação</Button>}
@@ -255,7 +256,7 @@ export function InvoicesPage() {
     </div>}
     {selectedInvoice && <div className="fixed inset-0 z-40 grid place-items-center overflow-y-auto bg-black/40 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) setSelectedInvoice(null); }}>
       <section ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="invoice-payment-title" className="my-auto grid w-full max-w-lg gap-5 rounded-2xl border border-border bg-card p-5 shadow-xl sm:p-6">
-        <div><h2 id="invoice-payment-title" className="text-lg font-semibold">Quitar fatura</h2><p className="mt-1 text-sm text-muted-foreground">{selectedInvoice.card_name} · {formatBrazilianMonth(selectedInvoice.invoice_month)} · previsto {formatBrazilianMoney(selectedInvoice.planned_cents)}.</p></div>
+        <div><h2 id="invoice-payment-title" className="text-lg font-semibold">Quitar fatura</h2><p className="mt-1 text-sm text-muted-foreground">{selectedInvoice.card_name} · {formatBrazilianMonth(selectedInvoice.invoice_month)} · previsto <MoneyValue cents={selectedInvoice.planned_cents} />.</p></div>
         <form className="grid gap-4" onSubmit={(event) => void savePayment(event)}>
           <FormField id="invoice-actual-amount" label="Valor efetivamente pago" hint="Registre o total da quitação integral, em reais."><Input required autoFocus inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} /></FormField>
           <FormField id="invoice-paid-on" label="Data do pagamento"><Input required placeholder="DD/MM/AAAA" value={paidOn} onChange={(event) => setPaidOn(event.target.value)} /></FormField>

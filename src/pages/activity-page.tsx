@@ -3,7 +3,7 @@ import { History } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { EmptyState, LoadingState } from '../components/ui/feedback';
-import { formatBrazilianDate, formatBrazilianMonth, formatBrazilianMoney } from '../lib/finance';
+import { formatBrazilianDate, formatBrazilianDateTime, formatBrazilianMonth, formatBrazilianMoney } from '../lib/finance';
 import { PageHeader } from './page-header';
 
 type EntryKind = 'income' | 'expense' | 'investment';
@@ -121,7 +121,7 @@ export function ActivityPage() {
       <CardContent>
         {loading ? <LoadingState label="Carregando histórico" /> : events.length ? <><ol className="divide-y divide-border">{events.map((event) => <li key={event.id} className="flex gap-3 py-4 first:pt-0 last:pb-0 sm:gap-4">
           <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-accent text-accent-foreground"><History aria-hidden="true" className="size-[18px]" /></span>
-          <div className="min-w-0 flex-1"><p className="text-sm leading-6"><span className="font-semibold">{event.actor_name}</span> {actionWords[event.action]} {kindNames[event.entry_kind]} <span className="font-semibold">“{event.entry_description}”</span></p><p className="mt-1 text-xs leading-5 text-muted-foreground">{new Date(event.occurred_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</p><p className="mt-2 text-sm leading-6 text-muted-foreground">{snapshotSummary(event)}</p></div>
+          <div className="min-w-0 flex-1"><p className="text-sm leading-6"><span className="font-semibold">{event.actor_name}</span> {actionWords[event.action]} {kindNames[event.entry_kind]} <span className="font-semibold">“{event.entry_description}”</span></p><p className="mt-1 text-xs leading-5 text-muted-foreground">{formatBrazilianDateTime(event.occurred_at)}</p><p className="mt-2 text-sm leading-6 text-muted-foreground">{snapshotSummary(event)}</p></div>
         </li>)}</ol>{hasMore && <div className="flex justify-center pt-5"><Button type="button" variant="outline" disabled={loadingMore} onClick={() => void loadMore()}>{loadingMore ? 'Carregando…' : 'Carregar atividades anteriores'}</Button></div>}</> : <EmptyState title="Nenhuma alteração registrada" description="Quando alguém cadastrar ou atualizar um lançamento, a atividade aparecerá aqui." />}
       </CardContent>
     </Card>
