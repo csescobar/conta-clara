@@ -83,7 +83,7 @@ Contas bancárias e saldos, integração bancária, importação de extratos, pa
 
 Fases definidas a partir da auditoria de design system e engenharia de 2026-10-08. As fases 9 e 11 podem avançar em paralelo; a fase 10 depende do catálogo vivo (#43).
 
-- [ ] [Consolidar tokens semânticos de estado e superfície](https://github.com/csescobar/conta-clara/issues/38) — dependências: nenhuma.
+- [x] [Consolidar tokens semânticos de estado e superfície](https://github.com/csescobar/conta-clara/issues/38) — dependências: nenhuma; tokens `-soft`, `-surface` e `-border` por estado, sem hexadecimais avulsos, menu móvel a 12 px e escala tipográfica documentada (`f03d95f`).
 - [ ] [Unificar formatação de dinheiro e datas](https://github.com/csescobar/conta-clara/issues/39) — dependências: nenhuma.
 - [ ] [Criar primitivos de formulário](https://github.com/csescobar/conta-clara/issues/40) — dependências: #38.
 - [ ] [Criar primitivos de sobreposição e mensagem](https://github.com/csescobar/conta-clara/issues/41) — dependências: #38.
