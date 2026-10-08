@@ -84,7 +84,7 @@ Contas bancárias e saldos, integração bancária, importação de extratos, pa
 Fases definidas a partir da auditoria de design system e engenharia de 2026-10-08. As fases 9 e 11 podem avançar em paralelo; a fase 10 depende do catálogo vivo (#43).
 
 - [x] [Consolidar tokens semânticos de estado e superfície](https://github.com/csescobar/conta-clara/issues/38) — dependências: nenhuma; tokens `-soft`, `-surface` e `-border` por estado, sem hexadecimais avulsos, menu móvel a 12 px e escala tipográfica documentada (`f03d95f`).
-- [ ] [Unificar formatação de dinheiro e datas](https://github.com/csescobar/conta-clara/issues/39) — dependências: nenhuma.
+- [x] [Unificar formatação de dinheiro e datas](https://github.com/csescobar/conta-clara/issues/39) — dependências: nenhuma; formatação única e segura para BigInt em `finance.ts`, `MoneyValue` com tom, sinal e variante compacta em todas as telas (`7293ff9`).
 - [ ] [Criar primitivos de formulário](https://github.com/csescobar/conta-clara/issues/40) — dependências: #38.
 - [ ] [Criar primitivos de sobreposição e mensagem](https://github.com/csescobar/conta-clara/issues/41) — dependências: #38.
 - [ ] [Extrair componentes de composição financeira](https://github.com/csescobar/conta-clara/issues/42) — dependências: #39, #40, #41.
@@ -104,6 +104,8 @@ Fases definidas a partir da auditoria de design system e engenharia de 2026-10-0
 - [ ] [Verificar mudanças localmente antes de publicar](https://github.com/csescobar/conta-clara/issues/50) — dependências: #48, #49.
 - [ ] [Reduzir o bundle inicial](https://github.com/csescobar/conta-clara/issues/51) — dependências: nenhuma.
 - [ ] [Tipar o servidor gradualmente](https://github.com/csescobar/conta-clara/issues/52) — dependências: #48.
+
+- [ ] [Corrigir condições de corrida em listas filtradas e formulários](https://github.com/csescobar/conta-clara/issues/54) — dependências: nenhuma; estabiliza o E2E, pré-requisito prático para validar as demais histórias.
 
 Integração contínua remota fica fora desta etapa: a verificação acontece localmente antes do push (#50), sem consumo de serviços pagos.
 
