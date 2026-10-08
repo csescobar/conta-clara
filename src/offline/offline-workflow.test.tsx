@@ -255,6 +255,35 @@ describe('offline transaction workflow', () => {
     expect(fetchMock.mock.calls.filter(([input]) => String(input) === '/api/sync/operations')).toHaveLength(1);
   });
 
+  it('keeps edited form fields when the connection returns during editing', async () => {
+    const scope = { userId: 'offline-reconnect-edit-user', spaceId: 'offline-reconnect-edit-space' };
+    await seed(scope);
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
+    let online = false;
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      if (!online) throw new TypeError('offline');
+      const path = String(input);
+      if (path === '/api/catalog/categories?includeArchived=true') return jsonResponse({ categories: [{ id: 'offline-category', name: 'Moradia', kind: 'expense', expense_class: 'fixed', archived_at: null }] });
+      if (path === '/api/catalog/payment-methods?includeArchived=true') return jsonResponse({ paymentMethods: [{ id: 'offline-method', name: 'Pix', archived_at: null }] });
+      if (path === '/api/entries/offline-entry') return jsonResponse({ entry: { ...entry(), version: 1 } });
+      throw new Error(`Unexpected request ${path}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    offlinePage(scope, '/lancamentos/offline-entry/editar');
+
+    const description = await screen.findByDisplayValue('Conta fictícia');
+    await user.clear(description);
+    await user.type(description, 'Conta digitada antes de reconectar');
+    online = true;
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
+    window.dispatchEvent(new Event('online'));
+
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input) === '/api/entries/offline-entry')).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.getByRole('textbox', { name: 'Descrição' })).toHaveValue('Conta digitada antes de reconectar');
+  });
+
   it('edits and deletes cached entries offline with a persistent final operation per entry', async () => {
     const scope = { userId: 'offline-edit-user', spaceId: 'offline-edit-space' };
     await seed(scope);

@@ -33,6 +33,39 @@ afterEach(() => {
 });
 
 describe('financial entry pages', () => {
+  it('keeps the selected competence when an earlier month answers last', async () => {
+    const current = currentMonthInputValue();
+    const [year, month] = current.split('-').map(Number);
+    const nextMonth = new Date(Date.UTC(year, month, 1)).toISOString().slice(0, 7);
+    const listEntry = (id: string, description: string, competence: string) => ({
+      id, kind: 'expense', description, category_id: 'expense-category', category_name: 'Moradia', competence_on: `${competence}-01`,
+      due_on: `${competence}-10`, planned_cents: '1000', actual_cents: null, realized_on: null, payment_method_id: null,
+      payment_method_name: null, notes: null, created_by_user_id: 'member-id', updated_by_user_id: 'member-id', status: 'pending',
+    });
+    let answerCurrentMonth: (() => void) | undefined;
+    const fetchMock = vi.fn().mockImplementation(async (input: string) => {
+      if (input === '/api/catalog/categories?includeArchived=true') return response({ categories });
+      if (input === `/api/entries?month=${current}`) {
+        return new Promise((resolve) => { answerCurrentMonth = () => resolve(response({ entries: [listEntry('slow', 'Conta do mês anterior fictícia', current)] })); });
+      }
+      if (input === `/api/entries?month=${nextMonth}`) return response({ entries: [listEntry('fast', 'Conta do mês escolhido fictícia', nextMonth)] });
+      throw new Error(`Unexpected request: ${input}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    renderPage('/lancamentos');
+
+    await waitFor(() => expect(answerCurrentMonth).toBeDefined());
+    fireEvent.change(screen.getByLabelText('Competência'), { target: { value: nextMonth } });
+    expect(await screen.findByText('Conta do mês escolhido fictícia')).toBeInTheDocument();
+    answerCurrentMonth!();
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.getByText('Conta do mês escolhido fictícia')).toBeInTheDocument();
+    expect(screen.queryByText('Conta do mês anterior fictícia')).not.toBeInTheDocument();
+    expect(screen.getByText('1 lançamento encontrado')).toBeInTheDocument();
+  });
+
   it('shows a generated recurring entry in the selected future competence', async () => {
     const current = currentMonthInputValue();
     const [year, month] = current.split('-').map(Number);

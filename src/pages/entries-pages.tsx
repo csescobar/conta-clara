@@ -52,7 +52,12 @@ export function TransactionsPage() {
   const [actualDate, setActualDate] = useState(() => currentBrazilianDate());
   const [error, setError] = useState('');
 
+  const selectedFiltersRef = useRef('');
+  selectedFiltersRef.current = `${month}|${categoryId}|${status}`;
   const loadEntries = useCallback(async () => {
+    const filtersKey = `${month}|${categoryId}|${status}`;
+    // Uma resposta lenta de filtros anteriores não pode substituir a lista dos filtros atuais.
+    const superseded = () => selectedFiltersRef.current !== filtersKey;
     setLoading(true);
     setError('');
     const currentOffline = offlineRef.current;
@@ -69,25 +74,28 @@ export function TransactionsPage() {
       if (status) query.set('status', status);
       const response = await fetch(`/api/entries?${query.toString()}`, { credentials: 'same-origin' });
       const result = await readApi(response);
+      if (superseded()) return;
       if (!response.ok) {
         if (currentOffline && isAuthenticationFailure(response)) currentOffline.invalidateSession();
         throw new Error(result.error ?? 'Não foi possível carregar os lançamentos.');
       }
       const serverEntries = result.entries ?? [];
       await currentOffline?.cacheEntries(serverEntries);
+      if (superseded()) return;
       if (currentOffline) currentOffline.setOnline(true);
       setEntries(mergeOfflineEntries(serverEntries, currentOffline ?? emptyOfflineSnapshot, filters, false));
     } catch (loadError) {
       if (currentOffline && currentOffline.supported && isNetworkFailure(loadError, currentOffline.online)) {
         currentOffline.setOnline(navigator.onLine && !(loadError instanceof TypeError));
         const snapshot = await currentOffline.refresh();
+        if (superseded()) return;
         setEntries(filterOfflineEntries(snapshot.entries, filters));
         if (!snapshot.entries.length) setError('Ainda não há lançamentos salvos neste aparelho. Conecte-se uma vez para carregá-los.');
       } else {
         setError(loadError instanceof Error ? loadError.message : 'Não foi possível carregar os lançamentos.');
       }
     } finally {
-      setLoading(false);
+      if (!superseded()) setLoading(false);
     }
   }, [month, categoryId, status]);
 
@@ -295,14 +303,17 @@ export function NewTransactionPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [baseVersion, setBaseVersion] = useState<number | null>(null);
+  const formEditedRef = useRef(false);
 
   useEffect(() => {
     let active = true;
     const currentOffline = offlineRef.current;
     function applyCachedForm(entry: Entry | undefined, cachedCategories: Category[], cachedMethods: PaymentMethod[]) {
-      setBaseVersion(entry?.version ?? null);
       setCategories(cachedCategories.filter((category) => !category.archived_at || category.id === entry?.category_id));
       setPaymentMethods(cachedMethods.filter((method) => !method.archived_at || method.id === entry?.payment_method_id));
+      // Recargas por mudança de conexão não apagam o que a pessoa já alterou no formulário.
+      if (formEditedRef.current) return;
+      setBaseVersion(entry?.version ?? null);
       if (entry) {
         setKind(entry.kind);
         setDescription(entry.description);
@@ -315,7 +326,7 @@ export function NewTransactionPage() {
       }
     }
     async function loadForm() {
-      setLoading(true);
+      if (!formEditedRef.current) setLoading(true);
       setError('');
       const localEntry = id ? currentOffline?.entries.find((entry) => entry.id === id) : undefined;
       const hasPendingLocalVersion = Boolean(id && currentOffline?.operations.some((operation) => operation.entryId === id));
@@ -458,7 +469,7 @@ export function NewTransactionPage() {
     <PageHeader eyebrow="Lançamentos" title={editing ? 'Editar lançamento' : 'Adicionar lançamento'} description="Registre a previsão no espaço financeiro compartilhado." />
     <Card className="max-w-3xl"><CardContent className="grid gap-5 p-5 sm:p-7">
       {error && <p role="alert" className="rounded-xl bg-destructive-soft px-4 py-3 text-sm font-medium text-destructive">{error}</p>}
-      <form onSubmit={submit} className="grid gap-5">
+      <form onSubmit={submit} onChange={() => { formEditedRef.current = true; }} className="grid gap-5">
         <fieldset className="grid gap-2"><legend className="text-sm font-medium">Tipo</legend><div className="flex flex-wrap gap-2">{([['income', 'Receita'], ['expense', 'Despesa'], ['investment', 'Aporte']] as const).map(([value, label]) => <label key={value} className="cursor-pointer"><input className="peer sr-only" type="radio" name="entry-kind" value={value} checked={kind === value} onChange={() => { setKind(value); if (categories.find((category) => category.id === categoryId)?.kind !== value) setCategoryId(''); }} /><span className="inline-flex min-h-10 items-center rounded-xl border border-border bg-card px-4 text-sm font-medium text-muted-foreground peer-checked:border-primary peer-checked:bg-accent peer-checked:text-accent-foreground peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ring">{label}</span></label>)}</div></fieldset>
         <FormField id="entry-title" label="Descrição"><Input required maxLength={200} autoComplete="off" placeholder="Ex.: conta de luz" value={description} onChange={(event) => setDescription(event.target.value)} /></FormField>
         <div className="grid gap-5 sm:grid-cols-2">

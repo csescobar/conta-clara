@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Archive, CalendarDays, Plus, RefreshCw } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AuthContext } from '../auth/auth-gate';
@@ -108,6 +108,11 @@ export function RecurrenceFormPage() {
   const { id } = useParams();
   const editing = Boolean(id);
   const navigate = useNavigate();
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
   const [categories, setCategories] = useState<Category[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [kind, setKind] = useState<EntryKind>('expense');
@@ -193,7 +198,8 @@ export function RecurrenceFormPage() {
       });
       const result = await readApi(response);
       if (!response.ok) throw new Error(result.error ?? 'Não foi possível salvar a regra.');
-      navigate('/recorrencias');
+      // Quem já saiu do formulário durante o salvamento não deve ser levado de volta às regras.
+      if (mountedRef.current) navigate('/recorrencias');
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Não foi possível salvar a regra.');
     } finally {

@@ -54,7 +54,11 @@ export function InvoicesPage() {
   const savingRef = useRef(saving);
   savingRef.current = saving;
 
+  const selectedMonthRef = useRef(month);
+  selectedMonthRef.current = month;
   const loadInvoices = useCallback(async () => {
+    // Uma resposta lenta de outro mês não pode substituir as faturas do mês atual.
+    const superseded = () => selectedMonthRef.current !== month;
     const currentOffline = offlineRef.current;
     setLoading(true);
     setError('');
@@ -62,6 +66,7 @@ export function InvoicesPage() {
     if (currentOffline && !currentOffline.ready) return;
     if (currentOffline && !currentOffline.online) {
       const snapshot = await currentOffline.refresh();
+      if (superseded()) return;
       setInvoices(snapshot.invoices.filter((invoice) => invoice.invoice_month.startsWith(month)));
       setPaymentMethods(snapshot.paymentMethods);
       if (!snapshot.invoices.some((invoice) => invoice.invoice_month.startsWith(month))) {
@@ -79,6 +84,7 @@ export function InvoicesPage() {
         invoiceResponse.json() as Promise<InvoiceResponse>,
         methodsResponse.json() as Promise<ApiResponse>,
       ]);
+      if (superseded()) return;
       if (!invoiceResponse.ok || !methodsResponse.ok) {
         if (currentOffline && (isAuthenticationFailure(invoiceResponse) || isAuthenticationFailure(methodsResponse))) currentOffline.invalidateSession();
         throw new Error(invoiceResult.error ?? methodsResult.error ?? 'Não foi possível carregar as faturas.');
@@ -87,9 +93,11 @@ export function InvoicesPage() {
       const loadedMethods = methodsResult.paymentMethods ?? [];
       await currentOffline?.cacheInvoices(loadedInvoices);
       await currentOffline?.cacheCatalogs(currentOffline.categories, loadedMethods);
+      if (superseded()) return;
       if (currentOffline) {
         currentOffline.setOnline(true);
         const snapshot = await currentOffline.refresh();
+        if (superseded()) return;
         setInvoices(snapshot.invoices.filter((invoice) => invoice.invoice_month.startsWith(month)));
         setPaymentMethods(loadedMethods);
       } else {
@@ -100,12 +108,13 @@ export function InvoicesPage() {
       if (currentOffline && isNetworkFailure(loadError, currentOffline.online)) {
         currentOffline.setOnline(false);
         const snapshot = await currentOffline.refresh();
+        if (superseded()) return;
         setInvoices(snapshot.invoices.filter((invoice) => invoice.invoice_month.startsWith(month)));
         setPaymentMethods(snapshot.paymentMethods);
         if (!snapshot.invoices.some((invoice) => invoice.invoice_month.startsWith(month))) setError('Este mês de faturas ainda não foi carregado neste aparelho. Conecte-se uma vez para consultar os dados.');
       } else setError(loadError instanceof Error ? loadError.message : 'Não foi possível carregar as faturas.');
     } finally {
-      setLoading(false);
+      if (!superseded()) setLoading(false);
     }
   }, [month]);
 
