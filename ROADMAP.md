@@ -74,3 +74,7 @@ Backlog inicial da primeira versão. Concluir dependências antes de iniciar uma
 [Issue central da V3](https://github.com/csescobar/conta-clara/issues/36). Atualizar ambos os checklists após cada história concluída.
 
 Contas bancárias e saldos, integração bancária, importação de extratos, pagamento parcial/rotativo e acesso remoto permanecem fora desta etapa.
+
+## Melhorias após a V3
+
+- [x] [Ajustar tabelas dos gráficos para caber em telas mobile](https://github.com/csescobar/conta-clara/issues/37) — cabeçalhos e valores cabem em 320–430 px sem overflow horizontal; navegação por teclado e layouts desktop validados (`deeabba`).
