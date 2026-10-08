@@ -4,12 +4,13 @@ import { AuthContext } from '../auth/auth-gate';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { EmptyState, LoadingState } from '../components/ui/feedback';
-import { FormField, Input } from '../components/ui/input';
-import { currentBrazilianDate, currentMonthInputValue, formatBrazilianDate, formatBrazilianMonth, formatBrazilianMoney, parseBrazilianCents, parseBrazilianDate } from '../lib/finance';
+import { FormField } from '../components/ui/input';
+import { currentBrazilianDate, currentMonthInputValue, formatBrazilianAmount, formatBrazilianDate, formatBrazilianMonth, parseBrazilianCents, parseBrazilianDate } from '../lib/finance';
 import { isAuthenticationFailure, isNetworkFailure, useOfflineWorkspace } from '../offline/offline-context';
 import type { OfflineInvoice, OfflinePaymentMethod } from '../offline/offline-store';
 import { PageHeader } from './page-header';
 import { MoneyValue } from '../components/ui/money-value';
+import { Select, DateField, MonthField, MoneyInput } from '../components/ui/form-controls';
 
 type ApiResponse = { error?: string; invoices?: OfflineInvoice[]; paymentMethods?: OfflinePaymentMethod[] };
 type InvoiceResponse = { error?: string; invoices?: OfflineInvoice[] };
@@ -166,7 +167,7 @@ export function InvoicesPage() {
 
   function openPayment(invoice: OfflineInvoice) {
     setSelectedInvoice(invoice);
-    setAmount(formatBrazilianMoney(invoice.planned_cents));
+    setAmount(formatBrazilianAmount(invoice.planned_cents));
     setPaidOn(currentBrazilianDate());
     setPaymentMethodId('');
     setError('');
@@ -229,7 +230,7 @@ export function InvoicesPage() {
 
   const heading = formatBrazilianMonth(`${month}-01`);
   return <>
-    <PageHeader eyebrow="Cartões" title="Faturas" description="Confira as parcelas previstas e registre a quitação integral de cada fatura." action={<div className="flex items-center gap-2"><Button type="button" size="icon" variant="outline" aria-label="Mês anterior" onClick={() => setMonth((value) => moveMonth(value, -1))}><ChevronLeft aria-hidden="true" className="size-4" /></Button><Input aria-label="Mês de vencimento" type="month" className="w-[10.5rem]" value={month} onChange={(event) => { if (/^\d{4}-(0[1-9]|1[0-2])$/.test(event.target.value)) setMonth(event.target.value); }} /><Button type="button" size="icon" variant="outline" aria-label="Próximo mês" onClick={() => setMonth((value) => moveMonth(value, 1))}><ChevronRight aria-hidden="true" className="size-4" /></Button></div>} />
+    <PageHeader eyebrow="Cartões" title="Faturas" description="Confira as parcelas previstas e registre a quitação integral de cada fatura." action={<div className="flex items-center gap-2"><Button type="button" size="icon" variant="outline" aria-label="Mês anterior" onClick={() => setMonth((value) => moveMonth(value, -1))}><ChevronLeft aria-hidden="true" className="size-4" /></Button><MonthField aria-label="Mês de vencimento" className="w-[7.5rem] text-center" value={month} onChange={(value) => { if (value) setMonth(value); }} /><Button type="button" size="icon" variant="outline" aria-label="Próximo mês" onClick={() => setMonth((value) => moveMonth(value, 1))}><ChevronRight aria-hidden="true" className="size-4" /></Button></div>} />
     {notice && <p role="status" className="mb-4 rounded-xl border border-success-border bg-success-surface px-4 py-3 text-sm text-success">{notice}</p>}
     {error && <p role="alert" className="mb-4 rounded-xl bg-destructive-soft px-4 py-3 text-sm font-medium text-destructive">{error}</p>}
     {loading ? <LoadingState label="Carregando faturas" /> : grouped.length === 0 ? <Card><CardContent><EmptyState title={`Nenhuma fatura em ${heading}`} description="As faturas aparecem aqui quando houver parcelas de compras de cartão com vencimento neste mês." /></CardContent></Card> : <div className="grid gap-5">
@@ -267,9 +268,9 @@ export function InvoicesPage() {
       <section ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="invoice-payment-title" className="my-auto grid w-full max-w-lg gap-5 rounded-2xl border border-border bg-card p-5 shadow-xl sm:p-6">
         <div><h2 id="invoice-payment-title" className="text-lg font-semibold">Quitar fatura</h2><p className="mt-1 text-sm text-muted-foreground">{selectedInvoice.card_name} · {formatBrazilianMonth(selectedInvoice.invoice_month)} · previsto <MoneyValue cents={selectedInvoice.planned_cents} />.</p></div>
         <form className="grid gap-4" onSubmit={(event) => void savePayment(event)}>
-          <FormField id="invoice-actual-amount" label="Valor efetivamente pago" hint="Registre o total da quitação integral, em reais."><Input required autoFocus inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} /></FormField>
-          <FormField id="invoice-paid-on" label="Data do pagamento"><Input required placeholder="DD/MM/AAAA" value={paidOn} onChange={(event) => setPaidOn(event.target.value)} /></FormField>
-          <div className="grid gap-2"><label htmlFor="invoice-payment-method" className="text-sm font-medium">Forma de pagamento (opcional)</label><select id="invoice-payment-method" className="min-h-11 rounded-xl border border-input bg-card px-3.5 text-sm focus-visible:outline-2 focus-visible:outline-ring" value={paymentMethodId} onChange={(event) => setPaymentMethodId(event.target.value)}><option value="">Não definida</option>{paymentMethods.map((method) => <option key={method.id} value={method.id}>{method.name}</option>)}</select></div>
+          <FormField id="invoice-actual-amount" label="Valor efetivamente pago" hint="Registre o total da quitação integral, em reais."><MoneyInput required autoFocus value={amount} onChange={setAmount} /></FormField>
+          <FormField id="invoice-paid-on" label="Data do pagamento"><DateField required value={paidOn} onChange={setPaidOn} /></FormField>
+          <FormField id="invoice-payment-method" label="Forma de pagamento (opcional)"><Select value={paymentMethodId} onChange={(event) => setPaymentMethodId(event.target.value)}><option value="">Não definida</option>{paymentMethods.map((method) => <option key={method.id} value={method.id}>{method.name}</option>)}</Select></FormField>
           <div className="flex flex-wrap justify-end gap-2 pt-1"><Button type="button" variant="outline" disabled={saving} onClick={() => setSelectedInvoice(null)}>Cancelar</Button><Button type="submit" disabled={saving}>{saving ? 'Salvando…' : 'Confirmar quitação'}</Button></div>
         </form>
       </section>

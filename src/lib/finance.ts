@@ -41,6 +41,11 @@ export function formatBrazilianMoney(cents: number | string | bigint, { signDisp
   return `${sign}R$\u00a0${wholeReais.format(absolute / 100n)},${(absolute % 100n).toString().padStart(2, '0')}`;
 }
 
+/** Valor em reais sem o símbolo, para preencher campos (ex.: "1.234,56"). */
+export function formatBrazilianAmount(cents: number | string | bigint): string {
+  return formatBrazilianMoney(cents).replace(/^(-?)R\$\u00a0/, '$1');
+}
+
 const compactReais = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact', maximumFractionDigits: 1 });
 
 /** Formato abreviado para eixos e espaços reduzidos; não usar quando o valor exato for necessário. */

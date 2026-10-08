@@ -15,6 +15,7 @@ import { BackupSettings } from './backup-settings';
 import { PageHeader } from './page-header';
 import { isAuthenticationFailure, isNetworkFailure, useOfflineWorkspace } from '../offline/offline-context';
 import { MoneyValue } from '../components/ui/money-value';
+import { MonthField } from '../components/ui/form-controls';
 
 const DashboardCharts = lazy(() => import('./dashboard-charts').then(({ DashboardCharts: charts }) => ({ default: charts })));
 
@@ -108,7 +109,7 @@ export function DashboardPage() {
 
   const heading = formatBrazilianMonthLong(month);
   return <>
-    <PageHeader eyebrow={heading} title="Visão geral" description="Compare o previsto por competência com os valores efetivamente realizados." action={<div className="flex flex-wrap items-center gap-2"><div className="flex items-center gap-2"><Button type="button" size="icon" variant="outline" aria-label="Mês anterior" onClick={() => setMonth((value) => moveMonth(value, -1))}><ChevronLeft aria-hidden="true" className="size-4" /></Button><Input aria-label="Mês do painel" type="month" required className="w-[10.5rem]" value={month} onChange={(event) => { if (/^\d{4}-(0[1-9]|1[0-2])$/.test(event.target.value)) setMonth(event.target.value); }} /><Button type="button" size="icon" variant="outline" aria-label="Próximo mês" onClick={() => setMonth((value) => moveMonth(value, 1))}><ChevronRight aria-hidden="true" className="size-4" /></Button></div><Button asChild><Link to="/lancamentos/novo"><Plus aria-hidden="true" className="size-4" />Adicionar lançamento</Link></Button></div>} />
+    <PageHeader eyebrow={heading} title="Visão geral" description="Compare o previsto por competência com os valores efetivamente realizados." action={<div className="flex flex-wrap items-center gap-2"><div className="flex items-center gap-2"><Button type="button" size="icon" variant="outline" aria-label="Mês anterior" onClick={() => setMonth((value) => moveMonth(value, -1))}><ChevronLeft aria-hidden="true" className="size-4" /></Button><MonthField aria-label="Mês do painel" required className="w-[7.5rem] text-center" value={month} onChange={(value) => { if (value) setMonth(value); }} /><Button type="button" size="icon" variant="outline" aria-label="Próximo mês" onClick={() => setMonth((value) => moveMonth(value, 1))}><ChevronRight aria-hidden="true" className="size-4" /></Button></div><Button asChild><Link to="/lancamentos/novo"><Plus aria-hidden="true" className="size-4" />Adicionar lançamento</Link></Button></div>} />
     {error && <p role="alert" className="mb-4 rounded-xl bg-destructive-soft px-4 py-3 text-sm font-medium text-destructive">{error}</p>}
     {loading && !dashboard ? <LoadingState label="Carregando painel financeiro" /> : dashboard && <div aria-busy={loading}>
       <section aria-label={`Resumo de ${heading}`} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

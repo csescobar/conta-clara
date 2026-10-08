@@ -5,13 +5,14 @@ import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { FormField, Input } from '../components/ui/input';
 import { LoadingState } from '../components/ui/feedback';
-import { currentSaoPauloDate, formatBrazilianDate, formatBrazilianMonth, parseBrazilianCents } from '../lib/finance';
+import { currentBrazilianDate, currentSaoPauloDate, formatBrazilianAmount, formatBrazilianDate, formatBrazilianMonth, parseBrazilianCents, parseBrazilianDate } from '../lib/finance';
 import { creditCardCycleDate } from '../lib/credit-card-cycle';
 import { installmentAmounts, invoiceMonthForInstallment, nextInvoiceMonth } from '../lib/card-purchase-cycle';
 import { isNetworkFailure, useOfflineWorkspace } from '../offline/offline-context';
 import type { OfflineCard, OfflineCategory, OfflinePurchase, OfflinePurchaseInstallment } from '../offline/offline-store';
 import { PageHeader } from './page-header';
 import { MoneyValue } from '../components/ui/money-value';
+import { Select, DateField, MonthField, MoneyInput } from '../components/ui/form-controls';
 
 type CategoriesResponse = { categories?: OfflineCategory[] };
 type CardsResponse = { cards?: OfflineCard[]; error?: string };
@@ -64,7 +65,8 @@ export function CardPurchasesPage() {
   const [cardId, setCardId] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [description, setDescription] = useState('');
-  const [purchaseOn, setPurchaseOn] = useState(() => currentSaoPauloDate());
+  const [purchaseDate, setPurchaseDate] = useState(() => currentBrazilianDate());
+  const purchaseOn = parseBrazilianDate(purchaseDate) ?? '';
   const [amount, setAmount] = useState('');
   const [installmentCount, setInstallmentCount] = useState('1');
   const [firstInvoiceMonth, setFirstInvoiceMonth] = useState('');
@@ -141,7 +143,7 @@ export function CardPurchasesPage() {
     setCardId('');
     setCategoryId('');
     setDescription('');
-    setPurchaseOn(currentSaoPauloDate());
+    setPurchaseDate(currentBrazilianDate());
     setAmount('');
     setInstallmentCount('1');
     setFirstInvoiceMonth('');
@@ -153,8 +155,8 @@ export function CardPurchasesPage() {
     setCardId(purchase.card_id);
     setCategoryId(purchase.category_id);
     setDescription(purchase.description);
-    setPurchaseOn(purchase.purchase_on);
-    setAmount((Number(purchase.total_cents) / 100).toFixed(2).replace('.', ','));
+    setPurchaseDate(formatBrazilianDate(purchase.purchase_on));
+    setAmount(formatBrazilianAmount(purchase.total_cents));
     setInstallmentCount(String(purchase.installment_count));
     setFirstInvoiceMonth((purchase.installments.find((item) => item.installment_number === 1)?.invoice_on ?? purchase.first_invoice_on).slice(0, 7));
     setError('');
@@ -168,8 +170,8 @@ export function CardPurchasesPage() {
     setCardId(purchase.card_id);
     setCategoryId(purchase.category_id);
     setDescription(purchase.description);
-    setPurchaseOn(purchase.purchase_on);
-    setAmount((Number(installment.planned_cents) / 100).toFixed(2).replace('.', ','));
+    setPurchaseDate(formatBrazilianDate(purchase.purchase_on));
+    setAmount(formatBrazilianAmount(installment.planned_cents));
     setInstallmentCount(String(purchase.installment_count));
     setFirstInvoiceMonth(installment.invoice_on.slice(0, 7));
     setError('');
@@ -318,14 +320,14 @@ export function CardPurchasesPage() {
       <CardContent>
         <form onSubmit={(event) => void submit(event)} className="grid gap-3 sm:grid-cols-2">
           {!editingInstallment && <>
-            <div className="grid gap-2"><label htmlFor="purchase-card" className="text-sm font-medium">Cartão</label><select id="purchase-card" className="min-h-11 rounded-xl border border-input bg-card px-3.5 text-sm" required value={cardId} onChange={(event) => { setCardId(event.target.value); setFirstInvoiceMonth(''); }}><option value="">Selecione o cartão</option>{cards.filter((item) => !item.archived_at || purchaseBeingEdited?.card_id === item.id).map((item) => <option key={item.id} value={item.id}>{item.name} · vence dia {item.due_day}{item.archived_at ? ' (arquivado)' : ''}</option>)}</select></div>
-            <div className="grid gap-2"><label htmlFor="purchase-category" className="text-sm font-medium">Categoria de despesa</label><select id="purchase-category" className="min-h-11 rounded-xl border border-input bg-card px-3.5 text-sm" required value={categoryId} onChange={(event) => setCategoryId(event.target.value)}><option value="">Selecione a categoria</option>{categories.filter((item) => !item.archived_at || purchaseBeingEdited?.category_id === item.id).map((item) => <option key={item.id} value={item.id}>{item.name}{item.archived_at ? ' (arquivada)' : ''}</option>)}{purchaseBeingEdited && !categories.some((item) => item.id === purchaseBeingEdited.category_id) && <option value={purchaseBeingEdited.category_id}>{purchaseBeingEdited.category_name} (arquivada)</option>}</select></div>
+            <FormField id="purchase-card" label="Cartão"><Select required value={cardId} onChange={(event) => { setCardId(event.target.value); setFirstInvoiceMonth(''); }}><option value="">Selecione o cartão</option>{cards.filter((item) => !item.archived_at || purchaseBeingEdited?.card_id === item.id).map((item) => <option key={item.id} value={item.id}>{item.name} · vence dia {item.due_day}{item.archived_at ? ' (arquivado)' : ''}</option>)}</Select></FormField>
+            <FormField id="purchase-category" label="Categoria de despesa"><Select required value={categoryId} onChange={(event) => setCategoryId(event.target.value)}><option value="">Selecione a categoria</option>{categories.filter((item) => !item.archived_at || purchaseBeingEdited?.category_id === item.id).map((item) => <option key={item.id} value={item.id}>{item.name}{item.archived_at ? ' (arquivada)' : ''}</option>)}{purchaseBeingEdited && !categories.some((item) => item.id === purchaseBeingEdited.category_id) && <option value={purchaseBeingEdited.category_id}>{purchaseBeingEdited.category_name} (arquivada)</option>}</Select></FormField>
             <FormField id="purchase-description" label="Descrição"><Input required maxLength={200} autoComplete="off" value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Ex.: Eletrodoméstico" /></FormField>
-            <FormField id="purchase-date" label="Data da compra"><Input required type="date" value={purchaseOn} onChange={(event) => { setPurchaseOn(event.target.value); setFirstInvoiceMonth(''); }} /></FormField>
+            <FormField id="purchase-date" label="Data da compra"><DateField required value={purchaseDate} onChange={(value) => { setPurchaseDate(value); setFirstInvoiceMonth(''); }} /></FormField>
           </>}
-          <FormField id="purchase-amount" label={editingInstallment ? 'Valor da parcela (R$)' : 'Valor total (R$)'}><Input required inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0,00" /></FormField>
+          <FormField id="purchase-amount" label={editingInstallment ? 'Valor da parcela (R$)' : 'Valor total (R$)'}><MoneyInput required value={amount} onChange={setAmount} /></FormField>
           {!editingInstallment && <FormField id="purchase-count" label="Quantidade de parcelas"><Input required type="number" min={1} max={120} step={1} value={installmentCount} onChange={(event) => setInstallmentCount(event.target.value)} /></FormField>}
-          <FormField id="purchase-invoice-month" label={editingInstallment ? 'Fatura da parcela' : 'Primeira fatura'} hint={!editingInstallment && suggestedFirstInvoice ? `Sugestão pelo fechamento: ${formatBrazilianMonth(suggestedFirstInvoice)}. Você pode corrigir.` : undefined}><Input required type="month" value={firstInvoiceMonth || (editingInstallment ? '' : suggestedFirstInvoice.slice(0, 7))} onChange={(event) => setFirstInvoiceMonth(event.target.value)} /></FormField>
+          <FormField id="purchase-invoice-month" label={editingInstallment ? 'Fatura da parcela' : 'Primeira fatura'} hint={!editingInstallment && suggestedFirstInvoice ? `Sugestão pelo fechamento: ${formatBrazilianMonth(suggestedFirstInvoice)}. Você pode corrigir.` : undefined}><MonthField required value={firstInvoiceMonth || (editingInstallment ? '' : suggestedFirstInvoice.slice(0, 7))} onChange={setFirstInvoiceMonth} /></FormField>
           {!editingInstallment && resolvedFirstInvoice && <p className="text-sm text-muted-foreground sm:col-span-2">{Number(installmentCount) > 1 ? `As parcelas serão distribuídas de ${formatBrazilianMonth(resolvedFirstInvoice)} em diante.` : `A despesa será prevista para ${formatBrazilianMonth(resolvedFirstInvoice)}.`}</p>}
           {purchaseBeingEdited && !editingInstallment && <p className="text-xs text-muted-foreground sm:col-span-2">Parcelas pagas: {purchaseBeingEdited.installments.filter((item) => item.actual_cents !== null).length}. Elas manterão valor, fatura e categoria atuais.</p>}
           <div className="flex flex-wrap gap-2 sm:col-span-2"><Button type="submit" disabled={busy || !offline?.ready}>{busy ? 'Salvando…' : 'Salvar compra'}</Button><Button type="button" variant="outline" onClick={clearForm}>Cancelar</Button></div>

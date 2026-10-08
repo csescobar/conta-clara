@@ -4,6 +4,7 @@ import { AuthContext } from '../auth/auth-gate';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { FormField, Input } from '../components/ui/input';
+import { Select } from '../components/ui/form-controls';
 
 type CategoryKind = 'income' | 'expense' | 'investment';
 type ExpenseClass = 'fixed' | 'variable';
@@ -141,8 +142,8 @@ export function CatalogSettings() {
         <form onSubmit={submitCategory} className="grid gap-3">
           <FormField id="category-name" label="Nome da categoria"><Input required maxLength={80} value={categoryName} onChange={(event) => setCategoryName(event.target.value)} /></FormField>
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="grid gap-2"><label htmlFor="category-kind" className="text-sm font-medium">Tipo</label><select id="category-kind" className="min-h-11 rounded-xl border border-input bg-card px-3.5 text-sm focus-visible:outline-2 focus-visible:outline-ring" value={categoryKind} onChange={(event) => setCategoryKind(event.target.value as CategoryKind)}><option value="income">Receita</option><option value="expense">Despesa</option><option value="investment">Aporte</option></select></div>
-            {categoryKind === 'expense' && <div className="grid gap-2"><label htmlFor="expense-class" className="text-sm font-medium">Classificação</label><select id="expense-class" className="min-h-11 rounded-xl border border-input bg-card px-3.5 text-sm focus-visible:outline-2 focus-visible:outline-ring" value={expenseClass} onChange={(event) => setExpenseClass(event.target.value as ExpenseClass)}><option value="fixed">Fixa</option><option value="variable">Variável</option></select></div>}
+            <FormField id="category-kind" label="Tipo"><Select value={categoryKind} onChange={(event) => setCategoryKind(event.target.value as CategoryKind)}><option value="income">Receita</option><option value="expense">Despesa</option><option value="investment">Aporte</option></Select></FormField>
+            {categoryKind === 'expense' && <FormField id="expense-class" label="Classificação"><Select value={expenseClass} onChange={(event) => setExpenseClass(event.target.value as ExpenseClass)}><option value="fixed">Fixa</option><option value="variable">Variável</option></Select></FormField>}
           </div>
           <div className="flex flex-wrap gap-2"><Button type="submit" disabled={busy}>{editingCategoryId ? <Pencil aria-hidden="true" className="size-4" /> : <Plus aria-hidden="true" className="size-4" />}{editingCategoryId ? 'Salvar categoria' : 'Adicionar categoria'}</Button>{editingCategoryId && <Button type="button" variant="outline" disabled={busy} onClick={cancelCategoryEdit}><X aria-hidden="true" className="size-4" />Cancelar edição</Button>}</div>
         </form>

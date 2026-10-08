@@ -73,7 +73,7 @@ describe('card purchases page', () => {
     await userEventInstance.type(screen.getByRole('textbox', { name: 'Valor total (R$)' }), '10,01');
     await userEventInstance.clear(screen.getByRole('spinbutton', { name: 'Quantidade de parcelas' }));
     await userEventInstance.type(screen.getByRole('spinbutton', { name: 'Quantidade de parcelas' }), '3');
-    expect(screen.getByLabelText('Primeira fatura')).toHaveValue('2026-11');
+    expect(screen.getByLabelText('Primeira fatura')).toHaveValue('11/2026');
     const saveButton = screen.getByRole('button', { name: 'Salvar compra' });
     await waitFor(() => expect(saveButton).toBeEnabled());
     await userEventInstance.click(saveButton);

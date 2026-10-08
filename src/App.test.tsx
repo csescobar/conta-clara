@@ -40,7 +40,7 @@ describe('application navigation and preview screens', () => {
     await renderSignedInApp();
 
     expect(screen.getByRole('heading', { name: 'Visão geral' })).toBeInTheDocument();
-    expect(screen.getByLabelText('Mês do painel')).toHaveValue(currentMonthInputValue());
+    expect(screen.getByLabelText('Mês do painel')).toHaveValue(currentMonthInputValue().split('-').reverse().join('/'));
     const summaryTable = await screen.findByRole('table', { name: /Valores previstos e realizados/ });
     const incomeCells = within(within(summaryTable).getByRole('row', { name: /Receitas/ })).getAllByRole('cell');
     expect(incomeCells[0]).toHaveTextContent(/7\.800,00/);

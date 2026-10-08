@@ -133,7 +133,7 @@ describe('financial dashboard', () => {
     expect(screen.getByRole('button', { name: 'Mês anterior' })).toHaveFocus();
     await user.keyboard('{Enter}');
 
-    await waitFor(() => expect(monthInput).toHaveValue('2025-12'));
+    await waitFor(() => expect(monthInput).toHaveValue('12/2025'));
     expect(await screen.findByRole('table', { name: 'Valores previstos e realizados em Dezembro de 2025' })).toBeInTheDocument();
     expect(screen.getByRole('status', { name: 'Nenhuma conta próxima' })).toBeInTheDocument();
     expect(screen.getByRole('status', { name: 'Nenhuma conta atrasada' })).toBeInTheDocument();

@@ -6,9 +6,10 @@ import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { EmptyState, LoadingState } from '../components/ui/feedback';
 import { FormField, Input } from '../components/ui/input';
-import { currentMonthInputValue, formatBrazilianMoney, parseBrazilianCents } from '../lib/finance';
+import { currentMonthInputValue, formatBrazilianAmount, parseBrazilianCents } from '../lib/finance';
 import { PageHeader } from './page-header';
 import { MoneyValue } from '../components/ui/money-value';
+import { Select, Textarea, RadioGroup, MonthField, MoneyInput } from '../components/ui/form-controls';
 
 type EntryKind = 'income' | 'expense' | 'investment';
 type RecurrenceRule = {
@@ -103,6 +104,8 @@ export function RecurrencesPage() {
   </>;
 }
 
+const kindOptions = [['income', 'Receita'], ['expense', 'Despesa'], ['investment', 'Aporte']] as const;
+
 export function RecurrenceFormPage() {
   const auth = useContext(AuthContext);
   const { id } = useParams();
@@ -152,7 +155,7 @@ export function RecurrenceFormPage() {
           setStartMonth(rule.start_competence_on.slice(0, 7));
           setEndMonth(rule.end_competence_on?.slice(0, 7) ?? '');
           setDueDay(rule.due_day?.toString() ?? '');
-          setAmount(formatBrazilianMoney(rule.planned_cents));
+          setAmount(formatBrazilianAmount(rule.planned_cents));
           setNotes(rule.notes ?? '');
         }
       } catch (loadError) {
@@ -215,21 +218,21 @@ export function RecurrenceFormPage() {
     <Card className="max-w-3xl"><CardContent className="grid gap-5 p-5 sm:p-7">
       {error && <p role="alert" className="rounded-xl bg-destructive-soft px-4 py-3 text-sm font-medium text-destructive">{error}</p>}
       <form onSubmit={submit} className="grid gap-5">
-        <fieldset className="grid gap-2"><legend className="text-sm font-medium">Tipo</legend><div className="flex flex-wrap gap-2">{([['income', 'Receita'], ['expense', 'Despesa'], ['investment', 'Aporte']] as const).map(([value, label]) => <label key={value} className="cursor-pointer"><input className="peer sr-only" type="radio" name="recurrence-kind" value={value} checked={kind === value} onChange={() => { setKind(value); if (categories.find((category) => category.id === categoryId)?.kind !== value) setCategoryId(''); }} /><span className="inline-flex min-h-10 items-center rounded-xl border border-border bg-card px-4 text-sm font-medium text-muted-foreground peer-checked:border-primary peer-checked:bg-accent peer-checked:text-accent-foreground peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ring">{label}</span></label>)}</div></fieldset>
+        <RadioGroup legend="Tipo" name="recurrence-kind" value={kind} options={kindOptions} onChange={(value) => { setKind(value); if (categories.find((category) => category.id === categoryId)?.kind !== value) setCategoryId(''); }} />
         <FormField id="recurrence-description" label="Descrição"><Input id="recurrence-description" required maxLength={200} autoComplete="off" placeholder="Ex.: conta de internet" value={description} onChange={(event) => setDescription(event.target.value)} /></FormField>
         <div className="grid gap-5 sm:grid-cols-2">
-          <label className="grid gap-2 text-sm font-medium" htmlFor="recurrence-category">Categoria<select id="recurrence-category" className="min-h-11 rounded-xl border border-input bg-card px-3.5 text-sm focus-visible:outline-2 focus-visible:outline-ring" value={categoryId} onChange={(event) => setCategoryId(event.target.value)}><option value="">Sem categoria</option>{activeCategories.map((category) => <option key={category.id} value={category.id}>{category.name}{category.archived_at ? ' (arquivada)' : ''}</option>)}</select></label>
-          <label className="grid gap-2 text-sm font-medium" htmlFor="recurrence-payment-method">Forma de pagamento<select id="recurrence-payment-method" className="min-h-11 rounded-xl border border-input bg-card px-3.5 text-sm focus-visible:outline-2 focus-visible:outline-ring" value={paymentMethodId} onChange={(event) => setPaymentMethodId(event.target.value)}><option value="">Não definida</option>{paymentMethods.map((method) => <option key={method.id} value={method.id}>{method.name}{method.archived_at ? ' (arquivada)' : ''}</option>)}</select></label>
+          <FormField id="recurrence-category" label="Categoria"><Select value={categoryId} onChange={(event) => setCategoryId(event.target.value)}><option value="">Sem categoria</option>{activeCategories.map((category) => <option key={category.id} value={category.id}>{category.name}{category.archived_at ? ' (arquivada)' : ''}</option>)}</Select></FormField>
+          <FormField id="recurrence-payment-method" label="Forma de pagamento"><Select value={paymentMethodId} onChange={(event) => setPaymentMethodId(event.target.value)}><option value="">Não definida</option>{paymentMethods.map((method) => <option key={method.id} value={method.id}>{method.name}{method.archived_at ? ' (arquivada)' : ''}</option>)}</Select></FormField>
         </div>
         <div className="grid gap-5 sm:grid-cols-2">
-          <FormField id="recurrence-start" label="Mês de início"><Input id="recurrence-start" type="month" required value={startMonth} onChange={(event) => setStartMonth(event.target.value)} /></FormField>
-          <FormField id="recurrence-end" label="Mês de término" hint="Opcional"><Input id="recurrence-end" type="month" value={endMonth} onChange={(event) => setEndMonth(event.target.value)} /></FormField>
+          <FormField id="recurrence-start" label="Mês de início"><MonthField required value={startMonth} onChange={setStartMonth} /></FormField>
+          <FormField id="recurrence-end" label="Mês de término" hint="Opcional"><MonthField value={endMonth} onChange={setEndMonth} /></FormField>
         </div>
         <div className="grid gap-5 sm:grid-cols-2">
           <FormField id="recurrence-due-day" label="Dia de vencimento" hint="Opcional · dias 29–31 ajustam ao último dia do mês"><Input id="recurrence-due-day" type="number" min={1} max={31} step={1} inputMode="numeric" placeholder="Ex.: 31" value={dueDay} onChange={(event) => setDueDay(event.target.value)} /></FormField>
-          <FormField id="recurrence-amount" label="Valor previsto (R$)" hint="Ex.: 1.234,56"><Input id="recurrence-amount" required inputMode="decimal" placeholder="0,00" value={amount} onChange={(event) => setAmount(event.target.value)} /></FormField>
+          <FormField id="recurrence-amount" label="Valor previsto (R$)" hint="Ex.: 1.234,56"><MoneyInput required value={amount} onChange={setAmount} /></FormField>
         </div>
-        <div className="grid gap-2"><label htmlFor="recurrence-notes" className="text-sm font-medium">Observações</label><textarea id="recurrence-notes" maxLength={2000} rows={3} className="w-full rounded-xl border border-input bg-card px-3.5 py-3 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20" value={notes} onChange={(event) => setNotes(event.target.value)} /></div>
+        <FormField id="recurrence-notes" label="Observações"><Textarea maxLength={2000} value={notes} onChange={(event) => setNotes(event.target.value)} /></FormField>
         <div className="flex flex-wrap gap-2"><Button type="submit" disabled={busy}><CalendarDays aria-hidden="true" className="size-4" />{busy ? 'Salvando…' : editing ? 'Salvar regra' : 'Criar regra'}</Button><Button asChild type="button" variant="outline"><Link to="/recorrencias">Cancelar</Link></Button></div>
       </form>
     </CardContent></Card>

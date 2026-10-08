@@ -14,6 +14,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { EmptyState } from '../components/ui/feedback';
 import { MoneyValue } from '../components/ui/money-value';
 import { formatBrazilianMoney, formatCompactBrazilianMoney } from '../lib/finance';
+import { Select } from '../components/ui/form-controls';
 
 export type ChartSummary = { incomeCents: string; expenseCents: string; investmentCents: string; resultCents: string };
 export type ExpenseCategoryChartEntry = { categoryId: string | null; categoryName: string; plannedCents: string; realizedCents: string };
@@ -150,9 +151,9 @@ export function DashboardCharts({ monthLabel, planned, realized, expensesByCateg
       <CardHeader><CardTitle>Despesas por categoria</CardTitle><CardDescription>Previsto por competência e realizado pela data efetiva em {monthLabel}.</CardDescription></CardHeader>
       <CardContent className="grid min-w-0 gap-3">
         <label htmlFor="category-chart-filter" className="grid gap-2 text-sm font-medium sm:flex sm:items-center sm:gap-3">Valores exibidos
-          <select id="category-chart-filter" aria-label="Valores do gráfico por categoria" className="min-h-11 w-full rounded-xl border border-input bg-card px-3.5 py-2 text-sm text-foreground shadow-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20 sm:w-auto" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value as CategoryFilter)}>
+          <Select id="category-chart-filter" aria-label="Valores do gráfico por categoria" className="sm:w-auto" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value as CategoryFilter)}>
             <option value="both">Previsto e realizado</option><option value="planned">Somente previsto</option><option value="realized">Somente realizado</option>
-          </select>
+          </Select>
         </label>
         {!hasCategoryData ? <EmptyState
           title={categoryFilter === 'planned' ? 'Sem despesas previstas neste mês' : categoryFilter === 'realized' ? 'Sem despesas realizadas neste mês' : 'Sem despesas no mês'}

@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { FormField, Input } from '../components/ui/input';
 import { isNetworkFailure, useOfflineWorkspace } from '../offline/offline-context';
 import type { OfflineCard, OfflineCardMember } from '../offline/offline-store';
+import { Select } from '../components/ui/form-controls';
 
 type MemberResponse = { members?: Array<{ id: string; name: string; is_active: boolean }> };
 type CardResponse = { error?: string; cards?: OfflineCard[]; card?: OfflineCard; conflict?: boolean; serverCard?: OfflineCard };
@@ -218,7 +219,7 @@ export function CardSettings() {
       <form onSubmit={(event) => void submit(event)} className="grid gap-3">
         <FormField id="credit-card-name" label="Apelido do cartão"><Input required maxLength={80} autoComplete="off" placeholder="Ex.: Cartão principal" value={name} onChange={(event) => setName(event.target.value)} /></FormField>
         <div className="grid gap-3 sm:grid-cols-2">
-          <div className="grid gap-2"><label htmlFor="credit-card-holder" className="text-sm font-medium">Titular</label><select id="credit-card-holder" required value={holderUserId} onChange={(event) => setHolderUserId(event.target.value)} className="min-h-11 rounded-xl border border-input bg-card px-3.5 text-sm focus-visible:outline-2 focus-visible:outline-ring"><option value="">Selecione uma pessoa</option>{selectableMembers.map((member) => <option key={member.id} value={member.id}>{member.name}{member.is_active ? '' : ' (titular atual)'}</option>)}</select></div>
+          <FormField id="credit-card-holder" label="Titular"><Select required value={holderUserId} onChange={(event) => setHolderUserId(event.target.value)}><option value="">Selecione uma pessoa</option>{selectableMembers.map((member) => <option key={member.id} value={member.id}>{member.name}{member.is_active ? '' : ' (titular atual)'}</option>)}</Select></FormField>
           <FormField id="credit-card-closing-day" label="Dia de fechamento"><Input type="number" min={1} max={31} step={1} inputMode="numeric" required value={closingDay} onChange={(event) => setClosingDay(event.target.value)} /></FormField>
         </div>
         <FormField id="credit-card-due-day" label="Dia de vencimento"><Input type="number" min={1} max={31} step={1} inputMode="numeric" required value={dueDay} onChange={(event) => setDueDay(event.target.value)} /></FormField>

@@ -127,7 +127,7 @@ test('administra um espaço compartilhado, importa e sincroniza uma alteração 
   await admin.getByLabel('Data da compra').fill('2026-10-31');
   await admin.getByLabel('Valor total (R$)').fill('10,01');
   await admin.getByLabel('Quantidade de parcelas').fill('3');
-  await expect(admin.getByLabel('Primeira fatura')).toHaveValue('2026-11');
+  await expect(admin.getByLabel('Primeira fatura')).toHaveValue('11/2026');
   await admin.setViewportSize({ width: 390, height: 844 });
   expect(await admin.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await purchaseCard.focus();
@@ -279,7 +279,7 @@ test('administra um espaço compartilhado, importa e sincroniza uma alteração 
   await admin.getByRole('button', { name: 'Salvar alterações' }).click();
   await expect(admin).toHaveURL(/\/lancamentos$/);
   await admin.getByLabel('Competência').fill(forecastMonth);
-  await expect(admin.getByLabel('Competência')).toHaveValue(forecastMonth);
+  await expect(admin.getByLabel('Competência')).toHaveValue(forecastMonth.split('-').reverse().join('/'));
   await expect(admin.getByText('Moradia ajustada individualmente')).toBeVisible();
 
   await admin.getByRole('link', { name: 'Lançamentos' }).click();

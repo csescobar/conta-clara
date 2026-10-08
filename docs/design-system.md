@@ -54,7 +54,12 @@ Os componentes reutilizáveis ficam em `src/components/ui`. Seguem a composiçã
 
 - `Button`: ação principal, secundária, contorno, discreta e destrutiva; foco de teclado visível e estado desabilitado claro.
 - `Card`: superfície para informação relacionada, com título e descrição semânticos.
-- `FormField` e `Input`: rótulo visível ligado ao campo; ajuda e erro vinculados por `aria-describedby`.
+- `FormField` e `Input`: rótulo visível ligado ao campo; ajuda e erro vinculados por `aria-describedby`. `FormField` aceita qualquer controle de `src/components/ui/form-controls.tsx`.
+- `Select` e `Textarea`: mesma aparência do `Input` (`fieldControlClassName`), com seta própria no seletor nativo.
+- `Checkbox` e `RadioGroup`: rótulo clicável; `RadioGroup` usa `fieldset`/`legend` e opções segmentadas navegáveis por setas.
+- `DateField`: texto com máscara DD/MM/AAAA e teclado numérico; o formulário valida com `parseBrazilianDate`. Datas ISO coladas são convertidas.
+- `MonthField`: competência com máscara MM/AAAA, recebe e entrega `AAAA-MM`; texto incompleto não altera o valor e volta ao último mês válido ao sair do campo. Substitui `type="month"`, que aparecia no idioma do navegador e não funciona no Firefox e no Safari de desktop.
+- `MoneyInput`: valor em reais com prefixo visual “R$”, aceita vírgula e milhar, normaliza ao sair do campo (`1234,5` → `1.234,50`) e informa centavos inteiros por `onCentsChange`. Para preencher, use `formatBrazilianAmount`.
 - `MoneyValue`: recebe centavos inteiros (número, string ou BigInt) e exibe reais com algarismos tabulares. `tone` aplica a cor de receita (`income`), despesa (`expense`), aporte (`investment`) ou resultado (`balance`: sucesso se zero ou positivo, erro se negativo); `signDisplay` mostra `+` quando pedido; `compact` abrevia (ex.: “R$ 1,2 mi”) e mantém o valor exato no `title`. Use-o para valores isolados; em frases corridas, use `formatBrazilianMoney`.
 - Formatação: `src/lib/finance.ts` é a única fonte para dinheiro (`formatBrazilianMoney`, `formatCompactBrazilianMoney`), datas (`formatBrazilianDate`, `formatBrazilianMonth`, `formatBrazilianMonthLong`, `formatBrazilianDateTime`, `brazilianMonthName`) e a data atual em America/Sao_Paulo (`currentSaoPauloDate`, `currentBrazilianDate`, `currentMonthInputValue`). Não criar `Intl.NumberFormat` ou `Intl.DateTimeFormat` nas telas. A exportação CSV mantém seu formato próprio.
 - `StatusBadge`: sempre exibe texto e ícone além da cor.

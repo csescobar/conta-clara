@@ -7,12 +7,13 @@ import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { EmptyState, LoadingState } from '../components/ui/feedback';
 import { FormField, Input } from '../components/ui/input';
-import { currentBrazilianDate, currentMonthInputValue, formatBrazilianDate, formatBrazilianMonth, formatBrazilianMoney, parseBrazilianCents, parseBrazilianDate } from '../lib/finance';
+import { currentBrazilianDate, currentMonthInputValue, formatBrazilianAmount, formatBrazilianDate, formatBrazilianMonth, parseBrazilianCents, parseBrazilianDate } from '../lib/finance';
 import { downloadCsv, entriesCsvFilename, serializeEntriesCsv } from '../lib/csv-export';
 import { filterOfflineEntries, isAuthenticationFailure, isNetworkFailure, makeOfflineEntry, mergeOfflineEntries, useOfflineWorkspace } from '../offline/offline-context';
 import type { OfflineEntry, OfflineWorkspaceSnapshot } from '../offline/offline-store';
 import { PageHeader } from './page-header';
 import { MoneyValue } from '../components/ui/money-value';
+import { Select, Textarea, RadioGroup, DateField, MonthField, MoneyInput } from '../components/ui/form-controls';
 
 type EntryKind = 'income' | 'expense' | 'investment';
 type EntryStatus = 'pending' | 'late' | 'paid';
@@ -31,8 +32,10 @@ async function readApi(response: Response): Promise<ApiResponse> {
 }
 
 function SelectField({ id, label, value, onChange, children }: { id: string; label: string; value: string; onChange: (value: string) => void; children: ReactNode }) {
-  return <div className="grid gap-2"><label htmlFor={id} className="text-sm font-medium">{label}</label><select id={id} className="min-h-11 rounded-xl border border-input bg-card px-3.5 text-sm focus-visible:outline-2 focus-visible:outline-ring" value={value} onChange={(event) => onChange(event.target.value)}>{children}</select></div>;
+  return <FormField id={id} label={label}><Select value={value} onChange={(event) => onChange(event.target.value)}>{children}</Select></FormField>;
 }
+
+const kindOptions = [['income', 'Receita'], ['expense', 'Despesa'], ['investment', 'Aporte']] as const;
 
 export function TransactionsPage() {
   const auth = useContext(AuthContext);
@@ -181,7 +184,7 @@ export function TransactionsPage() {
 
   function startConfirmation(entry: Entry) {
     setConfirmingEntryId(entry.id);
-    setActualAmount(formatBrazilianMoney(entry.planned_cents));
+    setActualAmount(formatBrazilianAmount(entry.planned_cents));
     setActualDate(currentBrazilianDate());
     setError('');
   }
@@ -255,7 +258,7 @@ export function TransactionsPage() {
       <Card>
         <CardHeader><CardTitle>Filtrar lançamentos</CardTitle><CardDescription>Escolha competência, categoria ou situação.</CardDescription></CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-3">
-          <div className="grid gap-2"><label htmlFor="entries-month" className="text-sm font-medium">Competência</label><Input id="entries-month" type="month" value={month} onChange={(event) => setMonth(event.target.value)} /></div>
+          <FormField id="entries-month" label="Competência"><MonthField value={month} onChange={setMonth} /></FormField>
           <SelectField id="entries-category" label="Categoria" value={categoryId} onChange={setCategoryId}><option value="">Todas as categorias</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}{category.archived_at ? ' (arquivada)' : ''}</option>)}</SelectField>
           <SelectField id="entries-status" label="Situação" value={status} onChange={setStatus}><option value="">Todas as situações</option><option value="pending">Em aberto</option><option value="late">Atrasado</option><option value="paid">Pago</option></SelectField>
         </CardContent>
@@ -271,7 +274,7 @@ export function TransactionsPage() {
               <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{entry.description}</p><p className="mt-0.5 text-xs leading-5 text-muted-foreground">{kindLabels[entry.kind]} · {entry.category_name ?? 'Sem categoria'} · Competência {formatBrazilianMonth(entry.competence_on)} · Vencimento {formatBrazilianDate(entry.due_on)}{entry.realized_on ? ` · Realizado ${formatBrazilianDate(entry.realized_on)}` : ''}{pendingOperation && <span className="ml-1 font-semibold text-warning">· Pendente neste aparelho</span>}</p></div>
               <div className="grid shrink-0 justify-items-end gap-1"><p className="text-sm font-semibold"><MoneyValue cents={entry.actual_cents ?? entry.planned_cents} tone={entry.kind === 'income' ? 'income' : 'expense'} /></p>{entry.actual_cents !== null && <p className="text-xs text-muted-foreground">Previsto <MoneyValue cents={entry.planned_cents} /></p>}<StatusBadge status={entry.status} aria-label={`Situação: ${statusLabels[entry.status]}`} /></div>
               <div className="flex w-full flex-wrap justify-end gap-1 sm:w-auto">{entry.actual_cents === null ? <Button type="button" size="sm" variant="outline" disabled={busyEntryId === entry.id || confirmationBlocked} aria-label={`Confirmar ${entry.description}`} onClick={() => startConfirmation(entry)}><CalendarDays aria-hidden="true" className="size-4" />Confirmar</Button> : entry.card_purchase_id ? <span className="self-center px-2 text-xs text-muted-foreground">Parcela paga</span> : <Button type="button" size="sm" variant="ghost" disabled={busyEntryId === entry.id || confirmationBlocked} aria-label={`Desfazer confirmação ${entry.description}`} onClick={() => void undoConfirmation(entry)}>Desfazer confirmação</Button>}{entry.card_purchase_id ? <Button asChild size="sm" variant="ghost"><Link to="/compras">Gerenciar compra</Link></Button> : pendingOperation?.conflict ? <Button type="button" size="sm" variant="ghost" disabled aria-label={`Editar ${entry.description}`}><Pencil aria-hidden="true" className="size-4" />Editar</Button> : <Button asChild size="sm" variant="ghost"><Link aria-label={`Editar ${entry.description}`} to={`/lancamentos/${entry.id}/editar`}><Pencil aria-hidden="true" className="size-4" />Editar</Link></Button>}{!entry.card_purchase_id && <Button type="button" size="sm" variant="ghost" disabled={busyEntryId === entry.id || offline?.syncing || Boolean(pendingOperation?.conflict)} aria-label={`Excluir ${entry.description}`} onClick={() => void deleteEntry(entry)}><Trash2 aria-hidden="true" className="size-4" />Excluir</Button>}</div>
-              {confirmingEntryId === entry.id && <form aria-label={`Confirmar lançamento ${entry.description}`} onSubmit={(event) => void confirmEntry(event, entry)} className="grid w-full gap-3 rounded-xl border border-border bg-muted/40 p-3 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-end"><FormField id={`actual-amount-${entry.id}`} label="Valor realizado (R$)"><Input required inputMode="decimal" value={actualAmount} onChange={(event) => setActualAmount(event.target.value)} /></FormField><FormField id={`actual-date-${entry.id}`} label="Data de realização" hint="DD/MM/AAAA"><Input required inputMode="numeric" maxLength={10} value={actualDate} onChange={(event) => setActualDate(event.target.value)} /></FormField><Button type="submit" size="sm" disabled={busyEntryId === entry.id || confirmationBlocked}>{busyEntryId === entry.id ? 'Salvando…' : 'Salvar realização'}</Button><Button type="button" size="sm" variant="outline" onClick={() => setConfirmingEntryId('')}>Cancelar</Button></form>}
+              {confirmingEntryId === entry.id && <form aria-label={`Confirmar lançamento ${entry.description}`} onSubmit={(event) => void confirmEntry(event, entry)} className="grid w-full gap-3 rounded-xl border border-border bg-muted/40 p-3 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-end"><FormField id={`actual-amount-${entry.id}`} label="Valor realizado (R$)"><MoneyInput required allowZero value={actualAmount} onChange={setActualAmount} /></FormField><FormField id={`actual-date-${entry.id}`} label="Data de realização" hint="DD/MM/AAAA"><DateField required value={actualDate} onChange={setActualDate} /></FormField><Button type="submit" size="sm" disabled={busyEntryId === entry.id || confirmationBlocked}>{busyEntryId === entry.id ? 'Salvando…' : 'Salvar realização'}</Button><Button type="button" size="sm" variant="outline" onClick={() => setConfirmingEntryId('')}>Cancelar</Button></form>}
             </li>;
           })}</ul> : <EmptyState title="Nenhum lançamento encontrado" description="Ajuste os filtros ou adicione a primeira movimentação deste período." action={<Button asChild><Link to="/lancamentos/novo"><Plus aria-hidden="true" className="size-4" />Adicionar lançamento</Link></Button>} />}
         </CardContent>
@@ -320,7 +323,7 @@ export function NewTransactionPage() {
         setCategoryId(entry.category_id ?? '');
         setMonth(entry.competence_on.slice(0, 7));
         setDueOn(entry.due_on ? formatBrazilianDate(entry.due_on) : '');
-        setAmount(formatBrazilianMoney(entry.planned_cents));
+        setAmount(formatBrazilianAmount(entry.planned_cents));
         setPaymentMethodId(entry.payment_method_id ?? '');
         setNotes(entry.notes ?? '');
       }
@@ -470,18 +473,18 @@ export function NewTransactionPage() {
     <Card className="max-w-3xl"><CardContent className="grid gap-5 p-5 sm:p-7">
       {error && <p role="alert" className="rounded-xl bg-destructive-soft px-4 py-3 text-sm font-medium text-destructive">{error}</p>}
       <form onSubmit={submit} onChange={() => { formEditedRef.current = true; }} className="grid gap-5">
-        <fieldset className="grid gap-2"><legend className="text-sm font-medium">Tipo</legend><div className="flex flex-wrap gap-2">{([['income', 'Receita'], ['expense', 'Despesa'], ['investment', 'Aporte']] as const).map(([value, label]) => <label key={value} className="cursor-pointer"><input className="peer sr-only" type="radio" name="entry-kind" value={value} checked={kind === value} onChange={() => { setKind(value); if (categories.find((category) => category.id === categoryId)?.kind !== value) setCategoryId(''); }} /><span className="inline-flex min-h-10 items-center rounded-xl border border-border bg-card px-4 text-sm font-medium text-muted-foreground peer-checked:border-primary peer-checked:bg-accent peer-checked:text-accent-foreground peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ring">{label}</span></label>)}</div></fieldset>
+        <RadioGroup legend="Tipo" name="entry-kind" value={kind} options={kindOptions} onChange={(value) => { setKind(value); if (categories.find((category) => category.id === categoryId)?.kind !== value) setCategoryId(''); }} />
         <FormField id="entry-title" label="Descrição"><Input required maxLength={200} autoComplete="off" placeholder="Ex.: conta de luz" value={description} onChange={(event) => setDescription(event.target.value)} /></FormField>
         <div className="grid gap-5 sm:grid-cols-2">
           <SelectField id="entry-category" label="Categoria" value={categoryId} onChange={setCategoryId}><option value="">Sem categoria</option>{activeCategories.map((category) => <option key={category.id} value={category.id}>{category.name}{category.archived_at ? ' (arquivada)' : ''}</option>)}</SelectField>
-          <div className="grid gap-2"><label htmlFor="entry-competence" className="text-sm font-medium">Mês de competência</label><Input id="entry-competence" required type="month" value={month} onChange={(event) => setMonth(event.target.value)} /></div>
+          <FormField id="entry-competence" label="Mês de competência"><MonthField required value={month} onChange={setMonth} /></FormField>
         </div>
         <div className="grid gap-5 sm:grid-cols-2">
-          <FormField id="entry-amount" label="Valor previsto (R$)" hint="Ex.: 1.234,56"><Input required inputMode="decimal" placeholder="0,00" value={amount} onChange={(event) => setAmount(event.target.value)} /></FormField>
-          <FormField id="entry-due-date" label="Vencimento" hint="Opcional · DD/MM/AAAA"><Input inputMode="numeric" placeholder="DD/MM/AAAA" maxLength={10} value={dueOn} onChange={(event) => setDueOn(event.target.value)} /></FormField>
+          <FormField id="entry-amount" label="Valor previsto (R$)" hint="Ex.: 1.234,56"><MoneyInput required value={amount} onChange={setAmount} /></FormField>
+          <FormField id="entry-due-date" label="Vencimento" hint="Opcional · DD/MM/AAAA"><DateField value={dueOn} onChange={setDueOn} /></FormField>
         </div>
         <SelectField id="entry-payment-method" label="Forma de pagamento" value={paymentMethodId} onChange={setPaymentMethodId}><option value="">Não definida</option>{paymentMethods.map((method) => <option key={method.id} value={method.id}>{method.name}{method.archived_at ? ' (arquivada)' : ''}</option>)}</SelectField>
-        <div className="grid gap-2"><label htmlFor="entry-notes" className="text-sm font-medium">Observações</label><textarea id="entry-notes" maxLength={2000} rows={3} className="w-full rounded-xl border border-input bg-card px-3.5 py-3 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20" value={notes} onChange={(event) => setNotes(event.target.value)} /></div>
+        <FormField id="entry-notes" label="Observações"><Textarea maxLength={2000} value={notes} onChange={(event) => setNotes(event.target.value)} /></FormField>
         <div className="flex flex-wrap gap-2"><Button type="submit" disabled={busy || offline?.syncing}><Plus aria-hidden="true" className="size-4" />{busy ? 'Salvando…' : editing ? 'Salvar alterações' : 'Salvar lançamento'}</Button><Button asChild type="button" variant="outline"><Link to="/lancamentos">Cancelar</Link></Button></div>
       </form>
     </CardContent></Card>
