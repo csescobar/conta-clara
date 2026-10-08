@@ -3,6 +3,7 @@ import { LockKeyhole, WalletCards } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { FormField, Input } from '../components/ui/input';
+import { Alert } from '../components/ui/alert';
 
 export type AuthUser = { id: string; name: string; email: string; role: string; spaceId: string };
 export type AuthState = { initialized: boolean; user: AuthUser | null; csrfToken: string };
@@ -53,7 +54,7 @@ export function AuthPage({ initialized, csrfToken, onAuthenticated }: { initiali
               <FormField id="auth-password" label="Senha" hint={!initialized ? 'Use pelo menos 12 caracteres.' : undefined}>
                 <Input type="password" autoComplete={initialized ? 'current-password' : 'new-password'} required minLength={initialized ? undefined : 12} maxLength={1024} value={password} onChange={(event) => setPassword(event.target.value)} />
               </FormField>
-              {error && <p role="alert" className="rounded-xl bg-destructive-soft px-3.5 py-3 text-sm font-medium text-destructive">{error}</p>}
+              {error && <Alert>{error}</Alert>}
               <Button type="submit" disabled={busy} className="w-full"><LockKeyhole aria-hidden="true" className="size-4" />{busy ? 'Aguarde…' : initialized ? 'Entrar' : 'Criar meu acesso'}</Button>
             </form>
           </CardContent>

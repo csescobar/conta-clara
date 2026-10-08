@@ -301,8 +301,8 @@ describe('offline transaction workflow', () => {
     expect(await screen.findByText('Conta ajustada offline')).toBeInTheDocument();
     expect((await loadOfflineWorkspace(scope)).operations).toMatchObject([expect.objectContaining({ kind: 'update', entryId: 'offline-entry' })]);
 
-    vi.stubGlobal('confirm', vi.fn(() => true));
     await user.click(screen.getByRole('button', { name: 'Excluir Conta ajustada offline' }));
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Excluir lançamento' }));
     await waitFor(async () => expect((await loadOfflineWorkspace(scope)).operations).toMatchObject([expect.objectContaining({ kind: 'delete', entryId: 'offline-entry' })]));
     expect(screen.queryByText('Conta ajustada offline')).not.toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
@@ -324,20 +324,20 @@ describe('offline transaction workflow', () => {
       throw new Error(`Unexpected request ${String(input)}`);
     });
     vi.stubGlobal('fetch', fetchMock);
-    const confirm = vi.fn(() => false);
-    vi.stubGlobal('confirm', confirm);
     const user = userEvent.setup();
     render(<MemoryRouter><AuthGate><p>Conteúdo privado</p></AuthGate></MemoryRouter>);
 
     await screen.findByText('Conteúdo privado');
     await screen.findByText(/1 alteração aguarda sincronização/);
     await user.click(screen.getByRole('button', { name: 'Sair de Conta Clara' }));
-    await waitFor(() => expect(confirm).toHaveBeenCalledWith('Há 1 alteração sem sincronização. Sair e descartar essas alterações locais?'));
+    const confirmation = await screen.findByRole('alertdialog', { name: 'Sair com alterações não sincronizadas?' });
+    expect(confirmation).toHaveAccessibleDescription('Há 1 alteração sem sincronização. Sair e descartar essas alterações locais?');
+    await user.click(within(confirmation).getByRole('button', { name: 'Continuar conectado' }));
     expect(fetchMock).not.toHaveBeenCalledWith('/api/auth/logout', expect.anything());
     expect((await loadOfflineWorkspace(scope)).operations).toHaveLength(1);
 
-    confirm.mockImplementation(() => true);
     await user.click(screen.getByRole('button', { name: 'Sair de Conta Clara' }));
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Sair e descartar' }));
     expect(await screen.findByRole('heading', { name: 'Boas-vindas de volta' })).toBeInTheDocument();
     await waitFor(async () => expect(await loadOfflineWorkspace(scope)).toMatchObject({ entries: [], operations: [], categories: [] }));
     expect((await loadOfflineWorkspace(otherScope)).entries[0]?.description).toBe('Despesa de outra pessoa');
@@ -355,12 +355,12 @@ describe('offline transaction workflow', () => {
       throw new Error(`Unexpected request ${String(input)}`);
     });
     vi.stubGlobal('fetch', fetchMock);
-    vi.stubGlobal('confirm', vi.fn(() => true));
     const user = userEvent.setup();
     render(<MemoryRouter><AuthGate><p>Conteúdo privado</p></AuthGate></MemoryRouter>);
 
     await screen.findByText(/1 alteração pendente/);
     await user.click(screen.getByRole('button', { name: 'Sair de Conta Clara' }));
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Sair e descartar' }));
     expect(await screen.findByRole('heading', { name: 'Boas-vindas de volta' })).toBeInTheDocument();
     expect(await isOfflineLogoutMarked(localUser)).toBe(true);
     expect((await loadOfflineWorkspace(scope)).operations).toHaveLength(0);

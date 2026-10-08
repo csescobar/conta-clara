@@ -14,6 +14,8 @@ import type { OfflineEntry, OfflineWorkspaceSnapshot } from '../offline/offline-
 import { PageHeader } from './page-header';
 import { MoneyValue } from '../components/ui/money-value';
 import { Select, Textarea, RadioGroup, DateField, MonthField, MoneyInput } from '../components/ui/form-controls';
+import { useConfirmDialog } from '../components/ui/dialog';
+import { Alert } from '../components/ui/alert';
 
 type EntryKind = 'income' | 'expense' | 'investment';
 type EntryStatus = 'pending' | 'late' | 'paid';
@@ -38,6 +40,7 @@ function SelectField({ id, label, value, onChange, children }: { id: string; lab
 const kindOptions = [['income', 'Receita'], ['expense', 'Despesa'], ['investment', 'Aporte']] as const;
 
 export function TransactionsPage() {
+  const [confirm, confirmDialog] = useConfirmDialog();
   const auth = useContext(AuthContext);
   const offline = useOfflineWorkspace();
   const offlineRef = useRef(offline);
@@ -138,7 +141,7 @@ export function TransactionsPage() {
   useEffect(() => { void loadEntries(); }, [loadEntries, offline?.online, offline?.pendingCount, offline?.ready, offlineOperationKey]);
 
   async function deleteEntry(entry: Entry) {
-    if (!window.confirm(`Excluir “${entry.description}”? Esta ação não pode ser desfeita.`)) return;
+    if (!(await confirm({ title: `Excluir “${entry.description}”?`, description: 'Esta ação não pode ser desfeita.', confirmLabel: 'Excluir lançamento', destructive: true }))) return;
     setBusyEntryId(entry.id);
     setError('');
     const currentOffline = offlineRef.current;
@@ -226,7 +229,7 @@ export function TransactionsPage() {
   }
 
   async function undoConfirmation(entry: Entry) {
-    if (!window.confirm(`Desfazer a confirmação de “${entry.description}”? O lançamento voltará a ficar em aberto ou atrasado.`)) return;
+    if (!(await confirm({ title: `Desfazer a confirmação de “${entry.description}”?`, description: 'O lançamento voltará a ficar em aberto ou atrasado.', confirmLabel: 'Desfazer confirmação', cancelLabel: 'Manter confirmação' }))) return;
     setBusyEntryId(entry.id);
     setError('');
     try {
@@ -252,8 +255,9 @@ export function TransactionsPage() {
   const confirmationBlocked = Boolean(offline && (!offline.online || offline.pendingCount > 0 || offline.syncing));
 
   return <>
+    {confirmDialog}
     <PageHeader eyebrow="Movimentações" title="Lançamentos" description="Acompanhe receitas, despesas e aportes do espaço compartilhado." action={<div className="flex flex-wrap gap-2"><Button type="button" variant="outline" disabled={loading || entries.length === 0} onClick={() => downloadCsv(serializeEntriesCsv(entries), entriesCsvFilename(month))}><Download aria-hidden="true" className="size-4" />Exportar CSV</Button><Button asChild variant="outline"><Link to="/importar"><Upload aria-hidden="true" className="size-4" />Importar planilha</Link></Button><Button asChild><Link to="/lancamentos/novo"><Plus aria-hidden="true" className="size-4" />Adicionar lançamento</Link></Button></div>} />
-    {error && <p role="alert" className="mb-4 rounded-xl bg-destructive-soft px-4 py-3 text-sm font-medium text-destructive">{error}</p>}
+    {error && <Alert className="mb-4">{error}</Alert>}
     <section className="grid gap-4">
       <Card>
         <CardHeader><CardTitle>Filtrar lançamentos</CardTitle><CardDescription>Escolha competência, categoria ou situação.</CardDescription></CardHeader>
@@ -471,7 +475,7 @@ export function NewTransactionPage() {
   return <>
     <PageHeader eyebrow="Lançamentos" title={editing ? 'Editar lançamento' : 'Adicionar lançamento'} description="Registre a previsão no espaço financeiro compartilhado." />
     <Card className="max-w-3xl"><CardContent className="grid gap-5 p-5 sm:p-7">
-      {error && <p role="alert" className="rounded-xl bg-destructive-soft px-4 py-3 text-sm font-medium text-destructive">{error}</p>}
+      {error && <Alert>{error}</Alert>}
       <form onSubmit={submit} onChange={() => { formEditedRef.current = true; }} className="grid gap-5">
         <RadioGroup legend="Tipo" name="entry-kind" value={kind} options={kindOptions} onChange={(value) => { setKind(value); if (categories.find((category) => category.id === categoryId)?.kind !== value) setCategoryId(''); }} />
         <FormField id="entry-title" label="Descrição"><Input required maxLength={200} autoComplete="off" placeholder="Ex.: conta de luz" value={description} onChange={(event) => setDescription(event.target.value)} /></FormField>

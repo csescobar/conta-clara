@@ -300,8 +300,8 @@ test('administra um espaço compartilhado, importa e sincroniza uma alteração 
   await admin.getByRole('link', { name: 'Lançamentos' }).click();
   await admin.getByLabel('Competência').fill(skippedMonth);
   await expect(admin.getByText('Moradia recorrente fictícia')).toBeVisible();
-  admin.once('dialog', (dialog) => dialog.accept());
   await admin.getByRole('button', { name: 'Excluir Moradia recorrente fictícia' }).click();
+  await admin.getByRole('alertdialog', { name: 'Excluir “Moradia recorrente fictícia”?' }).getByRole('button', { name: 'Excluir lançamento' }).click();
   await expect(admin.getByText('Moradia recorrente fictícia')).toHaveCount(0);
 
   await admin.getByRole('link', { name: 'Recorrências' }).click();

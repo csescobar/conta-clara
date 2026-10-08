@@ -5,6 +5,7 @@ import { LoadingState } from '../components/ui/feedback';
 import { AppLayout } from '../components/app-layout';
 import { OfflineWorkspaceProvider, useOfflineWorkspace } from '../offline/offline-context';
 import { clearOfflineLogoutMarker, clearRememberedOfflineUser, isOfflineLogoutMarked, loadRememberedOfflineUser, markOfflineLogout, rememberOfflineUser } from '../offline/offline-store';
+import { useConfirmDialog } from '../components/ui/dialog';
 
 export const AuthContext = createContext<{ user: AuthUser; csrfToken: string } | null>(null);
 
@@ -25,6 +26,7 @@ function AuthenticatedSession({ user, csrfToken, notice, onLogout, children }: {
   onLogout: (localOnly: boolean) => Promise<boolean>;
   children: ReactNode;
 }) {
+  const [confirm, confirmDialog] = useConfirmDialog();
   const offline = useOfflineWorkspace();
   const [localNotice, setLocalNotice] = useState('');
 
@@ -48,7 +50,7 @@ function AuthenticatedSession({ user, csrfToken, notice, onLogout, children }: {
     await offline?.sync(csrfToken);
     const currentWorkspace = await offline?.refresh();
     const pendingCount = (currentWorkspace?.operations.length ?? 0) + (currentWorkspace?.cardOperations.length ?? 0) + (currentWorkspace?.purchaseOperations.length ?? 0) + (currentWorkspace?.invoiceOperations.length ?? 0);
-    if (pendingCount && !window.confirm(`Há ${pendingCount} alteração${pendingCount === 1 ? '' : 'ões'} sem sincronização. Sair e descartar essas alterações locais?`)) return;
+    if (pendingCount && !(await confirm({ title: 'Sair com alterações não sincronizadas?', description: `Há ${pendingCount} alteração${pendingCount === 1 ? '' : 'ões'} sem sincronização. Sair e descartar essas alterações locais?`, confirmLabel: 'Sair e descartar', cancelLabel: 'Continuar conectado', destructive: true }))) return;
     const loggedOut = await onLogout(Boolean(offline && !offline.online));
     if (!loggedOut) return;
     try {
@@ -58,7 +60,7 @@ function AuthenticatedSession({ user, csrfToken, notice, onLogout, children }: {
     }
   }
 
-  return <AuthContext.Provider value={{ user, csrfToken }}><AppLayout user={user} csrfToken={csrfToken} onLogout={() => void logout()} notice={[notice, localNotice].filter(Boolean).join(' ')}>{children}</AppLayout></AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, csrfToken }}><AppLayout user={user} csrfToken={csrfToken} onLogout={() => void logout()} notice={[notice, localNotice].filter(Boolean).join(' ')}>{children}</AppLayout>{confirmDialog}</AuthContext.Provider>;
 }
 
 export function AuthGate({ children }: { children?: ReactNode }) {

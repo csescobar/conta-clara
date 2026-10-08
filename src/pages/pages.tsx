@@ -16,6 +16,8 @@ import { PageHeader } from './page-header';
 import { isAuthenticationFailure, isNetworkFailure, useOfflineWorkspace } from '../offline/offline-context';
 import { MoneyValue } from '../components/ui/money-value';
 import { MonthField } from '../components/ui/form-controls';
+import { useConfirmDialog } from '../components/ui/dialog';
+import { Alert } from '../components/ui/alert';
 
 const DashboardCharts = lazy(() => import('./dashboard-charts').then(({ DashboardCharts: charts }) => ({ default: charts })));
 
@@ -110,7 +112,7 @@ export function DashboardPage() {
   const heading = formatBrazilianMonthLong(month);
   return <>
     <PageHeader eyebrow={heading} title="Visão geral" description="Compare o previsto por competência com os valores efetivamente realizados." action={<div className="flex flex-wrap items-center gap-2"><div className="flex items-center gap-2"><Button type="button" size="icon" variant="outline" aria-label="Mês anterior" onClick={() => setMonth((value) => moveMonth(value, -1))}><ChevronLeft aria-hidden="true" className="size-4" /></Button><MonthField aria-label="Mês do painel" required className="w-[7.5rem] text-center" value={month} onChange={(value) => { if (value) setMonth(value); }} /><Button type="button" size="icon" variant="outline" aria-label="Próximo mês" onClick={() => setMonth((value) => moveMonth(value, 1))}><ChevronRight aria-hidden="true" className="size-4" /></Button></div><Button asChild><Link to="/lancamentos/novo"><Plus aria-hidden="true" className="size-4" />Adicionar lançamento</Link></Button></div>} />
-    {error && <p role="alert" className="mb-4 rounded-xl bg-destructive-soft px-4 py-3 text-sm font-medium text-destructive">{error}</p>}
+    {error && <Alert className="mb-4">{error}</Alert>}
     {loading && !dashboard ? <LoadingState label="Carregando painel financeiro" /> : dashboard && <div aria-busy={loading}>
       <section aria-label={`Resumo de ${heading}`} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <DashboardMetric title="Resultado previsto" cents={dashboard.planned.resultCents} description="Receitas − despesas − aportes por competência" />
@@ -153,6 +155,7 @@ export function DashboardPage() {
 }
 
 export function SettingsPage() {
+  const [confirm, confirmDialog] = useConfirmDialog();
   const auth = useContext(AuthContext);
   const isAdmin = auth?.user.role === 'admin';
   const [members, setMembers] = useState<Array<{ id: string; name: string; email: string; role: string; is_active: boolean }> | null>(null);
@@ -243,7 +246,7 @@ export function SettingsPage() {
   }
 
   async function deactivateMember(member: { id: string; name: string }) {
-    if (!window.confirm(`Desativar o acesso de ${member.name}? As sessões ativas serão encerradas.`)) return;
+    if (!(await confirm({ title: `Desativar o acesso de ${member.name}?`, description: 'As sessões ativas serão encerradas.', confirmLabel: 'Desativar acesso', destructive: true }))) return;
     setError('');
     setBusy(true);
     try {
@@ -283,8 +286,9 @@ export function SettingsPage() {
   const linkValue = link ? new URL(link.path, window.location.origin).toString() : '';
   const statusText: Record<string, string> = { pending: 'Pendente', accepted: 'Ativado', revoked: 'Revogado', expired: 'Expirado' };
   return <>
+    {confirmDialog}
     <PageHeader eyebrow="Seu espaço" title="Configurações" description="Pessoas e acessos ao espaço financeiro compartilhado." />
-    {error && <p role="alert" className="mb-5 rounded-xl bg-destructive-soft px-4 py-3 text-sm font-medium text-destructive">{error}</p>}
+    {error && <Alert className="mb-5">{error}</Alert>}
     <section aria-labelledby="members-heading" className="grid gap-4">
       <Card><CardHeader><CardTitle id="members-heading"><span className="flex items-center gap-2"><UsersRound aria-hidden="true" className="size-5 text-primary" />Pessoas</span></CardTitle><CardDescription>Todos usam seu próprio acesso e compartilham as finanças deste espaço.</CardDescription></CardHeader><CardContent className="grid gap-4">
         {members === null ? <p className="text-sm text-muted-foreground">Carregando pessoas…</p> : members.length ? <ul className="divide-y divide-border">{members.map((member) => <li key={member.id} className="flex flex-wrap items-center gap-3 py-3 first:pt-0 last:pb-0"><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{member.name}</p><p className="truncate text-xs text-muted-foreground">{member.email}</p></div><span className="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground">{member.role === 'admin' ? 'Administrador' : 'Membro'}</span>{!member.is_active && <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">Acesso desativado</span>}{isAdmin && member.is_active && <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => void createResetLink(member)}><ShieldCheck aria-hidden="true" className="size-4" />Link para redefinir senha</Button>}{isAdmin && member.is_active && member.role === 'member' && <Button type="button" variant="destructive" size="sm" disabled={busy} aria-label={`Desativar acesso de ${member.name}`} onClick={() => void deactivateMember(member)}>Desativar acesso</Button>}{isAdmin && !member.is_active && member.role === 'member' && <Button type="button" variant="outline" size="sm" disabled={busy} aria-label={`Reativar acesso de ${member.name}`} onClick={() => void reactivateMember(member)}>Reativar acesso</Button>}</li>)}</ul> : <p className="text-sm text-muted-foreground">Nenhum membro encontrado.</p>}

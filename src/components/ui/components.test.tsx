@@ -3,7 +3,8 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { StatusBadge } from './badge';
 import { Button } from './button';
-import { ErrorState, EmptyState, LoadingState } from './feedback';
+import { Alert } from './alert';
+import { EmptyState, LoadingState } from './feedback';
 import { FormField, Input } from './input';
 import { MoneyValue } from './money-value';
 
@@ -39,10 +40,17 @@ describe('finance UI components', () => {
     expect(screen.getByText('Atrasado')).toHaveClass('bg-destructive-soft', 'text-destructive');
   });
 
-  it('presents errors on the destructive surface tokens', () => {
-    render(<ErrorState title="Falha ao carregar" description="Tente novamente." />);
+  it('announces errors as alerts and successes as status with semantic tokens', () => {
+    render(<>
+      <Alert title="Falha ao carregar">Tente novamente.</Alert>
+      <Alert variant="success">Backup verificado.</Alert>
+    </>);
 
-    expect(screen.getByRole('alert', { name: 'Falha ao carregar' })).toHaveClass('border-destructive-border', 'bg-destructive-surface');
+    const error = screen.getByRole('alert');
+    expect(error).toHaveTextContent('Falha ao carregarTente novamente.');
+    expect(error).toHaveClass('border-destructive-border', 'bg-destructive-soft');
+    expect(screen.getByRole('status')).toHaveTextContent('Backup verificado.');
+    expect(screen.getByRole('status')).toHaveClass('bg-success-surface', 'text-success');
   });
 
   it('keeps the action reachable by keyboard', async () => {
@@ -70,12 +78,10 @@ describe('finance UI components', () => {
       <>
         <EmptyState title="Nada por aqui" description="Inclua seu primeiro item." />
         <LoadingState label="Carregando painel" />
-        <ErrorState title="Falha ao carregar" description="Tente novamente." />
       </>,
     );
 
     expect(screen.getByRole('status', { name: /nada por aqui/i })).toBeInTheDocument();
     expect(screen.getByRole('status', { name: 'Carregando painel' })).toHaveAttribute('aria-live', 'polite');
-    expect(screen.getByRole('alert', { name: /falha ao carregar/i })).toBeInTheDocument();
   });
 });

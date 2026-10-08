@@ -113,7 +113,7 @@ describe('application navigation and preview screens', () => {
     await user.click(within(mainNav).getByRole('link', { name: 'Configurações' }));
     expect(screen.getByRole('heading', { name: 'Configurações' })).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: 'Pessoas' })).toBeInTheDocument();
-    expect(within(screen.getByRole('list')).getAllByText('Pessoa de exemplo')).toHaveLength(1);
+    expect(within(within(screen.getByRole('main')).getByRole('list')).getAllByText('Pessoa de exemplo')).toHaveLength(1);
     expect(screen.getByRole('button', { name: 'Gerar convite' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Link para redefinir senha' })).toBeInTheDocument();
   });

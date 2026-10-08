@@ -197,7 +197,6 @@ describe('financial entry pages', () => {
       throw new Error(`Unexpected request: ${input}`);
     });
     vi.stubGlobal('fetch', fetchMock);
-    vi.stubGlobal('confirm', vi.fn(() => true));
     const user = userEvent.setup();
     renderPage('/lancamentos');
 
@@ -209,7 +208,9 @@ describe('financial entry pages', () => {
     expect(screen.getByRole('link', { name: 'Editar Conta de energia' })).toHaveAttribute('href', '/lancamentos/entry-id/editar');
 
     await user.click(screen.getByRole('button', { name: 'Excluir Conta de energia' }));
-    expect(window.confirm).toHaveBeenCalledWith('Excluir “Conta de energia”? Esta ação não pode ser desfeita.');
+    const confirmation = await screen.findByRole('alertdialog', { name: 'Excluir “Conta de energia”?' });
+    expect(confirmation).toHaveAccessibleDescription('Esta ação não pode ser desfeita.');
+    await user.click(within(confirmation).getByRole('button', { name: 'Excluir lançamento' }));
     expect(await screen.findByRole('status', { name: 'Nenhum lançamento encontrado' })).toBeInTheDocument();
     const remove = fetchMock.mock.calls.find(([input, init]) => input === '/api/entries/entry-id' && init?.method === 'DELETE');
     expect(remove?.[1]?.headers).toMatchObject({ 'X-CSRF-Token': 'csrf-entry-test' });
@@ -239,7 +240,6 @@ describe('financial entry pages', () => {
       throw new Error(`Unexpected request: ${input}`);
     });
     vi.stubGlobal('fetch', fetchMock);
-    vi.stubGlobal('confirm', vi.fn(() => true));
     const user = userEvent.setup();
     renderPage('/lancamentos');
 
@@ -261,7 +261,9 @@ describe('financial entry pages', () => {
     expect(JSON.parse(String(confirmCall?.[1]?.body))).toEqual({ actualCents: 9700, realizedOn: '2026-11-02' });
 
     await user.click(screen.getByRole('button', { name: 'Desfazer confirmação Conta de energia' }));
-    expect(window.confirm).toHaveBeenCalledWith('Desfazer a confirmação de “Conta de energia”? O lançamento voltará a ficar em aberto ou atrasado.');
+    const undo = await screen.findByRole('alertdialog', { name: 'Desfazer a confirmação de “Conta de energia”?' });
+    expect(undo).toHaveAccessibleDescription('O lançamento voltará a ficar em aberto ou atrasado.');
+    await user.click(within(undo).getByRole('button', { name: 'Desfazer confirmação' }));
     await waitFor(() => expect(within(row as HTMLElement).getByLabelText('Situação: Atrasado')).toBeInTheDocument());
     expect(row).not.toHaveTextContent('Realizado 02/11/2026');
     const undoCall = fetchMock.mock.calls.find(([input, init]) => input === '/api/entries/entry-id/confirm' && init?.method === 'DELETE');

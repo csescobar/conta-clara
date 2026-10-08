@@ -11,6 +11,9 @@ import type { OfflineInvoice, OfflinePaymentMethod } from '../offline/offline-st
 import { PageHeader } from './page-header';
 import { MoneyValue } from '../components/ui/money-value';
 import { Select, DateField, MonthField, MoneyInput } from '../components/ui/form-controls';
+import { AlertDialog, AlertDialogContent, Dialog, DialogContent, DialogFooter, DialogHeader } from '../components/ui/dialog';
+import { Alert } from '../components/ui/alert';
+import { toast } from '../components/ui/toast';
 
 type ApiResponse = { error?: string; invoices?: OfflineInvoice[]; paymentMethods?: OfflinePaymentMethod[] };
 type InvoiceResponse = { error?: string; invoices?: OfflineInvoice[] };
@@ -43,17 +46,19 @@ export function InvoicesPage() {
   const [paymentMethods, setPaymentMethods] = useState<OfflinePaymentMethod[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
   const [selectedInvoice, setSelectedInvoice] = useState<OfflineInvoice | null>(null);
   const [reversalInvoice, setReversalInvoice] = useState<OfflineInvoice | null>(null);
-  const dialogRef = useRef<HTMLElement | null>(null);
   const triggerFocusRef = useRef<HTMLElement | null>(null);
+  function restoreTriggerFocus(event: Event) {
+    if (!triggerFocusRef.current) return;
+    event.preventDefault();
+    triggerFocusRef.current.focus();
+    triggerFocusRef.current = null;
+  }
   const [amount, setAmount] = useState('');
   const [paidOn, setPaidOn] = useState(currentBrazilianDate());
   const [paymentMethodId, setPaymentMethodId] = useState('');
   const [saving, setSaving] = useState(false);
-  const savingRef = useRef(saving);
-  savingRef.current = saving;
 
   const selectedMonthRef = useRef(month);
   selectedMonthRef.current = month;
@@ -63,7 +68,6 @@ export function InvoicesPage() {
     const currentOffline = offlineRef.current;
     setLoading(true);
     setError('');
-    setNotice('');
     if (currentOffline && !currentOffline.ready) return;
     if (currentOffline && !currentOffline.online) {
       const snapshot = await currentOffline.refresh();
@@ -121,39 +125,6 @@ export function InvoicesPage() {
 
   useEffect(() => { void loadInvoices(); }, [loadInvoices, offline?.online, offline?.pendingCount, offline?.ready]);
 
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-    const focusable = [...dialog.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])')];
-    focusable[0]?.focus();
-    function handleDialogKeydown(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        if (savingRef.current) return;
-        event.preventDefault();
-        if (selectedInvoice) setSelectedInvoice(null);
-        else setReversalInvoice(null);
-        return;
-      }
-      if (event.key !== 'Tab' || !focusable.length) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    }
-    document.addEventListener('keydown', handleDialogKeydown);
-    return () => {
-      document.removeEventListener('keydown', handleDialogKeydown);
-      if (!dialogRef.current) {
-        triggerFocusRef.current?.focus();
-        triggerFocusRef.current = null;
-      }
-    };
-  }, [Boolean(selectedInvoice), Boolean(reversalInvoice)]);
 
   const grouped = useMemo(() => {
     const result = new Map<string, OfflineInvoice[]>();
@@ -199,7 +170,7 @@ export function InvoicesPage() {
         await offline.sync(auth.csrfToken);
         await loadInvoices();
         if (offline.syncError) setError(offline.syncError);
-      } else setNotice('Quitação salva neste aparelho. Ela será sincronizada quando a conexão voltar.');
+      } else toast('Quitação salva neste aparelho. Ela será sincronizada quando a conexão voltar.');
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Não foi possível salvar a quitação.');
     } finally {
@@ -220,7 +191,7 @@ export function InvoicesPage() {
         await offline.sync(auth.csrfToken);
         await loadInvoices();
         if (offline.syncError) setError(offline.syncError);
-      } else setNotice('Estorno salvo neste aparelho. Ele será sincronizado quando a conexão voltar.');
+      } else toast('Estorno salvo neste aparelho. Ele será sincronizado quando a conexão voltar.');
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Não foi possível desfazer a quitação.');
     } finally {
@@ -231,8 +202,7 @@ export function InvoicesPage() {
   const heading = formatBrazilianMonth(`${month}-01`);
   return <>
     <PageHeader eyebrow="Cartões" title="Faturas" description="Confira as parcelas previstas e registre a quitação integral de cada fatura." action={<div className="flex items-center gap-2"><Button type="button" size="icon" variant="outline" aria-label="Mês anterior" onClick={() => setMonth((value) => moveMonth(value, -1))}><ChevronLeft aria-hidden="true" className="size-4" /></Button><MonthField aria-label="Mês de vencimento" className="w-[7.5rem] text-center" value={month} onChange={(value) => { if (value) setMonth(value); }} /><Button type="button" size="icon" variant="outline" aria-label="Próximo mês" onClick={() => setMonth((value) => moveMonth(value, 1))}><ChevronRight aria-hidden="true" className="size-4" /></Button></div>} />
-    {notice && <p role="status" className="mb-4 rounded-xl border border-success-border bg-success-surface px-4 py-3 text-sm text-success">{notice}</p>}
-    {error && <p role="alert" className="mb-4 rounded-xl bg-destructive-soft px-4 py-3 text-sm font-medium text-destructive">{error}</p>}
+    {error && <Alert className="mb-4">{error}</Alert>}
     {loading ? <LoadingState label="Carregando faturas" /> : grouped.length === 0 ? <Card><CardContent><EmptyState title={`Nenhuma fatura em ${heading}`} description="As faturas aparecem aqui quando houver parcelas de compras de cartão com vencimento neste mês." /></CardContent></Card> : <div className="grid gap-5">
       {grouped.map(({ cardId, cardName, invoices: cardInvoices }) => <section key={cardId} aria-labelledby={`invoice-card-${cardId}`} className="grid gap-3">
         <h2 id={`invoice-card-${cardId}`} className="flex items-center gap-2 text-lg font-semibold"><CreditCard aria-hidden="true" className="size-5 text-primary" />{cardName}</h2>
@@ -264,22 +234,28 @@ export function InvoicesPage() {
         })}
       </section>)}
     </div>}
-    {selectedInvoice && <div className="fixed inset-0 z-40 grid place-items-center overflow-y-auto bg-black/40 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) setSelectedInvoice(null); }}>
-      <section ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="invoice-payment-title" className="my-auto grid w-full max-w-lg gap-5 rounded-2xl border border-border bg-card p-5 shadow-xl sm:p-6">
-        <div><h2 id="invoice-payment-title" className="text-lg font-semibold">Quitar fatura</h2><p className="mt-1 text-sm text-muted-foreground">{selectedInvoice.card_name} · {formatBrazilianMonth(selectedInvoice.invoice_month)} · previsto <MoneyValue cents={selectedInvoice.planned_cents} />.</p></div>
+    <Dialog open={Boolean(selectedInvoice)} onOpenChange={(open) => { if (!open && !saving) setSelectedInvoice(null); }}>
+      {selectedInvoice && <DialogContent onCloseAutoFocus={restoreTriggerFocus} onEscapeKeyDown={(event) => { if (saving) event.preventDefault(); }} onPointerDownOutside={(event) => { if (saving) event.preventDefault(); }}>
+        <DialogHeader title="Quitar fatura" description={<>{selectedInvoice.card_name} · {formatBrazilianMonth(selectedInvoice.invoice_month)} · previsto <MoneyValue cents={selectedInvoice.planned_cents} />.</>} />
         <form className="grid gap-4" onSubmit={(event) => void savePayment(event)}>
           <FormField id="invoice-actual-amount" label="Valor efetivamente pago" hint="Registre o total da quitação integral, em reais."><MoneyInput required autoFocus value={amount} onChange={setAmount} /></FormField>
           <FormField id="invoice-paid-on" label="Data do pagamento"><DateField required value={paidOn} onChange={setPaidOn} /></FormField>
           <FormField id="invoice-payment-method" label="Forma de pagamento (opcional)"><Select value={paymentMethodId} onChange={(event) => setPaymentMethodId(event.target.value)}><option value="">Não definida</option>{paymentMethods.map((method) => <option key={method.id} value={method.id}>{method.name}</option>)}</Select></FormField>
-          <div className="flex flex-wrap justify-end gap-2 pt-1"><Button type="button" variant="outline" disabled={saving} onClick={() => setSelectedInvoice(null)}>Cancelar</Button><Button type="submit" disabled={saving}>{saving ? 'Salvando…' : 'Confirmar quitação'}</Button></div>
+          <DialogFooter className="pt-1"><Button type="button" variant="outline" disabled={saving} onClick={() => setSelectedInvoice(null)}>Cancelar</Button><Button type="submit" disabled={saving}>{saving ? 'Salvando…' : 'Confirmar quitação'}</Button></DialogFooter>
         </form>
-      </section>
-    </div>}
-    {reversalInvoice && <div className="fixed inset-0 z-40 grid place-items-center overflow-y-auto bg-black/40 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) setReversalInvoice(null); }}>
-      <section ref={dialogRef} role="alertdialog" aria-modal="true" aria-labelledby="invoice-reversal-title" aria-describedby="invoice-reversal-description" className="my-auto grid w-full max-w-md gap-4 rounded-2xl border border-border bg-card p-5 shadow-xl sm:p-6">
-        <div><h2 id="invoice-reversal-title" className="text-lg font-semibold">Desfazer quitação?</h2><p id="invoice-reversal-description" className="mt-1 text-sm text-muted-foreground">A fatura de {reversalInvoice.card_name} de {formatBrazilianMonth(reversalInvoice.invoice_month)} voltará a ficar em aberto. Você poderá quitar novamente depois.</p></div>
-        <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="outline" disabled={saving} onClick={() => setReversalInvoice(null)}>Manter quitação</Button><Button type="button" variant="destructive" disabled={saving} onClick={() => void reversePayment(reversalInvoice)}>{saving ? 'Salvando…' : 'Confirmar estorno'}</Button></div>
-      </section>
-    </div>}
+      </DialogContent>}
+    </Dialog>
+    <AlertDialog open={Boolean(reversalInvoice)} onOpenChange={(open) => { if (!open && !saving) setReversalInvoice(null); }}>
+      {reversalInvoice && <AlertDialogContent
+        title="Desfazer quitação?"
+        description={`A fatura de ${reversalInvoice.card_name} de ${formatBrazilianMonth(reversalInvoice.invoice_month)} voltará a ficar em aberto. Você poderá quitar novamente depois.`}
+        cancelLabel="Manter quitação"
+        confirmLabel={saving ? 'Salvando…' : 'Confirmar estorno'}
+        destructive
+        busy={saving}
+        onConfirm={() => void reversePayment(reversalInvoice)}
+        onCloseAutoFocus={restoreTriggerFocus}
+      />}
+    </AlertDialog>
   </>;
 }

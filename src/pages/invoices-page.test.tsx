@@ -8,6 +8,7 @@ import { OfflineWorkspaceProvider } from '../offline/offline-context';
 import { loadOfflineWorkspace, saveOfflineInvoices, type OfflineInvoice, type OfflineScope } from '../offline/offline-store';
 import { currentMonthInputValue } from '../lib/finance';
 import { InvoicesPage } from './invoices-page';
+import { Toaster } from '../components/ui/toast';
 
 const user = { id: 'invoice-page-user', name: 'Membro', email: 'member@example.test', role: 'member', spaceId: 'invoice-page-space' };
 const scope: OfflineScope = { userId: user.id, spaceId: user.spaceId };
@@ -29,7 +30,7 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 function renderPage() {
-  return render(<MemoryRouter><AuthContext.Provider value={{ user, csrfToken: 'csrf-invoice-page' }}><OfflineWorkspaceProvider scope={scope}><InvoicesPage /></OfflineWorkspaceProvider></AuthContext.Provider></MemoryRouter>);
+  return render(<MemoryRouter><AuthContext.Provider value={{ user, csrfToken: 'csrf-invoice-page' }}><OfflineWorkspaceProvider scope={scope}><InvoicesPage /><Toaster /></OfflineWorkspaceProvider></AuthContext.Provider></MemoryRouter>);
 }
 
 beforeAll(() => { vi.stubGlobal('indexedDB', new IDBFactory()); });

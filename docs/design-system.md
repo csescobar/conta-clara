@@ -64,7 +64,11 @@ Os componentes reutilizáveis ficam em `src/components/ui`. Seguem a composiçã
 - Formatação: `src/lib/finance.ts` é a única fonte para dinheiro (`formatBrazilianMoney`, `formatCompactBrazilianMoney`), datas (`formatBrazilianDate`, `formatBrazilianMonth`, `formatBrazilianMonthLong`, `formatBrazilianDateTime`, `brazilianMonthName`) e a data atual em America/Sao_Paulo (`currentSaoPauloDate`, `currentBrazilianDate`, `currentMonthInputValue`). Não criar `Intl.NumberFormat` ou `Intl.DateTimeFormat` nas telas. A exportação CSV mantém seu formato próprio.
 - `StatusBadge`: sempre exibe texto e ícone além da cor.
 - `DashboardCharts`: gráficos responsivos de previsto versus realizado e despesas por categoria, com aportes separados do consumo. Cada gráfico inclui resumo textual, tooltip com valor exato e tabela expansível; a navegação por teclado e leitores de tela permanecem habilitados.
-- `EmptyState`, `LoadingState` e `ErrorState`: mensagens explícitas; carregamento usa anúncio educado, erro usa alerta.
+- `EmptyState` e `LoadingState`: mensagens explícitas; carregamento usa anúncio educado.
+- `Alert`: mensagem inline com ícone e texto nas variantes `destructive`, `warning`, `success` e `info`. Erro e atenção usam `role="alert"`; sucesso e informação usam `role="status"`. Substitui parágrafos de erro montados à mão.
+- `Dialog` (`DialogContent`, `DialogHeader`, `DialogFooter`): modal Radix que prende o foco e fecha com Esc. Ao abrir por código, devolva o foco ao gatilho com `onCloseAutoFocus`.
+- `useConfirmDialog`: substitui `window.confirm` por `AlertDialog` com título, descrição, ação nomeada (“Excluir lançamento”, não “OK”) e variante destrutiva. Devolve o foco ao elemento que pediu a confirmação e só resolve `true` quando a pessoa confirma.
+- `toast` e `Toaster`: anunciam o resultado de uma ação concluída sem deslocar o layout. O `Toaster` fica no `AppLayout`, acima do menu móvel; orientações persistentes continuam como `Alert`.
 
 O estado vazio explica como começar quando existe uma ação disponível. Carregamento mantém o layout estável e respeita movimento reduzido. Erro descreve a situação em texto e, quando a tela oferecer recuperação, orienta uma ação. Valores, legenda ou resumo acompanham os gráficos; não comunicar resultado somente pela cor. Use os filtros do mesmo período do painel e mantenha valores exatos disponíveis fora dos eixos arredondados.
 

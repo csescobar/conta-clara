@@ -10,6 +10,7 @@ import { parseSpreadsheetImport, type ImportKind, type ImportLocale, type Spread
 import { PageHeader } from './page-header';
 import { MoneyValue } from '../components/ui/money-value';
 import { Select, Checkbox } from '../components/ui/form-controls';
+import { Alert } from '../components/ui/alert';
 
 type Category = { id: string; name: string; kind: ImportKind; archived_at: string | null };
 type PaymentMethod = { id: string; name: string; archived_at: string | null };
@@ -186,7 +187,7 @@ export function SpreadsheetImportPage() {
 
   return <>
     <PageHeader eyebrow="Migração" title="Importar planilha" description="Revise as contas e receitas previstas antes de adicionar lançamentos ao espaço compartilhado." action={<Button asChild variant="outline"><Link to="/lancamentos">Voltar aos lançamentos</Link></Button>} />
-    {error && <p role="alert" className="mb-4 rounded-xl bg-destructive-soft px-4 py-3 text-sm font-medium text-destructive">{error}</p>}
+    {error && <Alert className="mb-4">{error}</Alert>}
     {successCount !== null && <Card className="mb-5 border-primary/30"><CardContent className="flex flex-wrap items-center justify-between gap-3 pt-5"><p role="status" className="text-sm font-medium">{successCount} lançamentos foram importados. A planilha original não foi alterada.</p><Button asChild variant="outline"><Link to="/lancamentos">Ver lançamentos</Link></Button></CardContent></Card>}
 
     <div className="grid gap-5">

@@ -2,10 +2,12 @@ import { ArrowLeftRight, CreditCard, Ellipsis, FileText, History, House, LogOut,
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { Button } from './ui/button';
+import { Toaster } from './ui/toast';
 import type { AuthUser } from '../auth/auth-page';
 import { cn } from '../lib/utils';
 import { useOfflineWorkspace } from '../offline/offline-context';
 import { formatBrazilianDate, formatBrazilianDateTime, formatBrazilianMoney, formatBrazilianMonth } from '../lib/finance';
+import { Alert } from './ui/alert';
 
 const links = [
   { to: '/', label: 'Visão geral', Icon: House, end: true },
@@ -182,7 +184,7 @@ export function AppLayout({ user, csrfToken, onLogout, notice, children }: { use
           <Button type="button" variant="ghost" size="icon" aria-label="Sair de Conta Clara" onClick={onLogout}><LogOut aria-hidden="true" className="size-5" /></Button>
         </header>
         <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-6xl px-4 pb-28 pt-7 sm:px-8 sm:pt-10 lg:px-10 lg:pb-12">
-          {notice && <p role="alert" className="mb-5 rounded-xl bg-destructive-soft px-4 py-3 text-sm font-medium text-destructive">{notice}</p>}
+          {notice && <Alert className="mb-5">{notice}</Alert>}
           {offline && <div role="status" aria-live="polite" className={`mb-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-xl border px-4 py-2.5 text-xs leading-5 ${offline.online && offline.pendingCount === 0 ? 'border-border bg-card text-muted-foreground' : 'border-warning-border bg-warning-surface text-warning'}`}>
             <span>{offlineMessage}</span>
             {lastUpdated && <span>Última atualização online: <time dateTime={offline.lastSyncedAt ?? undefined}>{lastUpdated}</time></span>}
@@ -260,12 +262,13 @@ export function AppLayout({ user, csrfToken, onLogout, notice, children }: { use
               </article>;
             })}
           </section>}
-          {offline?.syncError && <p role="alert" className="mb-5 rounded-xl bg-destructive-soft px-4 py-3 text-sm font-medium text-destructive">{offline.syncError}</p>}
+          {offline?.syncError && <Alert className="mb-5">{offline.syncError}</Alert>}
           {children}
         </main>
       </div>
 
       <MobileNavigation />
+      <Toaster />
     </div>
   );
 }

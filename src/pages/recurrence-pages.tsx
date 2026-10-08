@@ -10,6 +10,8 @@ import { currentMonthInputValue, formatBrazilianAmount, parseBrazilianCents } fr
 import { PageHeader } from './page-header';
 import { MoneyValue } from '../components/ui/money-value';
 import { Select, Textarea, RadioGroup, MonthField, MoneyInput } from '../components/ui/form-controls';
+import { useConfirmDialog } from '../components/ui/dialog';
+import { Alert } from '../components/ui/alert';
 
 type EntryKind = 'income' | 'expense' | 'investment';
 type RecurrenceRule = {
@@ -45,6 +47,7 @@ function recurrencePeriod(rule: RecurrenceRule) {
 }
 
 export function RecurrencesPage() {
+  const [confirm, confirmDialog] = useConfirmDialog();
   const auth = useContext(AuthContext);
   const [rules, setRules] = useState<RecurrenceRule[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,7 +72,7 @@ export function RecurrencesPage() {
   useEffect(() => { void loadRules(); }, [loadRules]);
 
   async function archiveRule(rule: RecurrenceRule) {
-    if (!window.confirm(`Arquivar a regra “${rule.description}”? Os lançamentos já gerados serão mantidos.`)) return;
+    if (!(await confirm({ title: `Arquivar a regra “${rule.description}”?`, description: 'Os lançamentos já gerados serão mantidos.', confirmLabel: 'Arquivar regra', destructive: true }))) return;
     setBusyId(rule.id);
     try {
       const response = await fetch(`/api/recurrences/${rule.id}/archive`, {
@@ -87,8 +90,9 @@ export function RecurrencesPage() {
 
   const activeCount = rules.filter((rule) => !rule.archived_at).length;
   return <>
+    {confirmDialog}
     <PageHeader eyebrow="Planejamento" title="Recorrências" description="Gere lançamentos mensais automaticamente e ajuste cada ocorrência quando precisar." action={<Button asChild><Link to="/recorrencias/novo"><Plus aria-hidden="true" className="size-4" />Nova regra</Link></Button>} />
-    {error && <p role="alert" className="mb-4 rounded-xl bg-destructive-soft px-4 py-3 text-sm font-medium text-destructive">{error}</p>}
+    {error && <Alert className="mb-4">{error}</Alert>}
     <Card>
       <CardHeader><CardTitle>Regras mensais</CardTitle><CardDescription>{activeCount} {activeCount === 1 ? 'regra ativa' : 'regras ativas'} · os lançamentos gerados aparecem em Lançamentos.</CardDescription></CardHeader>
       <CardContent>
@@ -216,7 +220,7 @@ export function RecurrenceFormPage() {
   return <>
     <PageHeader eyebrow="Recorrências" title={editing ? 'Editar regra mensal' : 'Nova regra mensal'} description="Defina a despesa, receita ou aporte que deve se repetir a cada mês." />
     <Card className="max-w-3xl"><CardContent className="grid gap-5 p-5 sm:p-7">
-      {error && <p role="alert" className="rounded-xl bg-destructive-soft px-4 py-3 text-sm font-medium text-destructive">{error}</p>}
+      {error && <Alert>{error}</Alert>}
       <form onSubmit={submit} className="grid gap-5">
         <RadioGroup legend="Tipo" name="recurrence-kind" value={kind} options={kindOptions} onChange={(value) => { setKind(value); if (categories.find((category) => category.id === categoryId)?.kind !== value) setCategoryId(''); }} />
         <FormField id="recurrence-description" label="Descrição"><Input id="recurrence-description" required maxLength={200} autoComplete="off" placeholder="Ex.: conta de internet" value={description} onChange={(event) => setDescription(event.target.value)} /></FormField>

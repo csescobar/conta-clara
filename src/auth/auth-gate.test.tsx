@@ -1,5 +1,5 @@
 import { IDBFactory } from 'fake-indexeddb';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -97,13 +97,15 @@ describe('authentication interface', () => {
     await queueOfflineInvoiceChange(scope, invoice, 'pay', { actualCents: 100, paidOn: '2026-11-05', paymentMethodId: null });
     const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({ initialized: true, user: admin, csrfToken }));
     vi.stubGlobal('fetch', fetchMock);
-    const confirmation = vi.spyOn(window, 'confirm').mockReturnValue(false);
     const user = userEvent.setup();
     renderGate();
 
     await user.click(await screen.findByRole('button', { name: 'Sair de Conta Clara' }));
 
-    await waitFor(() => expect(confirmation).toHaveBeenCalledWith('Há 1 alteração sem sincronização. Sair e descartar essas alterações locais?'));
+    const confirmation = await screen.findByRole('alertdialog', { name: 'Sair com alterações não sincronizadas?' });
+    expect(confirmation).toHaveAccessibleDescription('Há 1 alteração sem sincronização. Sair e descartar essas alterações locais?');
+    await user.click(within(confirmation).getByRole('button', { name: 'Continuar conectado' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect((await loadOfflineWorkspace(scope)).invoiceOperations).toHaveLength(1);
     Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });

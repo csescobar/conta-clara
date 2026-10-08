@@ -1,4 +1,4 @@
-import { AlertTriangle, Inbox, LoaderCircle } from 'lucide-react';
+import { Inbox, LoaderCircle } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 export function EmptyState({ title, description, action }: { title: string; description: string; action?: ReactNode }) {
@@ -18,17 +18,5 @@ export function LoadingState({ label = 'Carregando dados' }: { label?: string })
       <LoaderCircle aria-hidden="true" className="size-5 animate-spin text-primary motion-reduce:animate-none" />
       {label}
     </div>
-  );
-}
-
-export function ErrorState({ title, description }: { title: string; description: string }) {
-  return (
-    <section role="alert" aria-label={title} className="flex items-start gap-3 rounded-2xl border border-destructive-border bg-destructive-surface p-5">
-      <AlertTriangle aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-destructive" />
-      <div className="grid gap-1">
-        <h3 className="font-semibold text-destructive">{title}</h3>
-        <p className="text-sm leading-6 text-muted-foreground">{description}</p>
-      </div>
-    </section>
   );
 }

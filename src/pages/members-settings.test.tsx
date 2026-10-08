@@ -100,13 +100,14 @@ describe('member settings', () => {
       throw new Error(`Unexpected request: ${input}`);
     });
     vi.stubGlobal('fetch', fetchMock);
-    vi.stubGlobal('confirm', vi.fn(() => true));
     const user = userEvent.setup();
     renderSettings('admin');
 
     await user.click(await screen.findByRole('button', { name: 'Desativar acesso de Pessoa convidada' }));
 
-    expect(window.confirm).toHaveBeenCalledWith('Desativar o acesso de Pessoa convidada? As sessões ativas serão encerradas.');
+    const confirmation = await screen.findByRole('alertdialog', { name: 'Desativar o acesso de Pessoa convidada?' });
+    expect(confirmation).toHaveAccessibleDescription('As sessões ativas serão encerradas.');
+    await user.click(within(confirmation).getByRole('button', { name: 'Desativar acesso' }));
     expect(await screen.findByText('Acesso desativado')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Desativar acesso de Pessoa convidada' })).not.toBeInTheDocument();
     expect(fetchMock.mock.calls.some(([input]) => input === '/api/members/member-id/deactivate')).toBe(true);

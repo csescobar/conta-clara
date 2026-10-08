@@ -13,6 +13,9 @@ import type { OfflineCard, OfflineCategory, OfflinePurchase, OfflinePurchaseInst
 import { PageHeader } from './page-header';
 import { MoneyValue } from '../components/ui/money-value';
 import { Select, DateField, MonthField, MoneyInput } from '../components/ui/form-controls';
+import { useConfirmDialog } from '../components/ui/dialog';
+import { Alert } from '../components/ui/alert';
+import { toast } from '../components/ui/toast';
 
 type CategoriesResponse = { categories?: OfflineCategory[] };
 type CardsResponse = { cards?: OfflineCard[]; error?: string };
@@ -49,6 +52,7 @@ function toPayload(purchase: OfflinePurchase) {
 }
 
 export function CardPurchasesPage() {
+  const [confirm, confirmDialog] = useConfirmDialog();
   const auth = useContext(AuthContext);
   const offline = useOfflineWorkspace();
   const offlineRef = useRef(offline);
@@ -217,7 +221,7 @@ export function CardPurchasesPage() {
         : item);
       const updated: OfflinePurchase = { ...purchase, first_invoice_on: installmentBeingEdited.installment_number === 1 ? invoiceOn : purchase.first_invoice_on, total_cents: installments.reduce((sum, item) => sum + BigInt(item.planned_cents), 0n).toString(), updated_by_user_id: auth.user.id, version: purchase.version + 1, installments };
       setBusy(true);
-      try { await persistPurchase(updated, 'update', toPayload(updated)); clearForm(); setNotice('A parcela foi salva e sincronizada quando houver conexão.'); }
+      try { await persistPurchase(updated, 'update', toPayload(updated)); clearForm(); toast('Parcela salva. Ela será sincronizada quando houver conexão.'); }
       catch (saveError) { setError(saveError instanceof Error ? saveError.message : 'Não foi possível salvar a parcela.'); }
       finally { setBusy(false); }
       return;
@@ -286,13 +290,13 @@ export function CardPurchasesPage() {
     try {
       await persistPurchase(saved, kind, toPayload(saved));
       clearForm();
-      setNotice('Compra salva. As parcelas já aparecem nos lançamentos e serão sincronizadas quando houver conexão.');
+      toast('Compra salva. As parcelas já aparecem nos lançamentos e serão sincronizadas quando houver conexão.');
     } catch (saveError) { setError(saveError instanceof Error ? saveError.message : 'Não foi possível salvar a compra.'); }
     finally { setBusy(false); }
   }
 
   async function cancelPurchase(purchase: OfflinePurchase) {
-    if (!window.confirm(`Cancelar “${purchase.description}”? Apenas parcelas ainda não pagas serão removidas.`)) return;
+    if (!(await confirm({ title: `Cancelar “${purchase.description}”?`, description: 'Apenas parcelas ainda não pagas serão removidas.', confirmLabel: 'Cancelar compra', cancelLabel: 'Manter compra', destructive: true }))) return;
     if (!offline?.supported) { setError(offline?.storageError || 'O armazenamento offline não está disponível.'); return; }
     setBusy(true);
     setError('');
@@ -303,17 +307,18 @@ export function CardPurchasesPage() {
         await offline.sync(auth.csrfToken);
         await load();
       }
-      setNotice('Compra cancelada; as parcelas pagas foram mantidas.');
+      toast('Compra cancelada; as parcelas pagas foram mantidas.');
     } catch (cancelError) { setError(cancelError instanceof Error ? cancelError.message : 'Não foi possível cancelar a compra.'); }
     finally { setBusy(false); }
   }
 
   const editingInstallment = Boolean(editingInstallmentId);
   return <>
+    {confirmDialog}
     <PageHeader eyebrow="Cartões" title="Compras parceladas" description="Planeje as parcelas nas faturas e acompanhe as despesas no espaço compartilhado." action={!editingPurchaseId ? <Button type="button" onClick={() => { setEditingPurchaseId('new'); setNotice(''); setError(''); }}><Plus aria-hidden="true" className="size-4" />Nova compra</Button> : undefined} />
-    {error && <p role="alert" className="mb-4 rounded-xl bg-destructive-soft px-4 py-3 text-sm font-medium text-destructive">{error}</p>}
-    {notice && <p role="status" className="mb-4 rounded-xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground">{notice}</p>}
-    {offline?.storageError && !offline.supported && <p role="alert" className="mb-4 rounded-xl bg-destructive-soft px-4 py-3 text-sm font-medium text-destructive">{offline.storageError}</p>}
+    {error && <Alert className="mb-4">{error}</Alert>}
+    {notice && <Alert variant="info" className="mb-4">{notice}</Alert>}
+    {offline?.storageError && !offline.supported && <Alert className="mb-4">{offline.storageError}</Alert>}
 
     {editingPurchaseId && <Card className="mb-5">
       <CardHeader><CardTitle>{editingInstallment ? `Editar parcela ${installmentBeingEdited?.installment_number ?? ''}` : purchaseBeingEdited ? 'Editar série da compra' : 'Nova compra'}</CardTitle><CardDescription>{editingInstallment ? 'Altere o valor ou a fatura desta parcela futura.' : 'As parcelas são criadas como despesas; o valor total será dividido exatamente em centavos.'}</CardDescription></CardHeader>

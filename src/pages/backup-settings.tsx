@@ -3,6 +3,7 @@ import { CloudDownload, RefreshCw } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { formatBrazilianDateTime } from '../lib/finance';
+import { Alert } from '../components/ui/alert';
 
 type BackupStatus = {
   runState: 'never' | 'running' | 'success' | 'warning' | 'failed';
@@ -46,7 +47,7 @@ export function BackupSettings() {
       <CardDescription>Google Drive · todos os dias às 03:00, horário de Brasília · retenção de 7 diários, 4 semanais e 6 mensais.</CardDescription>
     </CardHeader>
     <CardContent className="grid gap-3">
-      {error && <p role="alert" className="rounded-xl bg-destructive-soft px-4 py-3 text-sm font-medium text-destructive">{error}</p>}
+      {error && <Alert>{error}</Alert>}
       {loading && !status && <p role="status" className="text-sm text-muted-foreground">Carregando status do backup…</p>}
       {status && <div aria-busy={loading}>
         <p className="text-sm font-medium">{status.lastSuccessAt

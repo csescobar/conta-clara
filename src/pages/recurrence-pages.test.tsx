@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -99,14 +99,15 @@ describe('monthly recurrence pages', () => {
       throw new Error(`Unexpected request: ${input}`);
     });
     vi.stubGlobal('fetch', fetchMock);
-    vi.stubGlobal('confirm', vi.fn(() => true));
     const user = userEvent.setup();
     renderPages('/recorrencias');
 
     expect(await screen.findByText('Aluguel')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Arquivar regra Aluguel' }));
+    const confirmation = await screen.findByRole('alertdialog', { name: 'Arquivar a regra “Aluguel”?' });
+    expect(confirmation).toHaveAccessibleDescription('Os lançamentos já gerados serão mantidos.');
+    await user.click(within(confirmation).getByRole('button', { name: 'Arquivar regra' }));
     await waitFor(() => expect(screen.getByText('Aluguel (arquivada)')).toBeInTheDocument());
-    expect(window.confirm).toHaveBeenCalledWith('Arquivar a regra “Aluguel”? Os lançamentos já gerados serão mantidos.');
     const archive = fetchMock.mock.calls.find(([input]) => input === '/api/recurrences/rule-id/archive');
     expect(archive?.[1]?.headers).toMatchObject({ 'X-CSRF-Token': 'csrf-recurrence-test' });
   });

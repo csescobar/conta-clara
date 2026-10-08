@@ -5,6 +5,7 @@ import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { FormField, Input } from '../components/ui/input';
 import { Select } from '../components/ui/form-controls';
+import { Alert } from '../components/ui/alert';
 
 type CategoryKind = 'income' | 'expense' | 'investment';
 type ExpenseClass = 'fixed' | 'variable';
@@ -135,7 +136,7 @@ export function CatalogSettings() {
   }
 
   return <section aria-label="Cadastros financeiros compartilhados" className="grid gap-4 xl:grid-cols-2">
-    {error && <p role="alert" className="rounded-xl bg-destructive-soft px-4 py-3 text-sm font-medium text-destructive xl:col-span-2">{error}</p>}
+    {error && <Alert className="xl:col-span-2">{error}</Alert>}
     <Card>
       <CardHeader><CardTitle>Categorias</CardTitle><CardDescription>Receitas, despesas e aportes usados pelos dois membros do espaço.</CardDescription></CardHeader>
       <CardContent className="grid gap-5">
