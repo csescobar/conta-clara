@@ -1,4 +1,3 @@
-import { randomBytes } from 'node:crypto';
 import express from 'express';
 import { createSession, hashOpaqueToken, hashPassword, requireCsrf, sessionCookieOptions } from './auth.js';
 
@@ -7,10 +6,6 @@ const invalidTokenMessage = 'Este link é inválido, expirou ou já foi utilizad
 
 function passwordIsValid(password) {
   return typeof password === 'string' && password.length >= 12 && password.length <= 1024;
-}
-
-function newToken() {
-  return randomBytes(32).toString('base64url');
 }
 
 async function findValidToken(pool, purpose, token) {

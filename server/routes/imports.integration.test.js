@@ -13,7 +13,6 @@ describe.skipIf(!testDatabaseUrl)('spreadsheet import route with PostgreSQL', ()
   let app;
   let browser;
   let csrfToken;
-  let sessionCookie;
   let expenseCategoryId;
   let investmentCategoryId;
   let incomeCategoryId;
@@ -29,9 +28,8 @@ describe.skipIf(!testDatabaseUrl)('spreadsheet import route with PostgreSQL', ()
     browser = request.agent(app);
     const state = await browser.get('/api/auth/state').set('Host', 'conta-clara.test').set('Origin', origin).expect(200);
     csrfToken = state.body.csrfToken;
-    const setup = await browser.post('/api/auth/setup').set('Host', 'conta-clara.test').set('Origin', origin).set('X-CSRF-Token', csrfToken)
+    await browser.post('/api/auth/setup').set('Host', 'conta-clara.test').set('Origin', origin).set('X-CSRF-Token', csrfToken)
       .send({ displayName: 'Admin importação', email: 'admin-import@example.test', password: 'senha-admin-importacao-ficticia-123' }).expect(201);
-    sessionCookie = setup.headers['set-cookie'].find((value) => value.startsWith('cc_session=')).split(';', 1)[0];
     const expense = await sameOrigin('post', '/api/catalog/categories').send({ name: 'Casa teste', kind: 'expense', expenseClass: 'fixed' }).expect(201);
     expenseCategoryId = expense.body.category.id;
     const investment = await sameOrigin('post', '/api/catalog/categories').send({ name: 'Aporte teste', kind: 'investment', expenseClass: null }).expect(201);

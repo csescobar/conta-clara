@@ -36,7 +36,7 @@ export function DialogFooter({ className, ...props }: ComponentPropsWithoutRef<'
 export const AlertDialog = AlertDialogPrimitive.Root;
 
 /** Confirmação que exige escolha explícita; clicar fora não fecha. */
-export function AlertDialogContent({ title, description, cancelLabel, confirmLabel, destructive = false, busy = false, onConfirm, onCloseAutoFocus }: {
+export function AlertDialogContent({ title, description, cancelLabel, confirmLabel, destructive = false, busy = false, focusConfirm = false, onConfirm, onCloseAutoFocus }: {
   title: ReactNode;
   description: ReactNode;
   cancelLabel: string;
@@ -44,19 +44,26 @@ export function AlertDialogContent({ title, description, cancelLabel, confirmLab
   destructive?: boolean;
   busy?: boolean;
   onConfirm: () => void;
+  /** Foca a confirmação ao abrir; por padrão o foco começa em cancelar. Use só em ações não destrutivas. */
+  focusConfirm?: boolean;
   onCloseAutoFocus?: (event: Event) => void;
 }) {
+  const confirmRef = useRef<HTMLButtonElement>(null);
   return (
     <AlertDialogPrimitive.Portal>
       <AlertDialogPrimitive.Overlay className={overlayClassName} />
-      <AlertDialogPrimitive.Content className={cn(contentClassName, 'max-w-md gap-4')} onCloseAutoFocus={onCloseAutoFocus}>
+      <AlertDialogPrimitive.Content
+        className={cn(contentClassName, 'max-w-md gap-4')}
+        onOpenAutoFocus={(event) => { if (focusConfirm && !destructive) { event.preventDefault(); confirmRef.current?.focus(); } }}
+        onCloseAutoFocus={onCloseAutoFocus}
+      >
         <div className="grid gap-1">
           <AlertDialogPrimitive.Title className="text-lg font-semibold">{title}</AlertDialogPrimitive.Title>
           <AlertDialogPrimitive.Description className="text-sm leading-6 text-muted-foreground">{description}</AlertDialogPrimitive.Description>
         </div>
         <DialogFooter>
           <AlertDialogPrimitive.Cancel asChild><Button type="button" variant="outline" disabled={busy}>{cancelLabel}</Button></AlertDialogPrimitive.Cancel>
-          <Button type="button" variant={destructive ? 'destructive' : 'default'} disabled={busy} onClick={onConfirm}>{confirmLabel}</Button>
+          <Button ref={confirmRef} type="button" variant={destructive ? 'destructive' : 'default'} disabled={busy} onClick={onConfirm}>{confirmLabel}</Button>
         </DialogFooter>
       </AlertDialogPrimitive.Content>
     </AlertDialogPrimitive.Portal>

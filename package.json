@@ -16,6 +16,9 @@
     "test:db": "node --env-file-if-exists=.env.test node_modules/vitest/vitest.mjs run server/database/database.integration.test.js && node --env-file-if-exists=.env.test node_modules/vitest/vitest.mjs run server/routes/auth.integration.test.js && node --env-file-if-exists=.env.test node_modules/vitest/vitest.mjs run server/routes/members.integration.test.js && node --env-file-if-exists=.env.test node_modules/vitest/vitest.mjs run server/routes/permissions.integration.test.js && node --env-file-if-exists=.env.test node_modules/vitest/vitest.mjs run server/routes/catalog.integration.test.js && node --env-file-if-exists=.env.test node_modules/vitest/vitest.mjs run server/routes/cards.integration.test.js && node --env-file-if-exists=.env.test node_modules/vitest/vitest.mjs run server/routes/purchases.integration.test.js && node --env-file-if-exists=.env.test node_modules/vitest/vitest.mjs run server/routes/invoices.integration.test.js && node --env-file-if-exists=.env.test node_modules/vitest/vitest.mjs run server/routes/entries.integration.test.js && node --env-file-if-exists=.env.test node_modules/vitest/vitest.mjs run server/routes/sync.integration.test.js && node --env-file-if-exists=.env.test node_modules/vitest/vitest.mjs run server/routes/imports.integration.test.js && node --env-file-if-exists=.env.test node_modules/vitest/vitest.mjs run server/routes/recurrences.integration.test.js && node --env-file-if-exists=.env.test node_modules/vitest/vitest.mjs run server/routes/dashboard.integration.test.js",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "build": "vite build",
     "db:migrate": "node --env-file-if-exists=.env scripts/migrate.js",
     "db:status": "node --env-file-if-exists=.env scripts/migrate.js --status",
@@ -44,6 +47,7 @@
     "shell-quote": "^1.12.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@playwright/test": "^1.63.0",
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/jest-dom": "^6.9.1",
@@ -56,11 +60,18 @@
     "@types/supertest": "^6.0.3",
     "@vitejs/plugin-react": "^5.0.4",
     "concurrently": "^9.2.1",
+    "eslint": "^9.39.5",
+    "eslint-config-prettier": "^9.1.2",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "fake-indexeddb": "^6.2.5",
+    "globals": "^17.12.0",
     "jsdom": "^27.0.0",
+    "prettier": "^3.9.9",
     "supertest": "^7.1.4",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3",
+    "typescript-eslint": "^8.70.1",
     "vite": "^7.1.12",
     "vitest": "^4.1.11"
   }

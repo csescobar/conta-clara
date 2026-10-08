@@ -31,7 +31,7 @@ describe('PWA shell', () => {
   });
 
   it('pre-caches the built shell, bypasses API responses, and preserves unrelated caches on update', async () => {
-    const handlers: Record<string, (event: any) => void> = {};
+    const handlers: Record<string, (event: unknown) => void> = {};
     const store = new Map<string, Map<string, Response>>();
     const addedUrls = new Map<string, string[]>();
     const keyFor = (request: string | { url: string }) => typeof request === 'string'
@@ -72,7 +72,7 @@ describe('PWA shell', () => {
     const self = {
       location: { origin: 'https://conta-clara.local' },
       clients: { claim: vi.fn(async () => undefined) },
-      addEventListener: (type: string, handler: (event: any) => void) => { handlers[type] = handler; },
+      addEventListener: (type: string, handler: (event: unknown) => void) => { handlers[type] = handler; },
     };
 
     const source = readFileSync(workerPath, 'utf8')
@@ -105,7 +105,7 @@ describe('PWA shell', () => {
   });
 
   it('serves the cached app shell and scripts after offline navigation', async () => {
-    const handlers: Record<string, (event: any) => void> = {};
+    const handlers: Record<string, (event: unknown) => void> = {};
     const store = new Map([[
       'conta-clara-shell-test-build',
       new Map([
@@ -132,7 +132,7 @@ describe('PWA shell', () => {
     const self = {
       location: { origin: 'https://conta-clara.local' },
       clients: { claim: async () => undefined },
-      addEventListener: (type: string, handler: (event: any) => void) => { handlers[type] = handler; },
+      addEventListener: (type: string, handler: (event: unknown) => void) => { handlers[type] = handler; },
     };
     const fetch = vi.fn(async () => { throw new TypeError('offline'); });
     const source = readFileSync(workerPath, 'utf8')

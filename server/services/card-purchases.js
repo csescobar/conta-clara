@@ -356,7 +356,7 @@ export async function cancelPurchase(client, { spaceId, userId, actorName, purch
   return { status: 200, body: { status: 'applied', purchase: await selectPurchase(client, spaceId, purchaseId) } };
 }
 
-export function createPurchasePayload({ id = randomUUID(), cardId, categoryId, description, purchaseOn, firstInvoiceOn, totalCents, installmentCount, closingDay, dueDay }) {
+export function createPurchasePayload({ cardId, categoryId, description, purchaseOn, firstInvoiceOn, totalCents, installmentCount, closingDay, dueDay }) {
   const amounts = splitInstallmentAmounts(totalCents, installmentCount);
   if (!amounts) return null;
   const firstMonth = firstInvoiceOn ?? calculateFirstInvoiceMonth(purchaseOn, closingDay, dueDay);

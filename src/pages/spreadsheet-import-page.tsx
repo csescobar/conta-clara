@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { FileUp, ShieldCheck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AuthContext } from '../auth/auth-gate';
@@ -11,6 +11,7 @@ import { PageHeader } from './page-header';
 import { MoneyValue } from '../components/ui/money-value';
 import { Select, Checkbox } from '../components/ui/form-controls';
 import { Alert } from '../components/ui/alert';
+import { AlertDialog, AlertDialogContent } from '../components/ui/dialog';
 
 type Category = { id: string; name: string; kind: ImportKind; archived_at: string | null };
 type PaymentMethod = { id: string; name: string; archived_at: string | null };
@@ -230,16 +231,17 @@ export function SpreadsheetImportPage() {
         <p className="flex items-start gap-2 text-xs leading-5 text-muted-foreground"><ShieldCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0" />Nenhuma linha é gravada nesta etapa. A confirmação envia somente os lançamentos mostrados e válidos.</p>
       </>}
 
-      {confirming && preview && <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 px-4 py-6" role="presentation"><section role="alertdialog" aria-modal="true" aria-labelledby="import-confirm-title" aria-describedby="import-confirm-description" onKeyDown={(event: ReactKeyboardEvent<HTMLElement>) => {
-        if (event.key === 'Escape') { event.preventDefault(); setConfirming(false); }
-        if (event.key === 'Tab') {
-          const actions = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));
-          const first = actions[0];
-          const last = actions.at(-1);
-          if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
-          else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
-        }
-      }} className="grid w-full max-w-lg gap-4 rounded-2xl border border-border bg-card p-5 shadow-xl"><h2 id="import-confirm-title" className="text-lg font-semibold">Confirmar importação</h2><p id="import-confirm-description" className="text-sm leading-6 text-muted-foreground">Serão criados {preview.entries.length} lançamentos neste espaço. O banco verifica referências e registra o lote em uma única transação. Um lote idêntico não pode ser importado duas vezes.</p><div className="flex flex-wrap gap-2"><Button autoFocus type="button" disabled={busy} onClick={() => void submitImport()}>{busy ? 'Importando…' : 'Confirmar e importar'}</Button><Button type="button" variant="outline" disabled={busy} onClick={() => setConfirming(false)}>Voltar à revisão</Button></div></section></div>}
+      <AlertDialog open={Boolean(confirming && preview)} onOpenChange={(open) => { if (!open && !busy) setConfirming(false); }}>
+        {confirming && preview && <AlertDialogContent
+          title="Confirmar importação"
+          description={`Serão criados ${preview.entries.length} lançamentos neste espaço. O banco verifica referências e registra o lote em uma única transação. Um lote idêntico não pode ser importado duas vezes.`}
+          cancelLabel="Voltar à revisão"
+          confirmLabel={busy ? 'Importando…' : 'Confirmar e importar'}
+          busy={busy}
+          focusConfirm
+          onConfirm={() => void submitImport()}
+        />}
+      </AlertDialog>
     </div>
   </>;
 }

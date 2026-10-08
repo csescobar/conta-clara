@@ -159,7 +159,7 @@ function parseDate(cell: XLSX.CellObject | undefined, year: number, locale: Impo
     const date = isoDate(Number(isoMatch[1]), Number(isoMatch[2]), Number(isoMatch[3]));
     return date ? { date, warning: null } : null;
   }
-  const match = /^(\d{1,2})[/.\-](\d{1,2})(?:[/.\-](\d{2,4}))?$/.exec(text);
+  const match = /^(\d{1,2})[/.-](\d{1,2})(?:[/.-](\d{2,4}))?$/.exec(text);
   if (!match) return null;
   const first = Number(match[1]);
   const second = Number(match[2]);

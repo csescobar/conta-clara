@@ -37,6 +37,8 @@ function centsAsDecimal(value: string | number | null) {
 
 function safeText(value: string | null) {
   if (value === null) return '';
+  // O caractere nulo é intencional: planilhas o ignoram antes de interpretar uma fórmula.
+  // eslint-disable-next-line no-control-regex
   return /^[\s\u0000\uFEFF]*[=+\-@]/.test(value) ? `'${value}` : value;
 }
 

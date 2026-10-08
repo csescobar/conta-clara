@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../app.js';
 import { createPool } from '../database/connection.js';
 import { migrate } from '../database/migrate.js';
-import { hashPassword, requireAuth, verifyPassword } from './auth.js';
+import { requireAuth, verifyPassword } from './auth.js';
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
 const origin = 'http://conta-clara.test';

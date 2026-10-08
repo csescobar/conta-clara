@@ -238,7 +238,7 @@ export function InvoicesPage() {
       {selectedInvoice && <DialogContent onCloseAutoFocus={restoreTriggerFocus} onEscapeKeyDown={(event) => { if (saving) event.preventDefault(); }} onPointerDownOutside={(event) => { if (saving) event.preventDefault(); }}>
         <DialogHeader title="Quitar fatura" description={<>{selectedInvoice.card_name} · {formatBrazilianMonth(selectedInvoice.invoice_month)} · previsto <MoneyValue cents={selectedInvoice.planned_cents} />.</>} />
         <form className="grid gap-4" onSubmit={(event) => void savePayment(event)}>
-          <FormField id="invoice-actual-amount" label="Valor efetivamente pago" hint="Registre o total da quitação integral, em reais."><MoneyInput required autoFocus value={amount} onChange={setAmount} /></FormField>
+          <FormField id="invoice-actual-amount" label="Valor efetivamente pago" hint="Registre o total da quitação integral, em reais."><MoneyInput required value={amount} onChange={setAmount} /></FormField>
           <FormField id="invoice-paid-on" label="Data do pagamento"><DateField required value={paidOn} onChange={setPaidOn} /></FormField>
           <FormField id="invoice-payment-method" label="Forma de pagamento (opcional)"><Select value={paymentMethodId} onChange={(event) => setPaymentMethodId(event.target.value)}><option value="">Não definida</option>{paymentMethods.map((method) => <option key={method.id} value={method.id}>{method.name}</option>)}</Select></FormField>
           <DialogFooter className="pt-1"><Button type="button" variant="outline" disabled={saving} onClick={() => setSelectedInvoice(null)}>Cancelar</Button><Button type="submit" disabled={saving}>{saving ? 'Salvando…' : 'Confirmar quitação'}</Button></DialogFooter>
