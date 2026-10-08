@@ -99,7 +99,7 @@ Fases definidas a partir da auditoria de design system e engenharia de 2026-10-0
 
 ## 11. Qualidade de engenharia (V4)
 
-- [ ] [Adotar lint e formatação](https://github.com/csescobar/conta-clara/issues/48) — dependências: nenhuma.
+- [x] [Adotar lint e formatação](https://github.com/csescobar/conta-clara/issues/48) — dependências: nenhuma; ESLint com jsx-a11y e regra de cores por tokens, Prettier aplicado em commit isolado e ignorado no blame (`1361c98`).
 - [ ] [Simplificar a execução dos testes Postgres](https://github.com/csescobar/conta-clara/issues/49) — dependências: nenhuma.
 - [ ] [Verificar mudanças localmente antes de publicar](https://github.com/csescobar/conta-clara/issues/50) — dependências: #48, #49.
 - [ ] [Reduzir o bundle inicial](https://github.com/csescobar/conta-clara/issues/51) — dependências: nenhuma.
