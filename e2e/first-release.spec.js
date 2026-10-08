@@ -306,6 +306,7 @@ test('administra um espaço compartilhado, importa e sincroniza uma alteração 
   await admin.getByRole('link', { name: 'Editar regra Moradia recorrente fictícia' }).click();
   await admin.getByLabel('Mês de término').fill(skippedMonth);
   await admin.getByRole('button', { name: 'Salvar regra' }).click();
+  await expect(admin).toHaveURL(/\/recorrencias$/);
   await admin.getByRole('link', { name: 'Lançamentos' }).click();
   await admin.getByLabel('Competência').fill(restoredMonth);
   await expect(admin.getByText('Moradia recorrente fictícia')).toHaveCount(0);
@@ -314,6 +315,7 @@ test('administra um espaço compartilhado, importa e sincroniza uma alteração 
   await admin.getByRole('link', { name: 'Editar regra Moradia recorrente fictícia' }).click();
   await admin.getByLabel('Mês de término').fill(ruleEndMonth);
   await admin.getByRole('button', { name: 'Salvar regra' }).click();
+  await expect(admin).toHaveURL(/\/recorrencias$/);
   await admin.getByRole('link', { name: 'Lançamentos' }).click();
   await admin.getByLabel('Competência').fill(restoredMonth);
   const restoredOccurrence = admin.getByText('Moradia recorrente fictícia');
