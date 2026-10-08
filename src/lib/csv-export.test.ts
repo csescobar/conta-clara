@@ -21,12 +21,22 @@ describe('CSV export', () => {
 
     expect(csv.startsWith('\uFEFF"Tipo";"Descrição";"Categoria"')).toBe(true);
     expect(csv).toContain('"Competência (AAAA-MM-DD)"');
-    expect(csv).toContain('"Mercado; “São José”";"Alimentação";"2026-10-01";"2026-10-18";"1234.56";"";"";"Cartão de crédito";"Em aberto";"Linha um\r\nlinha dois"');
+    expect(csv).toContain(
+      '"Mercado; “São José”";"Alimentação";"2026-10-01";"2026-10-18";"1234.56";"";"";"Cartão de crédito";"Em aberto";"Linha um\r\nlinha dois"',
+    );
     expect(csv.endsWith('\r\n')).toBe(true);
   });
 
   it('quotes and neutralizes formula-like text after leading whitespace', () => {
-    const csv = serializeEntriesCsv([{ ...entry, description: ' =HYPERLINK("https://example.test")', category_name: '+CMD()', payment_method_name: '\t@SUM(A1:A2)', notes: '\u0000=1+1' }]);
+    const csv = serializeEntriesCsv([
+      {
+        ...entry,
+        description: ' =HYPERLINK("https://example.test")',
+        category_name: '+CMD()',
+        payment_method_name: '\t@SUM(A1:A2)',
+        notes: '\u0000=1+1',
+      },
+    ]);
 
     expect(csv).toContain('"\' =HYPERLINK(""https://example.test"")"');
     expect(csv).toContain('"\'+CMD()"');
@@ -42,11 +52,16 @@ describe('CSV export', () => {
   });
 
   it('adds card invoice details and protects card names from spreadsheet formulas', () => {
-    const csv = serializeEntriesCsv([{
-      ...entry,
-      card_name: '=Cartão fictício', invoice_month: '2026-11-01',
-      installment_number: 2, installment_count: 3, invoice_status: 'paid',
-    }]);
+    const csv = serializeEntriesCsv([
+      {
+        ...entry,
+        card_name: '=Cartão fictício',
+        invoice_month: '2026-11-01',
+        installment_number: 2,
+        installment_count: 3,
+        invoice_status: 'paid',
+      },
+    ]);
     expect(csv).toContain('"Cartão";"Fatura (MM/AAAA)";"Parcela";"Situação da fatura"');
     expect(csv).toContain('"\'=Cartão fictício";"11/2026";"2/3";"Quitada"');
   });

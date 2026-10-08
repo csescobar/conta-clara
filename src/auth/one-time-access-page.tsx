@@ -25,7 +25,9 @@ export function OneTimeAccessPage({ purpose }: { purpose: Purpose }) {
       try {
         const [authResponse, previewResponse] = await Promise.all([
           fetch('/api/auth/state', { credentials: 'same-origin' }),
-          fetch(`/api/auth/${purpose === 'invite' ? 'invites' : 'password-resets'}/${encodeURIComponent(token ?? '')}`, { credentials: 'same-origin' }),
+          fetch(`/api/auth/${purpose === 'invite' ? 'invites' : 'password-resets'}/${encodeURIComponent(token ?? '')}`, {
+            credentials: 'same-origin',
+          }),
         ]);
         if (!authResponse.ok || !previewResponse.ok) throw new Error('Não foi possível verificar este link.');
         const [authState, linkPreview] = await Promise.all([authResponse.json(), previewResponse.json() as Promise<LinkPreview>]);
@@ -38,7 +40,9 @@ export function OneTimeAccessPage({ purpose }: { purpose: Purpose }) {
       }
     }
     void load();
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [purpose, token]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -71,19 +75,68 @@ export function OneTimeAccessPage({ purpose }: { purpose: Purpose }) {
   return (
     <main className="grid min-h-screen place-items-center bg-background px-4 py-10">
       <div className="grid w-full max-w-md gap-5">
-        <div className="grid gap-2 text-center"><p className="text-sm font-semibold text-primary">Conta Clara</p><h1 className="text-2xl font-semibold tracking-tight">{title}</h1><p className="text-sm leading-6 text-muted-foreground">{purpose === 'invite' ? 'Defina seu nome e senha para acessar as finanças compartilhadas.' : 'Escolha uma nova senha para sua conta.'}</p></div>
+        <div className="grid gap-2 text-center">
+          <p className="text-sm font-semibold text-primary">Conta Clara</p>
+          <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+          <p className="text-sm leading-6 text-muted-foreground">
+            {purpose === 'invite'
+              ? 'Defina seu nome e senha para acessar as finanças compartilhadas.'
+              : 'Escolha uma nova senha para sua conta.'}
+          </p>
+        </div>
         <Card>
-          <CardHeader><CardTitle>{preview?.valid ? title : 'Link indisponível'}</CardTitle><CardDescription>{preview?.valid ? preview.email : 'Os links são de uso único e expiram.'}</CardDescription></CardHeader>
-          {preview?.valid && <CardContent><form onSubmit={submit} className="grid gap-4">
-            {purpose === 'invite' && <FormField id="invite-name" label="Seu nome"><Input autoComplete="name" required maxLength={160} value={name} onChange={(event) => setName(event.target.value)} /></FormField>}
-            <FormField id="new-password" label="Nova senha" hint="Use pelo menos 12 caracteres."><Input type="password" autoComplete="new-password" required minLength={12} maxLength={1024} value={password} onChange={(event) => setPassword(event.target.value)} /></FormField>
-            <FormField id="confirm-password" label="Confirme a senha"><Input type="password" autoComplete="new-password" required minLength={12} maxLength={1024} value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /></FormField>
-            {error && <Alert>{error}</Alert>}
-            <Button type="submit" disabled={busy || !csrfToken} className="w-full">{busy ? 'Aguarde…' : purpose === 'invite' ? 'Ativar acesso' : 'Salvar nova senha'}</Button>
-          </form></CardContent>}
+          <CardHeader>
+            <CardTitle>{preview?.valid ? title : 'Link indisponível'}</CardTitle>
+            <CardDescription>{preview?.valid ? preview.email : 'Os links são de uso único e expiram.'}</CardDescription>
+          </CardHeader>
+          {preview?.valid && (
+            <CardContent>
+              <form onSubmit={submit} className="grid gap-4">
+                {purpose === 'invite' && (
+                  <FormField id="invite-name" label="Seu nome">
+                    <Input autoComplete="name" required maxLength={160} value={name} onChange={(event) => setName(event.target.value)} />
+                  </FormField>
+                )}
+                <FormField id="new-password" label="Nova senha" hint="Use pelo menos 12 caracteres.">
+                  <Input
+                    type="password"
+                    autoComplete="new-password"
+                    required
+                    minLength={12}
+                    maxLength={1024}
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                  />
+                </FormField>
+                <FormField id="confirm-password" label="Confirme a senha">
+                  <Input
+                    type="password"
+                    autoComplete="new-password"
+                    required
+                    minLength={12}
+                    maxLength={1024}
+                    value={confirmation}
+                    onChange={(event) => setConfirmation(event.target.value)}
+                  />
+                </FormField>
+                {error && <Alert>{error}</Alert>}
+                <Button type="submit" disabled={busy || !csrfToken} className="w-full">
+                  {busy ? 'Aguarde…' : purpose === 'invite' ? 'Ativar acesso' : 'Salvar nova senha'}
+                </Button>
+              </form>
+            </CardContent>
+          )}
         </Card>
-        {error && !preview?.valid && <p role="alert" className="text-center text-sm text-destructive">{error}</p>}
-        {preview && !preview.valid && <p role="alert" className="text-center text-sm text-destructive">Este link é inválido, expirou ou já foi utilizado. Peça um novo link ao administrador.</p>}
+        {error && !preview?.valid && (
+          <p role="alert" className="text-center text-sm text-destructive">
+            {error}
+          </p>
+        )}
+        {preview && !preview.valid && (
+          <p role="alert" className="text-center text-sm text-destructive">
+            Este link é inválido, expirou ou já foi utilizado. Peça um novo link ao administrador.
+          </p>
+        )}
       </div>
     </main>
   );

@@ -29,27 +29,41 @@ let generatedId = 0;
 
 function entry(id = 'offline-entry', description = 'Conta fictícia'): OfflineEntry {
   return {
-    id, kind: 'expense', description, category_id: 'offline-category', category_name: 'Moradia',
-    competence_on: `${currentMonthInputValue()}-01`, due_on: '2099-12-31', planned_cents: '12345', actual_cents: null,
-    realized_on: null, payment_method_id: 'offline-method', payment_method_name: 'Pix', notes: null,
-    created_by_user_id: authUser.id, updated_by_user_id: authUser.id, status: 'pending',
+    id,
+    kind: 'expense',
+    description,
+    category_id: 'offline-category',
+    category_name: 'Moradia',
+    competence_on: `${currentMonthInputValue()}-01`,
+    due_on: '2099-12-31',
+    planned_cents: '12345',
+    actual_cents: null,
+    realized_on: null,
+    payment_method_id: 'offline-method',
+    payment_method_name: 'Pix',
+    notes: null,
+    created_by_user_id: authUser.id,
+    updated_by_user_id: authUser.id,
+    status: 'pending',
   };
 }
 
 function offlinePage(scope: OfflineScope, path: string) {
   const scopedUser = { ...authUser, id: scope.userId, spaceId: scope.spaceId };
-  return render(<OfflineWorkspaceProvider scope={scope}>
-    <AuthContext.Provider value={{ user: scopedUser, csrfToken }}>
-      <MemoryRouter initialEntries={[path]}>
-        <Routes>
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/lancamentos" element={<TransactionsPage />} />
-          <Route path="/lancamentos/novo" element={<NewTransactionPage />} />
-          <Route path="/lancamentos/:id/editar" element={<NewTransactionPage />} />
-        </Routes>
-      </MemoryRouter>
-    </AuthContext.Provider>
-  </OfflineWorkspaceProvider>);
+  return render(
+    <OfflineWorkspaceProvider scope={scope}>
+      <AuthContext.Provider value={{ user: scopedUser, csrfToken }}>
+        <MemoryRouter initialEntries={[path]}>
+          <Routes>
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/lancamentos" element={<TransactionsPage />} />
+            <Route path="/lancamentos/novo" element={<NewTransactionPage />} />
+            <Route path="/lancamentos/:id/editar" element={<NewTransactionPage />} />
+          </Routes>
+        </MemoryRouter>
+      </AuthContext.Provider>
+    </OfflineWorkspaceProvider>,
+  );
 }
 
 function jsonResponse(body: unknown, status = 200) {
@@ -57,9 +71,11 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 async function seed(scope: OfflineScope, entries: OfflineEntry[] = [entry()]) {
-  await saveOfflineCatalogs(scope, [
-    { id: 'offline-category', name: 'Moradia', kind: 'expense', expense_class: 'fixed', archived_at: null },
-  ], [{ id: 'offline-method', name: 'Pix', archived_at: null }]);
+  await saveOfflineCatalogs(
+    scope,
+    [{ id: 'offline-category', name: 'Moradia', kind: 'expense', expense_class: 'fixed', archived_at: null }],
+    [{ id: 'offline-method', name: 'Pix', archived_at: null }],
+  );
   await saveOfflineEntries(scope, entries);
 }
 
@@ -81,15 +97,21 @@ describe('offline transaction workflow', () => {
       month: `${futureMonth}-01`,
       planned: { incomeCents: '0', expenseCents: '15600', investmentCents: '0', resultCents: '-15600' },
       realized: { incomeCents: '0', expenseCents: '0', investmentCents: '0', resultCents: '0' },
-      charts: { expensesByCategory: [{ categoryId: 'offline-category', categoryName: 'Moradia', plannedCents: '15600', realizedCents: '0' }] },
-      upcoming: { count: 0, entries: [] }, overdue: { count: 0, entries: [] },
+      charts: {
+        expensesByCategory: [{ categoryId: 'offline-category', categoryName: 'Moradia', plannedCents: '15600', realizedCents: '0' }],
+      },
+      upcoming: { count: 0, entries: [] },
+      overdue: { count: 0, entries: [] },
     };
-    const dashboardFor = (selectedMonth: string) => selectedMonth === futureMonth ? forecast : {
-      ...forecast,
-      month: `${selectedMonth}-01`,
-      planned: { incomeCents: '0', expenseCents: '0', investmentCents: '0', resultCents: '0' },
-      charts: { expensesByCategory: [] },
-    };
+    const dashboardFor = (selectedMonth: string) =>
+      selectedMonth === futureMonth
+        ? forecast
+        : {
+            ...forecast,
+            month: `${selectedMonth}-01`,
+            planned: { incomeCents: '0', expenseCents: '0', investmentCents: '0', resultCents: '0' },
+            charts: { expensesByCategory: [] },
+          };
     Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
     const fetchMock = vi.fn(async (input: string | URL | Request) => {
       const path = String(input);
@@ -110,7 +132,9 @@ describe('offline transaction workflow', () => {
     window.dispatchEvent(new Event('offline'));
     await waitFor(() => expect(within(forecastTitle.parentElement as HTMLElement).getByText(/-R\$.*156,00/)).toBeInTheDocument());
     fireEvent.change(monthInput, { target: { value: uncachedMonth } });
-    expect(await screen.findByRole('alert')).toHaveTextContent('Este mês ainda não foi carregado neste aparelho. Conecte-se para consultar o painel.');
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Este mês ainda não foi carregado neste aparelho. Conecte-se para consultar o painel.',
+    );
     expect(screen.queryByRole('table', { name: /Valores previstos e realizados/ })).not.toBeInTheDocument();
     expect(fetchMock.mock.calls.map(([input]) => String(input))).not.toContain(`/api/dashboard?month=${uncachedMonth}`);
     Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
@@ -122,9 +146,17 @@ describe('offline transaction workflow', () => {
     await seed(scope);
     await rememberOfflineUser(restoredUser);
     Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
-    const fetchMock = vi.fn(async (_input: string | URL | Request) => { throw new TypeError('offline'); });
+    const fetchMock = vi.fn(async (_input: string | URL | Request) => {
+      throw new TypeError('offline');
+    });
     vi.stubGlobal('fetch', fetchMock);
-    render(<MemoryRouter><AuthGate><TransactionsPage /></AuthGate></MemoryRouter>);
+    render(
+      <MemoryRouter>
+        <AuthGate>
+          <TransactionsPage />
+        </AuthGate>
+      </MemoryRouter>,
+    );
 
     expect(await screen.findByRole('heading', { name: 'Lançamentos' })).toBeInTheDocument();
     expect(await screen.findByText('Conta fictícia')).toBeInTheDocument();
@@ -140,15 +172,27 @@ describe('offline transaction workflow', () => {
     await queueOfflineEntryChange(scope, entry('offline-reload-entry', 'Despesa preservada após recarga'), 'create');
     await rememberOfflineUser(restoredUser);
     Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
-    const fetchMock = vi.fn(async (_input: string | URL | Request) => { throw new TypeError('offline'); });
+    const fetchMock = vi.fn(async (_input: string | URL | Request) => {
+      throw new TypeError('offline');
+    });
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<MemoryRouter initialEntries={['/lancamentos']}><AuthGate><Routes><Route path="/lancamentos" element={<TransactionsPage />} /></Routes></AuthGate></MemoryRouter>);
+    render(
+      <MemoryRouter initialEntries={['/lancamentos']}>
+        <AuthGate>
+          <Routes>
+            <Route path="/lancamentos" element={<TransactionsPage />} />
+          </Routes>
+        </AuthGate>
+      </MemoryRouter>,
+    );
 
     expect(await screen.findByRole('heading', { name: 'Lançamentos' })).toBeInTheDocument();
     expect(await screen.findByText('Despesa preservada após recarga')).toBeInTheDocument();
     expect(screen.getByText(/Pendente neste aparelho/)).toBeInTheDocument();
-    expect(await loadOfflineWorkspace(scope)).toMatchObject({ operations: [expect.objectContaining({ entryId: 'offline-reload-entry', kind: 'create' })] });
+    expect(await loadOfflineWorkspace(scope)).toMatchObject({
+      operations: [expect.objectContaining({ entryId: 'offline-reload-entry', kind: 'create' })],
+    });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/auth/state');
   });
@@ -157,7 +201,9 @@ describe('offline transaction workflow', () => {
     const scope = { userId: 'offline-create-user', spaceId: 'offline-create-space' };
     await seed(scope);
     Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
-    const fetchMock = vi.fn(async () => { throw new TypeError('offline'); });
+    const fetchMock = vi.fn(async () => {
+      throw new TypeError('offline');
+    });
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
     offlinePage(scope, '/lancamentos/novo');
@@ -171,7 +217,14 @@ describe('offline transaction workflow', () => {
     expect(screen.getByText(/Pendente neste aparelho/)).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
     const snapshot = await loadOfflineWorkspace(scope);
-    expect(snapshot.operations).toMatchObject([expect.objectContaining({ kind: 'create', userId: scope.userId, spaceId: scope.spaceId, payload: expect.objectContaining({ description: 'Nova conta de internet', plannedCents: 8990 }) })]);
+    expect(snapshot.operations).toMatchObject([
+      expect.objectContaining({
+        kind: 'create',
+        userId: scope.userId,
+        spaceId: scope.spaceId,
+        payload: expect.objectContaining({ description: 'Nova conta de internet', plannedCents: 8990 }),
+      }),
+    ]);
     expect(snapshot.entries.find((item) => item.description === 'Nova conta de internet')?.created_by_user_id).toBe(scope.userId);
   });
 
@@ -185,7 +238,8 @@ describe('offline transaction workflow', () => {
     let loseFirstResponse = true;
     const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
       const path = String(input);
-      if (path === '/api/auth/state') return jsonResponse({ initialized: true, user: { ...authUser, id: scope.userId, spaceId: scope.spaceId }, csrfToken });
+      if (path === '/api/auth/state')
+        return jsonResponse({ initialized: true, user: { ...authUser, id: scope.userId, spaceId: scope.spaceId }, csrfToken });
       if (path === '/api/catalog/categories?includeArchived=true') return jsonResponse({ categories: [] });
       if (path.startsWith('/api/entries?')) return jsonResponse({ entries: [...appliedEntries.values()] });
       if (path === '/api/sync/operations') {
@@ -202,7 +256,13 @@ describe('offline transaction workflow', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
-    render(<MemoryRouter><AuthGate><TransactionsPage /></AuthGate></MemoryRouter>);
+    render(
+      <MemoryRouter>
+        <AuthGate>
+          <TransactionsPage />
+        </AuthGate>
+      </MemoryRouter>,
+    );
 
     await screen.findByText(/A conexão foi interrompida/);
     const firstAttempt = fetchMock.mock.calls.find(([input]) => String(input) === '/api/sync/operations');
@@ -242,7 +302,13 @@ describe('offline transaction workflow', () => {
       throw new Error(`Unexpected request ${path}`);
     });
     vi.stubGlobal('fetch', fetchMock);
-    render(<MemoryRouter><AuthGate><p>Conteúdo privado</p></AuthGate></MemoryRouter>);
+    render(
+      <MemoryRouter>
+        <AuthGate>
+          <p>Conteúdo privado</p>
+        </AuthGate>
+      </MemoryRouter>,
+    );
 
     expect(await screen.findByText('Conteúdo privado')).toBeInTheDocument();
     expect(fetchMock.mock.calls.some(([input]) => String(input) === '/api/sync/operations')).toBe(false);
@@ -263,8 +329,12 @@ describe('offline transaction workflow', () => {
     const fetchMock = vi.fn(async (input: string | URL | Request) => {
       if (!online) throw new TypeError('offline');
       const path = String(input);
-      if (path === '/api/catalog/categories?includeArchived=true') return jsonResponse({ categories: [{ id: 'offline-category', name: 'Moradia', kind: 'expense', expense_class: 'fixed', archived_at: null }] });
-      if (path === '/api/catalog/payment-methods?includeArchived=true') return jsonResponse({ paymentMethods: [{ id: 'offline-method', name: 'Pix', archived_at: null }] });
+      if (path === '/api/catalog/categories?includeArchived=true')
+        return jsonResponse({
+          categories: [{ id: 'offline-category', name: 'Moradia', kind: 'expense', expense_class: 'fixed', archived_at: null }],
+        });
+      if (path === '/api/catalog/payment-methods?includeArchived=true')
+        return jsonResponse({ paymentMethods: [{ id: 'offline-method', name: 'Pix', archived_at: null }] });
       if (path === '/api/entries/offline-entry') return jsonResponse({ entry: { ...entry(), version: 1 } });
       throw new Error(`Unexpected request ${path}`);
     });
@@ -288,7 +358,9 @@ describe('offline transaction workflow', () => {
     const scope = { userId: 'offline-edit-user', spaceId: 'offline-edit-space' };
     await seed(scope);
     Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
-    const fetchMock = vi.fn(async () => { throw new TypeError('offline'); });
+    const fetchMock = vi.fn(async () => {
+      throw new TypeError('offline');
+    });
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
     offlinePage(scope, '/lancamentos');
@@ -299,11 +371,17 @@ describe('offline transaction workflow', () => {
     await user.type(description, 'Conta ajustada offline');
     await user.click(screen.getByRole('button', { name: 'Salvar alterações' }));
     expect(await screen.findByText('Conta ajustada offline')).toBeInTheDocument();
-    expect((await loadOfflineWorkspace(scope)).operations).toMatchObject([expect.objectContaining({ kind: 'update', entryId: 'offline-entry' })]);
+    expect((await loadOfflineWorkspace(scope)).operations).toMatchObject([
+      expect.objectContaining({ kind: 'update', entryId: 'offline-entry' }),
+    ]);
 
     await user.click(screen.getByRole('button', { name: 'Excluir Conta ajustada offline' }));
     await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Excluir lançamento' }));
-    await waitFor(async () => expect((await loadOfflineWorkspace(scope)).operations).toMatchObject([expect.objectContaining({ kind: 'delete', entryId: 'offline-entry' })]));
+    await waitFor(async () =>
+      expect((await loadOfflineWorkspace(scope)).operations).toMatchObject([
+        expect.objectContaining({ kind: 'delete', entryId: 'offline-entry' }),
+      ]),
+    );
     expect(screen.queryByText('Conta ajustada offline')).not.toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -325,7 +403,13 @@ describe('offline transaction workflow', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
-    render(<MemoryRouter><AuthGate><p>Conteúdo privado</p></AuthGate></MemoryRouter>);
+    render(
+      <MemoryRouter>
+        <AuthGate>
+          <p>Conteúdo privado</p>
+        </AuthGate>
+      </MemoryRouter>,
+    );
 
     await screen.findByText('Conteúdo privado');
     await screen.findByText(/1 alteração aguarda sincronização/);
@@ -356,7 +440,13 @@ describe('offline transaction workflow', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
-    render(<MemoryRouter><AuthGate><p>Conteúdo privado</p></AuthGate></MemoryRouter>);
+    render(
+      <MemoryRouter>
+        <AuthGate>
+          <p>Conteúdo privado</p>
+        </AuthGate>
+      </MemoryRouter>,
+    );
 
     await screen.findByText(/1 alteração pendente/);
     await user.click(screen.getByRole('button', { name: 'Sair de Conta Clara' }));
@@ -387,9 +477,20 @@ describe('offline transaction workflow', () => {
     await markOfflineConflict(scope, before.operations[0]!, { reason: 'version_mismatch', serverEntry: serverOne });
     await markOfflineConflict(scope, before.operations[1]!, { reason: 'version_mismatch', serverEntry: serverTwo });
     Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
-    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('offline'); }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new TypeError('offline');
+      }),
+    );
     const user = userEvent.setup();
-    render(<MemoryRouter><AuthGate><p>Conteúdo privado</p></AuthGate></MemoryRouter>);
+    render(
+      <MemoryRouter>
+        <AuthGate>
+          <p>Conteúdo privado</p>
+        </AuthGate>
+      </MemoryRouter>,
+    );
 
     expect(await screen.findByRole('heading', { name: 'Escolha como resolver estes conflitos' })).toBeInTheDocument();
     expect(screen.getByText(/Versão do servidor um/)).toBeInTheDocument();
@@ -398,9 +499,14 @@ describe('offline transaction workflow', () => {
     await user.keyboard('{Enter}');
     const afterLocalChoice = await loadOfflineWorkspace(scope);
     expect(afterLocalChoice.operations).toHaveLength(2);
-    expect(afterLocalChoice.operations.find((operation) => operation.entryId === localOne.id)).toMatchObject({ baseVersion: 3, kind: 'update' });
+    expect(afterLocalChoice.operations.find((operation) => operation.entryId === localOne.id)).toMatchObject({
+      baseVersion: 3,
+      kind: 'update',
+    });
     expect(afterLocalChoice.operations.find((operation) => operation.entryId === localOne.id)?.conflict).toBeUndefined();
-    expect(afterLocalChoice.operations.find((operation) => operation.entryId === localOne.id)?.operationId).not.toBe(before.operations[0]?.operationId);
+    expect(afterLocalChoice.operations.find((operation) => operation.entryId === localOne.id)?.operationId).not.toBe(
+      before.operations[0]?.operationId,
+    );
     expect(await screen.findByRole('heading', { name: 'Escolha como resolver este conflito' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Usar versão do servidor' }));
@@ -428,12 +534,22 @@ describe('offline transaction workflow', () => {
       throw new Error(`Unexpected request ${String(input)}`);
     });
     vi.stubGlobal('fetch', fetchMock);
-    render(<MemoryRouter><AuthGate><TransactionsPage /></AuthGate></MemoryRouter>);
+    render(
+      <MemoryRouter>
+        <AuthGate>
+          <TransactionsPage />
+        </AuthGate>
+      </MemoryRouter>,
+    );
 
     expect(await screen.findByRole('heading', { name: 'Boas-vindas de volta' })).toBeInTheDocument();
     expect(stateReads).toBe(2);
-    expect((await loadOfflineWorkspace(scope)).operations).toMatchObject([expect.objectContaining({ entryId: 'queued-expired', kind: 'create' })]);
-    expect(fetchMock.mock.calls.filter(([input, init]) => init?.method === 'POST' && String(input) === '/api/sync/operations')).toHaveLength(1);
+    expect((await loadOfflineWorkspace(scope)).operations).toMatchObject([
+      expect.objectContaining({ entryId: 'queued-expired', kind: 'create' }),
+    ]);
+    expect(
+      fetchMock.mock.calls.filter(([input, init]) => init?.method === 'POST' && String(input) === '/api/sync/operations'),
+    ).toHaveLength(1);
     expect(fetchMock.mock.calls.some(([input, init]) => init?.method === 'POST' && String(input).startsWith('/api/entries'))).toBe(false);
   });
 });

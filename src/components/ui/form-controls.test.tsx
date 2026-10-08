@@ -7,15 +7,36 @@ import { FormField } from './input';
 
 function ControlledMonth({ initial = '2026-10', onValue }: { initial?: string; onValue?: (value: string) => void }) {
   const [value, setValue] = useState(initial);
-  return <><FormField id="month" label="Competência"><MonthField value={value} onChange={(next) => { setValue(next); onValue?.(next); }} /></FormField><output aria-label="mês escolhido">{value}</output></>;
+  return (
+    <>
+      <FormField id="month" label="Competência">
+        <MonthField
+          value={value}
+          onChange={(next) => {
+            setValue(next);
+            onValue?.(next);
+          }}
+        />
+      </FormField>
+      <output aria-label="mês escolhido">{value}</output>
+    </>
+  );
 }
 
 describe('form primitives', () => {
   it('links select and textarea to their visible label, hint and error', () => {
-    render(<>
-      <FormField id="category" label="Categoria" error="Escolha uma categoria."><Select><option value="">Sem categoria</option></Select></FormField>
-      <FormField id="notes" label="Observações" hint="Opcional"><Textarea /></FormField>
-    </>);
+    render(
+      <>
+        <FormField id="category" label="Categoria" error="Escolha uma categoria.">
+          <Select>
+            <option value="">Sem categoria</option>
+          </Select>
+        </FormField>
+        <FormField id="notes" label="Observações" hint="Opcional">
+          <Textarea />
+        </FormField>
+      </>,
+    );
 
     const select = screen.getByRole('combobox', { name: 'Categoria' });
     expect(select).toHaveAttribute('aria-invalid', 'true');
@@ -26,7 +47,20 @@ describe('form primitives', () => {
   it('chooses a radio option with the keyboard', async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
-    render(<RadioGroup legend="Tipo" name="kind" value="expense" options={[['income', 'Receita'], ['expense', 'Despesa']] as const} onChange={onChange} />);
+    render(
+      <RadioGroup
+        legend="Tipo"
+        name="kind"
+        value="expense"
+        options={
+          [
+            ['income', 'Receita'],
+            ['expense', 'Despesa'],
+          ] as const
+        }
+        onChange={onChange}
+      />,
+    );
 
     expect(screen.getByRole('group', { name: 'Tipo' })).toBeInTheDocument();
     await user.click(screen.getByRole('radio', { name: 'Despesa' }));
@@ -47,7 +81,11 @@ describe('form primitives', () => {
     const user = userEvent.setup();
     function ControlledDate() {
       const [value, setValue] = useState('');
-      return <FormField id="due" label="Vencimento"><DateField value={value} onChange={setValue} /></FormField>;
+      return (
+        <FormField id="due" label="Vencimento">
+          <DateField value={value} onChange={setValue} />
+        </FormField>
+      );
     }
     render(<ControlledDate />);
     const field = screen.getByRole('textbox', { name: 'Vencimento' });
@@ -108,7 +146,11 @@ describe('form primitives', () => {
     const onCents = vi.fn();
     function ControlledMoney() {
       const [value, setValue] = useState('');
-      return <FormField id="amount" label="Valor previsto (R$)"><MoneyInput value={value} onChange={setValue} onCentsChange={onCents} /></FormField>;
+      return (
+        <FormField id="amount" label="Valor previsto (R$)">
+          <MoneyInput value={value} onChange={setValue} onCentsChange={onCents} />
+        </FormField>
+      );
     }
     render(<ControlledMoney />);
     const field = screen.getByRole('textbox', { name: 'Valor previsto (R$)' });

@@ -4,22 +4,47 @@ import { AuthPage, type AuthState, type AuthUser } from './auth-page';
 import { LoadingState } from '../components/ui/feedback';
 import { AppLayout } from '../components/app-layout';
 import { OfflineWorkspaceProvider, useOfflineWorkspace } from '../offline/offline-context';
-import { clearOfflineLogoutMarker, clearRememberedOfflineUser, isOfflineLogoutMarked, loadRememberedOfflineUser, markOfflineLogout, rememberOfflineUser } from '../offline/offline-store';
+import {
+  clearOfflineLogoutMarker,
+  clearRememberedOfflineUser,
+  isOfflineLogoutMarked,
+  loadRememberedOfflineUser,
+  markOfflineLogout,
+  rememberOfflineUser,
+} from '../offline/offline-store';
 import { useConfirmDialog } from '../components/ui/dialog';
 
 export const AuthContext = createContext<{ user: AuthUser; csrfToken: string } | null>(null);
 
-function AuthenticatedLayout({ user, csrfToken, onLogout, notice, children }: {
+function AuthenticatedLayout({
+  user,
+  csrfToken,
+  onLogout,
+  notice,
+  children,
+}: {
   user: AuthUser;
   csrfToken: string;
   onLogout: (localOnly: boolean) => Promise<boolean>;
   notice: string;
   children: ReactNode;
 }) {
-  return <OfflineWorkspaceProvider key={`${user.spaceId}\u0000${user.id}`} scope={{ userId: user.id, spaceId: user.spaceId }}><AuthenticatedSession user={user} csrfToken={csrfToken} onLogout={onLogout} notice={notice}>{children}</AuthenticatedSession></OfflineWorkspaceProvider>;
+  return (
+    <OfflineWorkspaceProvider key={`${user.spaceId}\u0000${user.id}`} scope={{ userId: user.id, spaceId: user.spaceId }}>
+      <AuthenticatedSession user={user} csrfToken={csrfToken} onLogout={onLogout} notice={notice}>
+        {children}
+      </AuthenticatedSession>
+    </OfflineWorkspaceProvider>
+  );
 }
 
-function AuthenticatedSession({ user, csrfToken, notice, onLogout, children }: {
+function AuthenticatedSession({
+  user,
+  csrfToken,
+  notice,
+  onLogout,
+  children,
+}: {
   user: AuthUser;
   csrfToken: string;
   notice: string;
@@ -49,8 +74,22 @@ function AuthenticatedSession({ user, csrfToken, notice, onLogout, children }: {
     setLocalNotice('');
     await offline?.sync(csrfToken);
     const currentWorkspace = await offline?.refresh();
-    const pendingCount = (currentWorkspace?.operations.length ?? 0) + (currentWorkspace?.cardOperations.length ?? 0) + (currentWorkspace?.purchaseOperations.length ?? 0) + (currentWorkspace?.invoiceOperations.length ?? 0);
-    if (pendingCount && !(await confirm({ title: 'Sair com alterações não sincronizadas?', description: `Há ${pendingCount} alteração${pendingCount === 1 ? '' : 'ões'} sem sincronização. Sair e descartar essas alterações locais?`, confirmLabel: 'Sair e descartar', cancelLabel: 'Continuar conectado', destructive: true }))) return;
+    const pendingCount =
+      (currentWorkspace?.operations.length ?? 0) +
+      (currentWorkspace?.cardOperations.length ?? 0) +
+      (currentWorkspace?.purchaseOperations.length ?? 0) +
+      (currentWorkspace?.invoiceOperations.length ?? 0);
+    if (
+      pendingCount &&
+      !(await confirm({
+        title: 'Sair com alterações não sincronizadas?',
+        description: `Há ${pendingCount} alteração${pendingCount === 1 ? '' : 'ões'} sem sincronização. Sair e descartar essas alterações locais?`,
+        confirmLabel: 'Sair e descartar',
+        cancelLabel: 'Continuar conectado',
+        destructive: true,
+      }))
+    )
+      return;
     const loggedOut = await onLogout(Boolean(offline && !offline.online));
     if (!loggedOut) return;
     try {
@@ -60,7 +99,14 @@ function AuthenticatedSession({ user, csrfToken, notice, onLogout, children }: {
     }
   }
 
-  return <AuthContext.Provider value={{ user, csrfToken }}><AppLayout user={user} csrfToken={csrfToken} onLogout={() => void logout()} notice={[notice, localNotice].filter(Boolean).join(' ')}>{children}</AppLayout>{confirmDialog}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={{ user, csrfToken }}>
+      <AppLayout user={user} csrfToken={csrfToken} onLogout={() => void logout()} notice={[notice, localNotice].filter(Boolean).join(' ')}>
+        {children}
+      </AppLayout>
+      {confirmDialog}
+    </AuthContext.Provider>
+  );
 }
 
 export function AuthGate({ children }: { children?: ReactNode }) {
@@ -73,8 +119,8 @@ export function AuthGate({ children }: { children?: ReactNode }) {
     try {
       const response = await fetch('/api/auth/state', { credentials: 'same-origin' });
       if (!response.ok) throw new Error('Não foi possível conectar à API.');
-      const authState = await response.json() as AuthState;
-      if (authState.user && await isOfflineLogoutMarked(authState.user).catch(() => false)) {
+      const authState = (await response.json()) as AuthState;
+      if (authState.user && (await isOfflineLogoutMarked(authState.user).catch(() => false))) {
         setState({ ...authState, user: null });
         return;
       }
@@ -93,10 +139,14 @@ export function AuthGate({ children }: { children?: ReactNode }) {
     }
   }, []);
 
-  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
 
   useEffect(() => {
-    const revalidate = () => { void refresh(); };
+    const revalidate = () => {
+      void refresh();
+    };
     window.addEventListener('conta-clara:session-expired', revalidate);
     window.addEventListener('online', revalidate);
     window.addEventListener('focus', revalidate);
@@ -110,7 +160,7 @@ export function AuthGate({ children }: { children?: ReactNode }) {
   function acceptLogin(user: AuthUser) {
     void clearOfflineLogoutMarker().catch(() => undefined);
     void rememberOfflineUser(user).catch(() => undefined);
-    setState((current) => current ? { ...current, initialized: true, user } : current);
+    setState((current) => (current ? { ...current, initialized: true, user } : current));
   }
 
   async function logout(localOnly: boolean): Promise<boolean> {
@@ -139,11 +189,34 @@ export function AuthGate({ children }: { children?: ReactNode }) {
 
   if (!state) {
     if (loadError) {
-      return <main className="grid min-h-screen place-items-center px-5"><div className="grid max-w-sm gap-3 text-center"><p role="alert" className="text-sm text-destructive">{loadError}</p><button type="button" onClick={() => void refresh()} className="mx-auto min-h-10 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Tentar novamente</button></div></main>;
+      return (
+        <main className="grid min-h-screen place-items-center px-5">
+          <div className="grid max-w-sm gap-3 text-center">
+            <p role="alert" className="text-sm text-destructive">
+              {loadError}
+            </p>
+            <button
+              type="button"
+              onClick={() => void refresh()}
+              className="mx-auto min-h-10 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            >
+              Tentar novamente
+            </button>
+          </div>
+        </main>
+      );
     }
-    return <main className="grid min-h-screen place-items-center px-5"><LoadingState label="Conectando ao servidor" /></main>;
+    return (
+      <main className="grid min-h-screen place-items-center px-5">
+        <LoadingState label="Conectando ao servidor" />
+      </main>
+    );
   }
 
   if (!state.user) return <AuthPage initialized={state.initialized} csrfToken={state.csrfToken} onAuthenticated={acceptLogin} />;
-  return <AuthenticatedLayout user={state.user} csrfToken={state.csrfToken} onLogout={logout} notice={actionError}>{children ?? <Outlet />}</AuthenticatedLayout>;
+  return (
+    <AuthenticatedLayout user={state.user} csrfToken={state.csrfToken} onLogout={logout} notice={actionError}>
+      {children ?? <Outlet />}
+    </AuthenticatedLayout>
+  );
 }

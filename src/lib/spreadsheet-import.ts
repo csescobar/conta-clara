@@ -51,22 +51,61 @@ const cashFlowHeaders = {
   income: 'Receitas Previstas',
 } as const;
 const monthNames = new Map([
-  ['january', 1], ['jan', 1], ['janeiro', 1], ['jan.', 1],
-  ['february', 2], ['feb', 2], ['fevereiro', 2], ['feb.', 2],
-  ['march', 3], ['mar', 3], ['março', 3], ['marco', 3], ['mar.', 3],
-  ['april', 4], ['apr', 4], ['abril', 4], ['apr.', 4],
-  ['may', 5], ['maio', 5],
-  ['june', 6], ['jun', 6], ['junho', 6], ['jun.', 6],
-  ['july', 7], ['jul', 7], ['julho', 7], ['jul.', 7],
-  ['august', 8], ['aug', 8], ['agosto', 8], ['aug.', 8],
-  ['september', 9], ['sep', 9], ['setembro', 9], ['sep.', 9],
-  ['october', 10], ['oct', 10], ['outubro', 10], ['oct.', 10],
-  ['november', 11], ['nov', 11], ['novembro', 11], ['nov.', 11],
-  ['december', 12], ['dec', 12], ['dezembro', 12], ['dec.', 12],
+  ['january', 1],
+  ['jan', 1],
+  ['janeiro', 1],
+  ['jan.', 1],
+  ['february', 2],
+  ['feb', 2],
+  ['fevereiro', 2],
+  ['feb.', 2],
+  ['march', 3],
+  ['mar', 3],
+  ['março', 3],
+  ['marco', 3],
+  ['mar.', 3],
+  ['april', 4],
+  ['apr', 4],
+  ['abril', 4],
+  ['apr.', 4],
+  ['may', 5],
+  ['maio', 5],
+  ['june', 6],
+  ['jun', 6],
+  ['junho', 6],
+  ['jun.', 6],
+  ['july', 7],
+  ['jul', 7],
+  ['julho', 7],
+  ['jul.', 7],
+  ['august', 8],
+  ['aug', 8],
+  ['agosto', 8],
+  ['aug.', 8],
+  ['september', 9],
+  ['sep', 9],
+  ['setembro', 9],
+  ['sep.', 9],
+  ['october', 10],
+  ['oct', 10],
+  ['outubro', 10],
+  ['oct.', 10],
+  ['november', 11],
+  ['nov', 11],
+  ['novembro', 11],
+  ['nov.', 11],
+  ['december', 12],
+  ['dec', 12],
+  ['dezembro', 12],
+  ['dec.', 12],
 ]);
 
 function normalizeLabel(value: unknown) {
-  return String(value ?? '').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('en-US');
+  return String(value ?? '')
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('en-US');
 }
 
 function cellAt(sheet: XLSX.WorkSheet, row: number, column: number) {
@@ -114,7 +153,10 @@ function parseMoney(cell: XLSX.CellObject | undefined, locale: ImportLocale): nu
     return Number.isSafeInteger(cents) && cents > 0 && Math.abs(value * 100 - cents) < 1e-7 ? cents : null;
   }
   if (typeof value !== 'string') return null;
-  let text = value.trim().replace(/[\s\u00a0]/g, '').replace(/^(?:R\$|US\$|\$)/i, '');
+  let text = value
+    .trim()
+    .replace(/[\s\u00a0]/g, '')
+    .replace(/^(?:R\$|US\$|\$)/i, '');
   if (!text) return null;
   if (locale === 'en_US') {
     if (!/^-?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?$/.test(text)) return null;
@@ -213,7 +255,28 @@ function paidStatus(value: string) {
 
 function knownStatus(value: string) {
   const normalized = normalizeLabel(value);
-  return !normalized || new Set(['pago', 'paga', 'quitado', 'quitada', 'realizado', 'realizada', 'paid', 'confirmed', 'pendente', 'em aberto', 'aberto', 'aberta', 'a vencer', 'nao pago', 'nao paga', 'unpaid', 'pending']).has(normalized);
+  return (
+    !normalized ||
+    new Set([
+      'pago',
+      'paga',
+      'quitado',
+      'quitada',
+      'realizado',
+      'realizada',
+      'paid',
+      'confirmed',
+      'pendente',
+      'em aberto',
+      'aberto',
+      'aberta',
+      'a vencer',
+      'nao pago',
+      'nao paga',
+      'unpaid',
+      'pending',
+    ]).has(normalized)
+  );
 }
 
 function hasFormula(row: Array<XLSX.CellObject | undefined>, columns: number[]) {
@@ -265,23 +328,44 @@ export function parseSpreadsheetImport(
       addSkipped('A linha contém fórmula e foi ignorada para evitar importar cálculos.');
       continue;
     }
-    if (!description) { addSkipped('Informe a descrição da conta.'); continue; }
-    if (description.length > 200) { addSkipped('A descrição excede o limite de 200 caracteres.'); continue; }
+    if (!description) {
+      addSkipped('Informe a descrição da conta.');
+      continue;
+    }
+    if (description.length > 200) {
+      addSkipped('A descrição excede o limite de 200 caracteres.');
+      continue;
+    }
     const notes = cellText(row[accountColumns.notes]) || null;
-    if (notes && notes.length > 2000) { addSkipped('As observações excedem o limite de 2.000 caracteres.'); continue; }
+    if (notes && notes.length > 2000) {
+      addSkipped('As observações excedem o limite de 2.000 caracteres.');
+      continue;
+    }
     const amount = parseMoney(row[accountColumns.amount], locale);
-    if (!amount) { addSkipped('O valor previsto precisa ser positivo e ter até duas casas decimais.'); continue; }
+    if (!amount) {
+      addSkipped('O valor previsto precisa ser positivo e ter até duas casas decimais.');
+      continue;
+    }
     const dueDayText = cellText(row[accountColumns.dueDay]);
     const dueDay = /^\d{1,2}$/.test(dueDayText) ? Number(dueDayText) : null;
-    if (!dueDay || dueDay < 1 || dueDay > 31) { addSkipped('O dia de vencimento precisa estar entre 1 e 31.'); continue; }
+    if (!dueDay || dueDay < 1 || dueDay > 31) {
+      addSkipped('O dia de vencimento precisa estar entre 1 e 31.');
+      continue;
+    }
     const status = cellText(row[accountColumns.status]);
-    if (!knownStatus(status)) { addSkipped('O status precisa ser “Pago” ou “Em aberto”.'); continue; }
+    if (!knownStatus(status)) {
+      addSkipped('O status precisa ser “Pago” ou “Em aberto”.');
+      continue;
+    }
     let actualCents: number | null = null;
     let realizedOn: string | null = null;
     let warning: string | null = null;
     if (paidStatus(status)) {
       const paidOn = parseDate(row[accountColumns.paidOn], year, locale);
-      if (!paidOn) { addSkipped('A conta está marcada como paga, mas a data de pagamento não pôde ser interpretada.'); continue; }
+      if (!paidOn) {
+        addSkipped('A conta está marcada como paga, mas a data de pagamento não pôde ser interpretada.');
+        continue;
+      }
       actualCents = amount;
       realizedOn = paidOn.date;
       warning = paidOn.warning;
@@ -310,18 +394,33 @@ export function parseSpreadsheetImport(
     const sourceRow = index + 1;
     const incomeCell = row[cashFlowColumns.income];
     if (incomeCell?.f) {
-      skipped.push({ sourceSheet: CASH_FLOW_SHEET, sourceRow, description: 'Receita prevista', reason: 'A receita é calculada por fórmula e foi ignorada.' });
+      skipped.push({
+        sourceSheet: CASH_FLOW_SHEET,
+        sourceRow,
+        description: 'Receita prevista',
+        reason: 'A receita é calculada por fórmula e foi ignorada.',
+      });
       continue;
     }
     if (!cellText(incomeCell)) continue;
     const amount = parseMoney(incomeCell, locale);
     if (!amount) {
-      skipped.push({ sourceSheet: CASH_FLOW_SHEET, sourceRow, description: 'Receita prevista', reason: 'O valor precisa ser positivo, estar no formato selecionado e ter até duas casas decimais.' });
+      skipped.push({
+        sourceSheet: CASH_FLOW_SHEET,
+        sourceRow,
+        description: 'Receita prevista',
+        reason: 'O valor precisa ser positivo, estar no formato selecionado e ter até duas casas decimais.',
+      });
       continue;
     }
     const month = parseMonth(row[cashFlowColumns.month]);
     if (!month) {
-      skipped.push({ sourceSheet: CASH_FLOW_SHEET, sourceRow, description: 'Receita prevista', reason: 'O mês da receita prevista não pôde ser interpretado.' });
+      skipped.push({
+        sourceSheet: CASH_FLOW_SHEET,
+        sourceRow,
+        description: 'Receita prevista',
+        reason: 'O mês da receita prevista não pôde ser interpretado.',
+      });
       continue;
     }
     const monthName = brazilianMonthName(month);
@@ -343,6 +442,7 @@ export function parseSpreadsheetImport(
     });
   }
 
-  if (entries.length > MAX_IMPORT_ENTRIES) throw new Error(`A prévia contém mais de ${MAX_IMPORT_ENTRIES} lançamentos válidos. Divida a importação em lotes menores.`);
+  if (entries.length > MAX_IMPORT_ENTRIES)
+    throw new Error(`A prévia contém mais de ${MAX_IMPORT_ENTRIES} lançamentos válidos. Divida a importação em lotes menores.`);
   return { entries, skipped };
 }

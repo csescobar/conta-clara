@@ -61,12 +61,14 @@ describe.skipIf(!testDatabaseUrl)('auth routes with PostgreSQL', () => {
       const secondState = await sameOrigin(secondBrowser, 'get', '/api/auth/state').expect(200);
       expect(firstState.body).toMatchObject({ initialized: false, user: null });
 
-      await firstBrowser.post('/api/auth/setup').set('Host', 'conta-clara.test').set('Origin', origin)
-        .send(adminCredentials).expect(403);
+      await firstBrowser.post('/api/auth/setup').set('Host', 'conta-clara.test').set('Origin', origin).send(adminCredentials).expect(403);
       await sameOrigin(firstBrowser, 'post', '/api/auth/setup', firstState.body.csrfToken)
-        .set('Origin', 'https://attacker.test').send(adminCredentials).expect(403);
+        .set('Origin', 'https://attacker.test')
+        .send(adminCredentials)
+        .expect(403);
       await sameOrigin(firstBrowser, 'post', '/api/auth/setup', firstState.body.csrfToken)
-        .send({ ...adminCredentials, password: 'short' }).expect(400);
+        .send({ ...adminCredentials, password: 'short' })
+        .expect(400);
 
       const setupCalls = await Promise.all([
         sameOrigin(firstBrowser, 'post', '/api/auth/setup', firstState.body.csrfToken).send(adminCredentials),
@@ -95,19 +97,27 @@ describe.skipIf(!testDatabaseUrl)('auth routes with PostgreSQL', () => {
       const loginState = await sameOrigin(loginBrowser, 'get', '/api/auth/state').expect(200);
       expect(loginState.body).toMatchObject({ initialized: true, user: null });
       const invalidLogin = await sameOrigin(loginBrowser, 'post', '/api/auth/login', loginState.body.csrfToken)
-        .send({ email: adminCredentials.email, password: 'senha-errada' }).expect(401);
+        .send({ email: adminCredentials.email, password: 'senha-errada' })
+        .expect(401);
       expect(invalidLogin.body.error).toBe('E-mail ou senha inválidos.');
       const login = await sameOrigin(loginBrowser, 'post', '/api/auth/login', loginState.body.csrfToken)
-        .send({ email: adminCredentials.email.toUpperCase(), password: adminCredentials.password }).expect(200);
+        .send({ email: adminCredentials.email.toUpperCase(), password: adminCredentials.password })
+        .expect(200);
       expect(login.body.user).toMatchObject({ id: user.id, role: 'admin' });
       activeSessionCookie = cookieFrom(login, 'cc_session');
       const token = activeSessionCookie.slice('cc_session='.length);
       const tokenDigest = createHash('sha256').update(token).digest('hex');
-      const storedSession = await pool.query('SELECT token_hash FROM sessions WHERE user_id = $1 AND token_hash = $2', [user.id, tokenDigest]);
+      const storedSession = await pool.query('SELECT token_hash FROM sessions WHERE user_id = $1 AND token_hash = $2', [
+        user.id,
+        tokenDigest,
+      ]);
       expect(storedSession.rowCount).toBe(1);
 
       const probe = protectedProbe();
-      await request(probe).get('/private').set('Cookie', activeSessionCookie).expect(200)
+      await request(probe)
+        .get('/private')
+        .set('Cookie', activeSessionCookie)
+        .expect(200)
         .expect(({ body }) => expect(body.user).toMatchObject({ id: user.id, email: adminCredentials.email }));
       await request(probe).get('/private').expect(401);
 
@@ -117,10 +127,14 @@ describe.skipIf(!testDatabaseUrl)('auth routes with PostgreSQL', () => {
       const expiryBrowser = request.agent(createApp({ pool, loginLimit: 100 }));
       const expiryState = await sameOrigin(expiryBrowser, 'get', '/api/auth/state').expect(200);
       const expiryLogin = await sameOrigin(expiryBrowser, 'post', '/api/auth/login', expiryState.body.csrfToken)
-        .send({ email: adminCredentials.email, password: adminCredentials.password }).expect(200);
+        .send({ email: adminCredentials.email, password: adminCredentials.password })
+        .expect(200);
       const expiredCookie = cookieFrom(expiryLogin, 'cc_session');
       const expiredToken = expiredCookie.slice('cc_session='.length);
-      await pool.query('UPDATE sessions SET created_at = now() - interval \'2 days\', expires_at = now() - interval \'1 minute\' WHERE token_hash = $1', [createHash('sha256').update(expiredToken).digest('hex')]);
+      await pool.query(
+        "UPDATE sessions SET created_at = now() - interval '2 days', expires_at = now() - interval '1 minute' WHERE token_hash = $1",
+        [createHash('sha256').update(expiredToken).digest('hex')],
+      );
       await request(probe).get('/private').set('Cookie', expiredCookie).expect(401);
     });
 
@@ -130,7 +144,8 @@ describe.skipIf(!testDatabaseUrl)('auth routes with PostgreSQL', () => {
       const csrfCookie = `cc_csrf=${state.headers['set-cookie'][0].split(';', 1)[0].split('=').slice(1).join('=')}`;
       const login = await sameOrigin(request(secureApp), 'post', '/api/auth/login', state.body.csrfToken)
         .set('Cookie', csrfCookie)
-        .send({ email: adminCredentials.email, password: adminCredentials.password }).expect(200);
+        .send({ email: adminCredentials.email, password: adminCredentials.password })
+        .expect(200);
       expect(login.headers['set-cookie'].join(';')).toMatch(/cc_session=.*HttpOnly; Secure; SameSite=Strict/i);
     });
 
@@ -139,9 +154,11 @@ describe.skipIf(!testDatabaseUrl)('auth routes with PostgreSQL', () => {
       const browser = request.agent(limitedApp);
       const state = await sameOrigin(browser, 'get', '/api/auth/state').expect(200);
       await sameOrigin(browser, 'post', '/api/auth/login', state.body.csrfToken)
-        .send({ email: adminCredentials.email, password: 'senha-errada' }).expect(401);
+        .send({ email: adminCredentials.email, password: 'senha-errada' })
+        .expect(401);
       await sameOrigin(browser, 'post', '/api/auth/login', state.body.csrfToken)
-        .send({ email: adminCredentials.email, password: 'senha-errada' }).expect(429);
+        .send({ email: adminCredentials.email, password: 'senha-errada' })
+        .expect(429);
     });
   });
 });

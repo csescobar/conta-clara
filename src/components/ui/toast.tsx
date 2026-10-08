@@ -8,7 +8,9 @@ type ToastItem = { id: number; message: string; variant: 'success' | 'info' };
 let items: ToastItem[] = [];
 let nextId = 1;
 const listeners = new Set<() => void>();
-const emit = () => { for (const listener of listeners) listener(); };
+const emit = () => {
+  for (const listener of listeners) listener();
+};
 
 /** Anuncia o resultado de uma ação concluída sem deslocar o conteúdo. Exige um `<Toaster />` montado. */
 export function toast(message: string, variant: ToastItem['variant'] = 'success') {
@@ -23,11 +25,17 @@ function dismiss(id: number) {
 
 function subscribe(listener: () => void) {
   listeners.add(listener);
-  return () => { listeners.delete(listener); };
+  return () => {
+    listeners.delete(listener);
+  };
 }
 
 export function Toaster() {
-  const current = useSyncExternalStore(subscribe, () => items, () => items);
+  const current = useSyncExternalStore(
+    subscribe,
+    () => items,
+    () => items,
+  );
   return (
     <ToastPrimitive.Provider label="Notificação" duration={6000}>
       {current.map((item) => {
@@ -36,12 +44,20 @@ export function Toaster() {
           <ToastPrimitive.Root
             key={item.id}
             type="foreground"
-            onOpenChange={(open) => { if (!open) dismiss(item.id); }}
-            className={cn('flex items-start gap-3 rounded-xl border bg-card p-4 text-sm shadow-lg', item.variant === 'success' ? 'border-success-border' : 'border-info-border')}
+            onOpenChange={(open) => {
+              if (!open) dismiss(item.id);
+            }}
+            className={cn(
+              'flex items-start gap-3 rounded-xl border bg-card p-4 text-sm shadow-lg',
+              item.variant === 'success' ? 'border-success-border' : 'border-info-border',
+            )}
           >
             <Icon aria-hidden="true" className={cn('mt-0.5 size-4 shrink-0', item.variant === 'success' ? 'text-success' : 'text-info')} />
             <ToastPrimitive.Description className="min-w-0 flex-1 leading-6 text-foreground">{item.message}</ToastPrimitive.Description>
-            <ToastPrimitive.Close aria-label="Fechar notificação" className="grid size-8 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring">
+            <ToastPrimitive.Close
+              aria-label="Fechar notificação"
+              className="grid size-8 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
+            >
               <X aria-hidden="true" className="size-4" />
             </ToastPrimitive.Close>
           </ToastPrimitive.Root>

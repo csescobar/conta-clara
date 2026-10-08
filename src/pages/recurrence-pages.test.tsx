@@ -5,7 +5,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AuthContext } from '../auth/auth-gate';
 import { RecurrenceFormPage, RecurrencesPage } from './recurrence-pages';
 
-const auth = { user: { id: 'member-id', name: 'Membro', email: 'member@example.test', role: 'member', spaceId: 'space-id' }, csrfToken: 'csrf-recurrence-test' };
+const auth = {
+  user: { id: 'member-id', name: 'Membro', email: 'member@example.test', role: 'member', spaceId: 'space-id' },
+  csrfToken: 'csrf-recurrence-test',
+};
 const categories = [{ id: 'expense-category', name: 'Moradia', kind: 'expense', archived_at: null }];
 const paymentMethods = [{ id: 'payment-method', name: 'Pix', archived_at: null }];
 
@@ -14,10 +17,16 @@ function response(body: unknown, status = 200) {
 }
 
 function renderPages(path: string) {
-  return render(<MemoryRouter initialEntries={[path]}><AuthContext.Provider value={auth}><Routes>
-    <Route path="/recorrencias" element={<RecurrencesPage />} />
-    <Route path="/recorrencias/novo" element={<RecurrenceFormPage />} />
-  </Routes></AuthContext.Provider></MemoryRouter>);
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <AuthContext.Provider value={auth}>
+        <Routes>
+          <Route path="/recorrencias" element={<RecurrencesPage />} />
+          <Route path="/recorrencias/novo" element={<RecurrenceFormPage />} />
+        </Routes>
+      </AuthContext.Provider>
+    </MemoryRouter>,
+  );
 }
 
 afterEach(() => vi.unstubAllGlobals());
@@ -56,9 +65,15 @@ describe('monthly recurrence pages', () => {
     expect(await screen.findByRole('heading', { name: 'Recorrências' })).toBeInTheDocument();
     const create = fetchMock.mock.calls.find(([input, init]) => input === '/api/recurrences' && init?.method === 'POST');
     expect(JSON.parse(String(create?.[1]?.body))).toMatchObject({
-      kind: 'expense', description: 'Conta de energia', categoryId: 'expense-category',
-      paymentMethodId: 'payment-method', startCompetenceOn: '2024-01-01', endCompetenceOn: null,
-      dueDay: 31, plannedCents: 123456, notes: null,
+      kind: 'expense',
+      description: 'Conta de energia',
+      categoryId: 'expense-category',
+      paymentMethodId: 'payment-method',
+      startCompetenceOn: '2024-01-01',
+      endCompetenceOn: null,
+      dueDay: 31,
+      plannedCents: 123456,
+      notes: null,
     });
     expect(create?.[1]?.headers).toMatchObject({ 'X-CSRF-Token': 'csrf-recurrence-test' });
   });
@@ -85,9 +100,20 @@ describe('monthly recurrence pages', () => {
 
   it('archives an active rule and keeps archived rules visible', async () => {
     const rule = {
-      id: 'rule-id', kind: 'expense', description: 'Aluguel', category_id: 'expense-category', category_name: 'Moradia',
-      payment_method_id: null, payment_method_name: null, start_competence_on: '2026-01-01', end_competence_on: null,
-      due_day: 5, planned_cents: '180000', notes: null, archived_at: null, occurrence_count: 3,
+      id: 'rule-id',
+      kind: 'expense',
+      description: 'Aluguel',
+      category_id: 'expense-category',
+      category_name: 'Moradia',
+      payment_method_id: null,
+      payment_method_name: null,
+      start_competence_on: '2026-01-01',
+      end_competence_on: null,
+      due_day: 5,
+      planned_cents: '180000',
+      notes: null,
+      archived_at: null,
+      occurrence_count: 3,
     };
     let currentRule: Omit<typeof rule, 'archived_at'> & { archived_at: string | null } = { ...rule };
     const fetchMock = vi.fn().mockImplementation(async (input: string, init?: RequestInit) => {

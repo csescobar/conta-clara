@@ -24,26 +24,32 @@ function requestedVersion(value) {
 }
 
 export async function selectCard(client, spaceId, cardId) {
-  const result = await client.query(`
+  const result = await client.query(
+    `
     SELECT c.id, c.name, c.holder_user_id, u.display_name AS holder_name,
       c.closing_day, c.due_day, c.archived_at, c.created_by_user_id,
       c.updated_by_user_id, c.version, c.created_at, c.updated_at
     FROM credit_cards c
     JOIN users u ON u.id = c.holder_user_id
     WHERE c.id = $1 AND c.space_id = $2
-  `, [cardId, spaceId]);
+  `,
+    [cardId, spaceId],
+  );
   return result.rows[0] ?? null;
 }
 
 export async function validateCardHolder(client, spaceId, holderUserId, currentHolderId = null) {
   if (holderUserId === currentHolderId) return null;
-  const result = await client.query(`
+  const result = await client.query(
+    `
     SELECT 1 FROM space_memberships m
     JOIN users u ON u.id = m.user_id
     WHERE m.space_id = $1 AND m.user_id = $2
       AND m.deactivated_at IS NULL AND u.is_active
     FOR SHARE OF m, u
-  `, [spaceId, holderUserId]);
+  `,
+    [spaceId, holderUserId],
+  );
   return result.rowCount ? null : 'Selecione uma pessoa ativa deste espaço como titular.';
 }
 
@@ -53,7 +59,9 @@ function sendCardError(error, response, next) {
 }
 
 function sendConflict(response, serverCard) {
-  return response.status(409).json({ error: 'Este cartão mudou em outro aparelho. Confira a versão atual antes de salvar.', conflict: true, serverCard });
+  return response
+    .status(409)
+    .json({ error: 'Este cartão mudou em outro aparelho. Confira a versão atual antes de salvar.', conflict: true, serverCard });
 }
 
 export function createCardsRouter({ pool, secureCookies = false, csrfSecret }) {
@@ -68,7 +76,8 @@ export function createCardsRouter({ pool, secureCookies = false, csrfSecret }) {
   router.get('/', async (request, response, next) => {
     try {
       const includeArchived = request.query.includeArchived === 'true';
-      const result = await pool.query(`
+      const result = await pool.query(
+        `
         SELECT c.id, c.name, c.holder_user_id, u.display_name AS holder_name,
           c.closing_day, c.due_day, c.archived_at, c.created_by_user_id,
           c.updated_by_user_id, c.version, c.created_at, c.updated_at
@@ -76,7 +85,9 @@ export function createCardsRouter({ pool, secureCookies = false, csrfSecret }) {
         JOIN users u ON u.id = c.holder_user_id
         WHERE c.space_id = $1 AND ($2::boolean OR c.archived_at IS NULL)
         ORDER BY lower(c.name), c.id
-      `, [request.auth.spaceId, includeArchived]);
+      `,
+        [request.auth.spaceId, includeArchived],
+      );
       return response.json({ cards: result.rows });
     } catch (error) {
       return next(error);
@@ -95,13 +106,16 @@ export function createCardsRouter({ pool, secureCookies = false, csrfSecret }) {
         await client.query('ROLLBACK');
         return response.status(400).json({ error: holderError });
       }
-      const inserted = await client.query(`
+      const inserted = await client.query(
+        `
         INSERT INTO credit_cards (
           space_id, name, holder_user_id, closing_day, due_day,
           created_by_user_id, updated_by_user_id
         ) VALUES ($1, $2, $3, $4, $5, $6, $6)
         RETURNING id
-      `, [request.auth.spaceId, card.name, card.holderUserId, card.closingDay, card.dueDay, request.auth.id]);
+      `,
+        [request.auth.spaceId, card.name, card.holderUserId, card.closingDay, card.dueDay, request.auth.id],
+      );
       const created = await selectCard(client, request.auth.spaceId, inserted.rows[0].id);
       await client.query('COMMIT');
       return response.status(201).json({ card: created });
@@ -122,7 +136,10 @@ export function createCardsRouter({ pool, secureCookies = false, csrfSecret }) {
     try {
       client = await pool.connect();
       await client.query('BEGIN');
-      const currentResult = await client.query('SELECT holder_user_id, version, archived_at FROM credit_cards WHERE id = $1 AND space_id = $2 FOR UPDATE', [request.params.id, request.auth.spaceId]);
+      const currentResult = await client.query(
+        'SELECT holder_user_id, version, archived_at FROM credit_cards WHERE id = $1 AND space_id = $2 FOR UPDATE',
+        [request.params.id, request.auth.spaceId],
+      );
       const current = currentResult.rows[0];
       if (!current || current.archived_at) {
         await client.query('ROLLBACK');
@@ -138,12 +155,15 @@ export function createCardsRouter({ pool, secureCookies = false, csrfSecret }) {
         await client.query('ROLLBACK');
         return response.status(400).json({ error: holderError });
       }
-      await client.query(`
+      await client.query(
+        `
         UPDATE credit_cards SET name = $1, holder_user_id = $2,
           closing_day = $3, due_day = $4, updated_by_user_id = $5,
           updated_at = now(), version = version + 1
         WHERE id = $6 AND space_id = $7
-      `, [card.name, card.holderUserId, card.closingDay, card.dueDay, request.auth.id, request.params.id, request.auth.spaceId]);
+      `,
+        [card.name, card.holderUserId, card.closingDay, card.dueDay, request.auth.id, request.params.id, request.auth.spaceId],
+      );
       const updated = await selectCard(client, request.auth.spaceId, request.params.id);
       await client.query('COMMIT');
       return response.json({ card: updated });
@@ -164,7 +184,10 @@ export function createCardsRouter({ pool, secureCookies = false, csrfSecret }) {
       try {
         client = await pool.connect();
         await client.query('BEGIN');
-        const currentResult = await client.query('SELECT version, archived_at FROM credit_cards WHERE id = $1 AND space_id = $2 FOR UPDATE', [request.params.id, request.auth.spaceId]);
+        const currentResult = await client.query(
+          'SELECT version, archived_at FROM credit_cards WHERE id = $1 AND space_id = $2 FOR UPDATE',
+          [request.params.id, request.auth.spaceId],
+        );
         const current = currentResult.rows[0];
         if (!current || (action === 'archive' ? current.archived_at : !current.archived_at)) {
           await client.query('ROLLBACK');
@@ -175,11 +198,14 @@ export function createCardsRouter({ pool, secureCookies = false, csrfSecret }) {
           await client.query('ROLLBACK');
           return sendConflict(response, serverCard);
         }
-        await client.query(`
+        await client.query(
+          `
           UPDATE credit_cards SET archived_at = ${action === 'archive' ? 'now()' : 'NULL'},
             updated_by_user_id = $1, updated_at = now(), version = version + 1
           WHERE id = $2 AND space_id = $3
-        `, [request.auth.id, request.params.id, request.auth.spaceId]);
+        `,
+          [request.auth.id, request.params.id, request.auth.spaceId],
+        );
         const updated = await selectCard(client, request.auth.spaceId, request.params.id);
         await client.query('COMMIT');
         return response.json({ card: updated });

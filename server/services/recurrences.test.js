@@ -4,11 +4,12 @@ import { listCompetenceMonths, recurrenceDueDate, recurrenceHorizonMonth } from 
 describe('monthly recurrence calendar rules', () => {
   it('creates months through the rule end or current competence across year boundaries', () => {
     expect(listCompetenceMonths('2024-11-01', '2025-02-01', '2025-12-01')).toEqual([
-      '2024-11-01', '2024-12-01', '2025-01-01', '2025-02-01',
+      '2024-11-01',
+      '2024-12-01',
+      '2025-01-01',
+      '2025-02-01',
     ]);
-    expect(listCompetenceMonths('2025-01-01', null, '2025-03-01')).toEqual([
-      '2025-01-01', '2025-02-01', '2025-03-01',
-    ]);
+    expect(listCompetenceMonths('2025-01-01', null, '2025-03-01')).toEqual(['2025-01-01', '2025-02-01', '2025-03-01']);
     expect(listCompetenceMonths('2026-11-01', null, '2026-10-01')).toEqual([]);
   });
 

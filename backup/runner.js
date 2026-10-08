@@ -83,7 +83,11 @@ function normalizeStatus(status) {
   const base = emptyStatus();
   return {
     ...base,
-    ...Object.fromEntries(Object.keys(base).filter((key) => Object.hasOwn(status ?? {}, key)).map((key) => [key, status[key]])),
+    ...Object.fromEntries(
+      Object.keys(base)
+        .filter((key) => Object.hasOwn(status ?? {}, key))
+        .map((key) => [key, status[key]]),
+    ),
   };
 }
 
@@ -147,8 +151,15 @@ function spawnCommand(command, args, { env = process.env, stdoutPath } = {}) {
     if (stdoutPath) {
       stream = createWriteStream(stdoutPath, { mode: 0o600 });
       child.stdout.pipe(stream);
-      stream.on('finish', () => { streamFinished = true; finish(); });
-      stream.on('error', (error) => { streamError = error; child.kill(); finish(); });
+      stream.on('finish', () => {
+        streamFinished = true;
+        finish();
+      });
+      stream.on('error', (error) => {
+        streamError = error;
+        child.kill();
+        finish();
+      });
     } else {
       child.stdout.on('data', (chunk) => {
         output += chunk.toString();
@@ -156,18 +167,17 @@ function spawnCommand(command, args, { env = process.env, stdoutPath } = {}) {
       });
     }
     child.on('error', reject);
-    child.on('close', (code) => { exitCode = code; finish(); });
+    child.on('close', (code) => {
+      exitCode = code;
+      finish();
+    });
   });
 }
 
 async function runRetention({ execute, remote, config, status, now, env = process.env }) {
   status.lastRetentionAttemptAt = now.toISOString();
   for (const { directory, keep } of retentionRules) {
-    const output = await execute('rclone', [
-      '--config', config,
-      'lsf', `${remote}${directory}`,
-      '--files-only', '--format', 'p',
-    ], { env });
+    const output = await execute('rclone', ['--config', config, 'lsf', `${remote}${directory}`, '--files-only', '--format', 'p'], { env });
     const files = output
       .split(/\r?\n/u)
       .filter((name) => /^conta-clara-\d{8}T\d{6}Z-[a-f0-9]{8}\.dump$/u.test(name))
@@ -258,9 +268,9 @@ export async function runBackup({
     }
 
     try {
-      await execute('pg_dump', [
-        '--format=custom', '--no-owner', '--no-privileges', '--file', dumpFile,
-      ], { env: connectionEnvironment(databaseUrl, env) });
+      await execute('pg_dump', ['--format=custom', '--no-owner', '--no-privileges', '--file', dumpFile], {
+        env: connectionEnvironment(databaseUrl, env),
+      });
     } catch {
       throw backupError('database_dump');
     }
@@ -270,7 +280,10 @@ export async function runBackup({
     const monthlyPeriod = localBackupPeriod(currentTime, 'month');
     if (status.lastWeeklyPeriod !== weeklyPeriod) buckets.push('weekly');
     if (status.lastMonthlyPeriod !== monthlyPeriod) buckets.push('monthly');
-    const stamp = currentTime.toISOString().replace(/[-:]/gu, '').replace(/\.\d{3}Z$/u, 'Z');
+    const stamp = currentTime
+      .toISOString()
+      .replace(/[-:]/gu, '')
+      .replace(/\.\d{3}Z$/u, 'Z');
     const fileName = `conta-clara-${stamp}-${randomUUID().slice(0, 8)}.dump`;
     const sourceDirectory = join(directory, 'verify');
     await mkdir(sourceDirectory);
@@ -327,8 +340,12 @@ const sleep = (duration) => new Promise((resolve) => setTimeout(resolve, duratio
 
 async function schedule() {
   let stopping = false;
-  process.on('SIGTERM', () => { stopping = true; });
-  process.on('SIGINT', () => { stopping = true; });
+  process.on('SIGTERM', () => {
+    stopping = true;
+  });
+  process.on('SIGINT', () => {
+    stopping = true;
+  });
   while (!stopping) {
     const status = await readStatus(process.env.BACKUP_STATUS_FILE ?? '/status/status.json');
     const now = new Date();

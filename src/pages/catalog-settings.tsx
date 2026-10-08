@@ -17,7 +17,13 @@ const classLabels: Record<ExpenseClass, string> = { fixed: 'Fixa', variable: 'Va
 
 async function readResponse(response: Response) {
   if (response.status === 204) return {};
-  return response.json() as Promise<{ error?: string; categories?: Category[]; category?: Category; paymentMethods?: PaymentMethod[]; paymentMethod?: PaymentMethod }>;
+  return response.json() as Promise<{
+    error?: string;
+    categories?: Category[];
+    category?: Category;
+    paymentMethods?: PaymentMethod[];
+    paymentMethod?: PaymentMethod;
+  }>;
 }
 
 export function CatalogSettings() {
@@ -65,11 +71,15 @@ export function CatalogSettings() {
     setError('');
     setBusy(true);
     try {
-      await save(editingCategoryId ? `/api/catalog/categories/${editingCategoryId}` : '/api/catalog/categories', editingCategoryId ? 'PUT' : 'POST', {
-        name: categoryName,
-        kind: categoryKind,
-        expenseClass: categoryKind === 'expense' ? expenseClass : null,
-      });
+      await save(
+        editingCategoryId ? `/api/catalog/categories/${editingCategoryId}` : '/api/catalog/categories',
+        editingCategoryId ? 'PUT' : 'POST',
+        {
+          name: categoryName,
+          kind: categoryKind,
+          expenseClass: categoryKind === 'expense' ? expenseClass : null,
+        },
+      );
       setCategoryName('');
       setCategoryKind('expense');
       setExpenseClass('fixed');
@@ -87,7 +97,11 @@ export function CatalogSettings() {
     setError('');
     setBusy(true);
     try {
-      await save(editingPaymentId ? `/api/catalog/payment-methods/${editingPaymentId}` : '/api/catalog/payment-methods', editingPaymentId ? 'PUT' : 'POST', { name: paymentName });
+      await save(
+        editingPaymentId ? `/api/catalog/payment-methods/${editingPaymentId}` : '/api/catalog/payment-methods',
+        editingPaymentId ? 'PUT' : 'POST',
+        { name: paymentName },
+      );
       setPaymentName('');
       setEditingPaymentId(null);
       await load();
@@ -135,36 +149,197 @@ export function CatalogSettings() {
     setPaymentName('');
   }
 
-  return <section aria-label="Cadastros financeiros compartilhados" className="grid gap-4 xl:grid-cols-2">
-    {error && <Alert className="xl:col-span-2">{error}</Alert>}
-    <Card>
-      <CardHeader><CardTitle>Categorias</CardTitle><CardDescription>Receitas, despesas e aportes usados pelos dois membros do espaço.</CardDescription></CardHeader>
-      <CardContent className="grid gap-5">
-        <form onSubmit={submitCategory} className="grid gap-3">
-          <FormField id="category-name" label="Nome da categoria"><Input required maxLength={80} value={categoryName} onChange={(event) => setCategoryName(event.target.value)} /></FormField>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <FormField id="category-kind" label="Tipo"><Select value={categoryKind} onChange={(event) => setCategoryKind(event.target.value as CategoryKind)}><option value="income">Receita</option><option value="expense">Despesa</option><option value="investment">Aporte</option></Select></FormField>
-            {categoryKind === 'expense' && <FormField id="expense-class" label="Classificação"><Select value={expenseClass} onChange={(event) => setExpenseClass(event.target.value as ExpenseClass)}><option value="fixed">Fixa</option><option value="variable">Variável</option></Select></FormField>}
+  return (
+    <section aria-label="Cadastros financeiros compartilhados" className="grid gap-4 xl:grid-cols-2">
+      {error && <Alert className="xl:col-span-2">{error}</Alert>}
+      <Card>
+        <CardHeader>
+          <CardTitle>Categorias</CardTitle>
+          <CardDescription>Receitas, despesas e aportes usados pelos dois membros do espaço.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-5">
+          <form onSubmit={submitCategory} className="grid gap-3">
+            <FormField id="category-name" label="Nome da categoria">
+              <Input required maxLength={80} value={categoryName} onChange={(event) => setCategoryName(event.target.value)} />
+            </FormField>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <FormField id="category-kind" label="Tipo">
+                <Select value={categoryKind} onChange={(event) => setCategoryKind(event.target.value as CategoryKind)}>
+                  <option value="income">Receita</option>
+                  <option value="expense">Despesa</option>
+                  <option value="investment">Aporte</option>
+                </Select>
+              </FormField>
+              {categoryKind === 'expense' && (
+                <FormField id="expense-class" label="Classificação">
+                  <Select value={expenseClass} onChange={(event) => setExpenseClass(event.target.value as ExpenseClass)}>
+                    <option value="fixed">Fixa</option>
+                    <option value="variable">Variável</option>
+                  </Select>
+                </FormField>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button type="submit" disabled={busy}>
+                {editingCategoryId ? <Pencil aria-hidden="true" className="size-4" /> : <Plus aria-hidden="true" className="size-4" />}
+                {editingCategoryId ? 'Salvar categoria' : 'Adicionar categoria'}
+              </Button>
+              {editingCategoryId && (
+                <Button type="button" variant="outline" disabled={busy} onClick={cancelCategoryEdit}>
+                  <X aria-hidden="true" className="size-4" />
+                  Cancelar edição
+                </Button>
+              )}
+            </div>
+          </form>
+          <div className="grid gap-1" aria-label="Lista de categorias">
+            {categories === null ? (
+              <p className="text-sm text-muted-foreground">Carregando categorias…</p>
+            ) : categories.length ? (
+              categories.map((category) => (
+                <div
+                  key={category.id}
+                  className="flex min-w-0 flex-wrap items-center gap-2 border-t border-border py-3 first:border-0 first:pt-0"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold">{category.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {kindLabels[category.kind]}
+                      {category.expense_class ? ` · ${classLabels[category.expense_class]}` : ''}
+                    </p>
+                  </div>
+                  {category.archived_at ? (
+                    <>
+                      <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">Arquivada</span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={busy}
+                        aria-label={`Restaurar categoria ${category.name}`}
+                        onClick={() => void changeStatus('categories', category.id, 'restore')}
+                      >
+                        <RotateCcw aria-hidden="true" className="size-4" />
+                        Restaurar
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        disabled={busy}
+                        aria-label={`Editar categoria ${category.name}`}
+                        onClick={() => editCategory(category)}
+                      >
+                        <Pencil aria-hidden="true" className="size-4" />
+                        Editar
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={busy}
+                        aria-label={`Arquivar categoria ${category.name}`}
+                        onClick={() => void changeStatus('categories', category.id, 'archive')}
+                      >
+                        <Archive aria-hidden="true" className="size-4" />
+                        Arquivar
+                      </Button>
+                    </>
+                  )}
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground">Nenhuma categoria cadastrada.</p>
+            )}
           </div>
-          <div className="flex flex-wrap gap-2"><Button type="submit" disabled={busy}>{editingCategoryId ? <Pencil aria-hidden="true" className="size-4" /> : <Plus aria-hidden="true" className="size-4" />}{editingCategoryId ? 'Salvar categoria' : 'Adicionar categoria'}</Button>{editingCategoryId && <Button type="button" variant="outline" disabled={busy} onClick={cancelCategoryEdit}><X aria-hidden="true" className="size-4" />Cancelar edição</Button>}</div>
-        </form>
-        <div className="grid gap-1" aria-label="Lista de categorias">
-          {categories === null ? <p className="text-sm text-muted-foreground">Carregando categorias…</p> : categories.length ? categories.map((category) => <div key={category.id} className="flex min-w-0 flex-wrap items-center gap-2 border-t border-border py-3 first:border-0 first:pt-0"><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{category.name}</p><p className="text-xs text-muted-foreground">{kindLabels[category.kind]}{category.expense_class ? ` · ${classLabels[category.expense_class]}` : ''}</p></div>{category.archived_at ? <><span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">Arquivada</span><Button type="button" size="sm" variant="outline" disabled={busy} aria-label={`Restaurar categoria ${category.name}`} onClick={() => void changeStatus('categories', category.id, 'restore')}><RotateCcw aria-hidden="true" className="size-4" />Restaurar</Button></> : <><Button type="button" size="sm" variant="ghost" disabled={busy} aria-label={`Editar categoria ${category.name}`} onClick={() => editCategory(category)}><Pencil aria-hidden="true" className="size-4" />Editar</Button><Button type="button" size="sm" variant="outline" disabled={busy} aria-label={`Arquivar categoria ${category.name}`} onClick={() => void changeStatus('categories', category.id, 'archive')}><Archive aria-hidden="true" className="size-4" />Arquivar</Button></>}</div>) : <p className="text-sm text-muted-foreground">Nenhuma categoria cadastrada.</p>}
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
 
-    <Card>
-      <CardHeader><CardTitle>Formas de pagamento</CardTitle><CardDescription>Cadastros compartilhados disponíveis para lançamentos novos.</CardDescription></CardHeader>
-      <CardContent className="grid gap-5">
-        <form onSubmit={submitPaymentMethod} className="grid gap-3">
-          <FormField id="payment-method-name" label="Nome da forma de pagamento"><Input required maxLength={80} value={paymentName} onChange={(event) => setPaymentName(event.target.value)} /></FormField>
-          <div className="flex flex-wrap gap-2"><Button type="submit" disabled={busy}>{editingPaymentId ? <Pencil aria-hidden="true" className="size-4" /> : <Plus aria-hidden="true" className="size-4" />}{editingPaymentId ? 'Salvar forma' : 'Adicionar forma'}</Button>{editingPaymentId && <Button type="button" variant="outline" disabled={busy} onClick={cancelPaymentEdit}><X aria-hidden="true" className="size-4" />Cancelar edição</Button>}</div>
-        </form>
-        <div className="grid gap-1" aria-label="Lista de formas de pagamento">
-          {paymentMethods === null ? <p className="text-sm text-muted-foreground">Carregando formas…</p> : paymentMethods.length ? paymentMethods.map((method) => <div key={method.id} className="flex min-w-0 flex-wrap items-center gap-2 border-t border-border py-3 first:border-0 first:pt-0"><p className="min-w-0 flex-1 truncate text-sm font-semibold">{method.name}</p>{method.archived_at ? <><span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">Arquivada</span><Button type="button" size="sm" variant="outline" disabled={busy} aria-label={`Restaurar forma de pagamento ${method.name}`} onClick={() => void changeStatus('payment-methods', method.id, 'restore')}><RotateCcw aria-hidden="true" className="size-4" />Restaurar</Button></> : <><Button type="button" size="sm" variant="ghost" disabled={busy} aria-label={`Editar forma de pagamento ${method.name}`} onClick={() => editPaymentMethod(method)}><Pencil aria-hidden="true" className="size-4" />Editar</Button><Button type="button" size="sm" variant="outline" disabled={busy} aria-label={`Arquivar forma de pagamento ${method.name}`} onClick={() => void changeStatus('payment-methods', method.id, 'archive')}><Archive aria-hidden="true" className="size-4" />Arquivar</Button></>}</div>) : <p className="text-sm text-muted-foreground">Nenhuma forma de pagamento cadastrada.</p>}
-        </div>
-      </CardContent>
-    </Card>
-  </section>;
+      <Card>
+        <CardHeader>
+          <CardTitle>Formas de pagamento</CardTitle>
+          <CardDescription>Cadastros compartilhados disponíveis para lançamentos novos.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-5">
+          <form onSubmit={submitPaymentMethod} className="grid gap-3">
+            <FormField id="payment-method-name" label="Nome da forma de pagamento">
+              <Input required maxLength={80} value={paymentName} onChange={(event) => setPaymentName(event.target.value)} />
+            </FormField>
+            <div className="flex flex-wrap gap-2">
+              <Button type="submit" disabled={busy}>
+                {editingPaymentId ? <Pencil aria-hidden="true" className="size-4" /> : <Plus aria-hidden="true" className="size-4" />}
+                {editingPaymentId ? 'Salvar forma' : 'Adicionar forma'}
+              </Button>
+              {editingPaymentId && (
+                <Button type="button" variant="outline" disabled={busy} onClick={cancelPaymentEdit}>
+                  <X aria-hidden="true" className="size-4" />
+                  Cancelar edição
+                </Button>
+              )}
+            </div>
+          </form>
+          <div className="grid gap-1" aria-label="Lista de formas de pagamento">
+            {paymentMethods === null ? (
+              <p className="text-sm text-muted-foreground">Carregando formas…</p>
+            ) : paymentMethods.length ? (
+              paymentMethods.map((method) => (
+                <div
+                  key={method.id}
+                  className="flex min-w-0 flex-wrap items-center gap-2 border-t border-border py-3 first:border-0 first:pt-0"
+                >
+                  <p className="min-w-0 flex-1 truncate text-sm font-semibold">{method.name}</p>
+                  {method.archived_at ? (
+                    <>
+                      <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">Arquivada</span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={busy}
+                        aria-label={`Restaurar forma de pagamento ${method.name}`}
+                        onClick={() => void changeStatus('payment-methods', method.id, 'restore')}
+                      >
+                        <RotateCcw aria-hidden="true" className="size-4" />
+                        Restaurar
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        disabled={busy}
+                        aria-label={`Editar forma de pagamento ${method.name}`}
+                        onClick={() => editPaymentMethod(method)}
+                      >
+                        <Pencil aria-hidden="true" className="size-4" />
+                        Editar
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={busy}
+                        aria-label={`Arquivar forma de pagamento ${method.name}`}
+                        onClick={() => void changeStatus('payment-methods', method.id, 'archive')}
+                      >
+                        <Archive aria-hidden="true" className="size-4" />
+                        Arquivar
+                      </Button>
+                    </>
+                  )}
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground">Nenhuma forma de pagamento cadastrada.</p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </section>
+  );
 }

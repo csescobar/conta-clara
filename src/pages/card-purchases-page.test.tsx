@@ -17,13 +17,32 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 function card(id: string): OfflineCard {
-  return { id, name: 'Cartão da família', holder_user_id: user.id, holder_name: user.name, closing_day: 25, due_day: 5, archived_at: null, created_by_user_id: user.id, updated_by_user_id: user.id, version: 1 };
+  return {
+    id,
+    name: 'Cartão da família',
+    holder_user_id: user.id,
+    holder_name: user.name,
+    closing_day: 25,
+    due_day: 5,
+    archived_at: null,
+    created_by_user_id: user.id,
+    updated_by_user_id: user.id,
+    version: 1,
+  };
 }
 
 const categories: OfflineCategory[] = [{ id: 'expense-home', name: 'Casa', kind: 'expense', expense_class: 'variable', archived_at: null }];
 
 function renderPage() {
-  return render(<MemoryRouter><AuthContext.Provider value={{ user, csrfToken: 'csrf-purchase-page' }}><OfflineWorkspaceProvider scope={scope}><CardPurchasesPage /></OfflineWorkspaceProvider></AuthContext.Provider></MemoryRouter>);
+  return render(
+    <MemoryRouter>
+      <AuthContext.Provider value={{ user, csrfToken: 'csrf-purchase-page' }}>
+        <OfflineWorkspaceProvider scope={scope}>
+          <CardPurchasesPage />
+        </OfflineWorkspaceProvider>
+      </AuthContext.Provider>
+    </MemoryRouter>,
+  );
 }
 
 beforeAll(() => {
@@ -40,20 +59,44 @@ describe('card purchases page', () => {
       if (input === '/api/cards?includeArchived=true' && !init?.method) return jsonResponse({ cards: [card('card-primary')] });
       if (input === '/api/catalog/categories' && !init?.method) return jsonResponse({ categories });
       if (input === '/api/sync/operations' && init?.method === 'POST') {
-        const operation = JSON.parse(String(init.body)) as { entity: string; purchaseId: string; payload: { purchase: Record<string, unknown>; installments: Array<Record<string, unknown>> } };
+        const operation = JSON.parse(String(init.body)) as {
+          entity: string;
+          purchaseId: string;
+          payload: { purchase: Record<string, unknown>; installments: Array<Record<string, unknown>> };
+        };
         expect(operation.entity).toBe('purchase');
         const p = operation.payload.purchase;
         saved = {
-          id: operation.purchaseId, card_id: String(p.cardId), card_name: 'Cartão da família', description: String(p.description),
-          category_id: String(p.categoryId), category_name: 'Casa', purchase_on: String(p.purchaseOn), first_invoice_on: String(p.firstInvoiceOn),
-          total_cents: String(p.totalCents), installment_count: Number(p.installmentCount), canceled_at: null,
-          created_by_user_id: user.id, updated_by_user_id: user.id, version: 1,
+          id: operation.purchaseId,
+          card_id: String(p.cardId),
+          card_name: 'Cartão da família',
+          description: String(p.description),
+          category_id: String(p.categoryId),
+          category_name: 'Casa',
+          purchase_on: String(p.purchaseOn),
+          first_invoice_on: String(p.firstInvoiceOn),
+          total_cents: String(p.totalCents),
+          installment_count: Number(p.installmentCount),
+          canceled_at: null,
+          created_by_user_id: user.id,
+          updated_by_user_id: user.id,
+          version: 1,
           installments: operation.payload.installments.map((item) => ({
-            id: String(item.id), description: `${String(p.description)} (${String(item.installmentNumber)}/${String(p.installmentCount)})`,
-            category_id: String(p.categoryId), category_name: 'Casa', invoice_on: String(item.invoiceOn),
-            due_on: `${String(item.invoiceOn).slice(0, 7)}-05`, planned_cents: String(item.plannedCents), actual_cents: null,
-            realized_on: null, created_by_user_id: user.id, updated_by_user_id: user.id, version: 1,
-            installment_number: Number(item.installmentNumber), installment_count: Number(p.installmentCount), status: 'pending',
+            id: String(item.id),
+            description: `${String(p.description)} (${String(item.installmentNumber)}/${String(p.installmentCount)})`,
+            category_id: String(p.categoryId),
+            category_name: 'Casa',
+            invoice_on: String(item.invoiceOn),
+            due_on: `${String(item.invoiceOn).slice(0, 7)}-05`,
+            planned_cents: String(item.plannedCents),
+            actual_cents: null,
+            realized_on: null,
+            created_by_user_id: user.id,
+            updated_by_user_id: user.id,
+            version: 1,
+            installment_number: Number(item.installmentNumber),
+            installment_count: Number(p.installmentCount),
+            status: 'pending',
           })),
         };
         return jsonResponse({ status: 'applied', operationId: 'operation-fixture', purchase: saved });

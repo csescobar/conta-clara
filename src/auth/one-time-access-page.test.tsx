@@ -8,10 +8,17 @@ const token = 'A'.repeat(43);
 const csrfToken = 'csrf-one-time-link';
 
 function renderRoute(path: string, purpose: 'invite' | 'password-reset') {
-  render(<MemoryRouter initialEntries={[path]}><Routes>
-    <Route path={purpose === 'invite' ? '/ativar/:token' : '/redefinir-senha/:token'} element={<OneTimeAccessPage purpose={purpose} />} />
-    <Route path="/" element={<p>Conta Clara aberta</p>} />
-  </Routes></MemoryRouter>);
+  render(
+    <MemoryRouter initialEntries={[path]}>
+      <Routes>
+        <Route
+          path={purpose === 'invite' ? '/ativar/:token' : '/redefinir-senha/:token'}
+          element={<OneTimeAccessPage purpose={purpose} />}
+        />
+        <Route path="/" element={<p>Conta Clara aberta</p>} />
+      </Routes>
+    </MemoryRouter>,
+  );
 }
 
 function jsonResponse(body: unknown) {
@@ -22,7 +29,8 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe('one-time access pages', () => {
   it('activates a valid invitation and sends the entered name and password with CSRF protection', async () => {
-    const fetchMock = vi.fn()
+    const fetchMock = vi
+      .fn()
       .mockResolvedValueOnce(jsonResponse({ csrfToken }))
       .mockResolvedValueOnce(jsonResponse({ valid: true, email: 'membro@example.test' }))
       .mockResolvedValueOnce(jsonResponse({ user: { id: 'member-id' } }));
@@ -38,12 +46,17 @@ describe('one-time access pages', () => {
     expect(await screen.findByText('Conta Clara aberta')).toBeInTheDocument();
     const post = fetchMock.mock.calls[2];
     expect(post?.[0]).toBe('/api/auth/accept-invite');
-    expect(JSON.parse(String(post?.[1]?.body))).toEqual({ token, displayName: 'Pessoa convidada', password: 'senha-ativacao-ficticia-123' });
+    expect(JSON.parse(String(post?.[1]?.body))).toEqual({
+      token,
+      displayName: 'Pessoa convidada',
+      password: 'senha-ativacao-ficticia-123',
+    });
     expect(post?.[1]?.headers).toMatchObject({ 'X-CSRF-Token': csrfToken });
   });
 
   it('rejects mismatched reset passwords before sending a request', async () => {
-    const fetchMock = vi.fn()
+    const fetchMock = vi
+      .fn()
       .mockResolvedValueOnce(jsonResponse({ csrfToken }))
       .mockResolvedValueOnce(jsonResponse({ valid: true, email: 'membro@example.test' }));
     vi.stubGlobal('fetch', fetchMock);

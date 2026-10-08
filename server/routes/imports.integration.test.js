@@ -28,13 +28,24 @@ describe.skipIf(!testDatabaseUrl)('spreadsheet import route with PostgreSQL', ()
     browser = request.agent(app);
     const state = await browser.get('/api/auth/state').set('Host', 'conta-clara.test').set('Origin', origin).expect(200);
     csrfToken = state.body.csrfToken;
-    await browser.post('/api/auth/setup').set('Host', 'conta-clara.test').set('Origin', origin).set('X-CSRF-Token', csrfToken)
-      .send({ displayName: 'Admin importação', email: 'admin-import@example.test', password: 'senha-admin-importacao-ficticia-123' }).expect(201);
-    const expense = await sameOrigin('post', '/api/catalog/categories').send({ name: 'Casa teste', kind: 'expense', expenseClass: 'fixed' }).expect(201);
+    await browser
+      .post('/api/auth/setup')
+      .set('Host', 'conta-clara.test')
+      .set('Origin', origin)
+      .set('X-CSRF-Token', csrfToken)
+      .send({ displayName: 'Admin importação', email: 'admin-import@example.test', password: 'senha-admin-importacao-ficticia-123' })
+      .expect(201);
+    const expense = await sameOrigin('post', '/api/catalog/categories')
+      .send({ name: 'Casa teste', kind: 'expense', expenseClass: 'fixed' })
+      .expect(201);
     expenseCategoryId = expense.body.category.id;
-    const investment = await sameOrigin('post', '/api/catalog/categories').send({ name: 'Aporte teste', kind: 'investment', expenseClass: null }).expect(201);
+    const investment = await sameOrigin('post', '/api/catalog/categories')
+      .send({ name: 'Aporte teste', kind: 'investment', expenseClass: null })
+      .expect(201);
     investmentCategoryId = investment.body.category.id;
-    const income = await sameOrigin('post', '/api/catalog/categories').send({ name: 'Renda teste', kind: 'income', expenseClass: null }).expect(201);
+    const income = await sameOrigin('post', '/api/catalog/categories')
+      .send({ name: 'Renda teste', kind: 'income', expenseClass: null })
+      .expect(201);
     incomeCategoryId = income.body.category.id;
     const payment = await sameOrigin('post', '/api/catalog/payment-methods').send({ name: 'Pix teste' }).expect(201);
     paymentMethodId = payment.body.paymentMethod.id;
@@ -51,17 +62,59 @@ describe.skipIf(!testDatabaseUrl)('spreadsheet import route with PostgreSQL', ()
 
   function validEntries() {
     return [
-      { kind: 'expense', description: 'Conta fictícia de teste', categoryId: expenseCategoryId, competenceOn: '2026-10-01', dueOn: '2026-10-18', plannedCents: 12590, actualCents: null, realizedOn: null, paymentMethodId, notes: null },
-      { kind: 'investment', description: 'Aporte fictício de teste', categoryId: investmentCategoryId, competenceOn: '2026-10-01', dueOn: '2026-10-20', plannedCents: 50000, actualCents: null, realizedOn: null, paymentMethodId: null, notes: null },
-      { kind: 'income', description: 'Receita fictícia de teste', categoryId: incomeCategoryId, competenceOn: '2026-11-01', dueOn: null, plannedCents: 250000, actualCents: null, realizedOn: null, paymentMethodId: null, notes: null },
+      {
+        kind: 'expense',
+        description: 'Conta fictícia de teste',
+        categoryId: expenseCategoryId,
+        competenceOn: '2026-10-01',
+        dueOn: '2026-10-18',
+        plannedCents: 12590,
+        actualCents: null,
+        realizedOn: null,
+        paymentMethodId,
+        notes: null,
+      },
+      {
+        kind: 'investment',
+        description: 'Aporte fictício de teste',
+        categoryId: investmentCategoryId,
+        competenceOn: '2026-10-01',
+        dueOn: '2026-10-20',
+        plannedCents: 50000,
+        actualCents: null,
+        realizedOn: null,
+        paymentMethodId: null,
+        notes: null,
+      },
+      {
+        kind: 'income',
+        description: 'Receita fictícia de teste',
+        categoryId: incomeCategoryId,
+        competenceOn: '2026-11-01',
+        dueOn: null,
+        plannedCents: 250000,
+        actualCents: null,
+        realizedOn: null,
+        paymentMethodId: null,
+        notes: null,
+      },
     ];
   }
 
   it('validates the confirmation, records a shared audited batch atomically, and blocks duplicate imports', async () => {
-    await request(app).post('/api/imports').set('Host', 'conta-clara.test').set('Origin', origin).send({ entries: validEntries() }).expect(401);
+    await request(app)
+      .post('/api/imports')
+      .set('Host', 'conta-clara.test')
+      .set('Origin', origin)
+      .send({ entries: validEntries() })
+      .expect(401);
     await browser.post('/api/imports').set('Host', 'conta-clara.test').set('Origin', origin).send({ entries: validEntries() }).expect(403);
-    await sameOrigin('post', '/api/imports').send({ entries: [{ ...validEntries()[0], competenceOn: '2026-10-02' }] }).expect(400);
-    await sameOrigin('post', '/api/imports').send({ entries: [{ ...validEntries()[0], categoryId: investmentCategoryId }] }).expect(400);
+    await sameOrigin('post', '/api/imports')
+      .send({ entries: [{ ...validEntries()[0], competenceOn: '2026-10-02' }] })
+      .expect(400);
+    await sameOrigin('post', '/api/imports')
+      .send({ entries: [{ ...validEntries()[0], categoryId: investmentCategoryId }] })
+      .expect(400);
 
     const payload = { entries: validEntries() };
     const imported = await sameOrigin('post', '/api/imports').send(payload).expect(201);
@@ -78,8 +131,12 @@ describe.skipIf(!testDatabaseUrl)('spreadsheet import route with PostgreSQL', ()
     expect(stored.rows.map((row) => row.action)).toEqual(['created', 'created', 'created']);
     expect(stored.rows.every((row) => row.created_by_user_id && row.actor_display_name === 'Admin importação')).toBe(true);
 
-    await sameOrigin('post', '/api/imports').send({ entries: [...payload.entries].reverse() }).expect(409);
-    const afterDuplicate = await pool.query('SELECT (SELECT count(*)::int FROM financial_entries) AS entries, (SELECT count(*)::int FROM spreadsheet_import_batches) AS batches');
+    await sameOrigin('post', '/api/imports')
+      .send({ entries: [...payload.entries].reverse() })
+      .expect(409);
+    const afterDuplicate = await pool.query(
+      'SELECT (SELECT count(*)::int FROM financial_entries) AS entries, (SELECT count(*)::int FROM spreadsheet_import_batches) AS batches',
+    );
     expect(afterDuplicate.rows[0]).toEqual({ entries: 3, batches: 1 });
 
     await pool.query(`
@@ -92,13 +149,17 @@ describe.skipIf(!testDatabaseUrl)('spreadsheet import route with PostgreSQL', ()
       CREATE TRIGGER fail_one_import_row_trigger BEFORE INSERT ON financial_entries FOR EACH ROW EXECUTE FUNCTION fail_one_import_row();
     `);
     try {
-      const rollbackPayload = { entries: [
-        { ...validEntries()[0], description: 'Linha válida antes da falha', dueOn: null },
-        { ...validEntries()[0], description: 'Falha fictícia de teste', dueOn: null },
-      ] };
+      const rollbackPayload = {
+        entries: [
+          { ...validEntries()[0], description: 'Linha válida antes da falha', dueOn: null },
+          { ...validEntries()[0], description: 'Falha fictícia de teste', dueOn: null },
+        ],
+      };
       await sameOrigin('post', '/api/imports').send(rollbackPayload).expect(500);
     } finally {
-      await pool.query('DROP TRIGGER IF EXISTS fail_one_import_row_trigger ON financial_entries; DROP FUNCTION IF EXISTS fail_one_import_row();');
+      await pool.query(
+        'DROP TRIGGER IF EXISTS fail_one_import_row_trigger ON financial_entries; DROP FUNCTION IF EXISTS fail_one_import_row();',
+      );
     }
     const afterRollback = await pool.query(`
       SELECT count(*)::int AS entries,

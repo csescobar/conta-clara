@@ -17,10 +17,7 @@ import { createImportsRouter } from './routes/imports.js';
 import { createSyncRouter } from './routes/sync.js';
 import { createBackupsRouter } from './routes/backups.js';
 
-const clientDist = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '../dist/client',
-);
+const clientDist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../dist/client');
 
 export function createApp({ pool, secureCookies = process.env.COOKIE_SECURE === 'true', loginLimit = 10 } = {}) {
   const app = express();
@@ -56,9 +53,19 @@ export function createApp({ pool, secureCookies = process.env.COOKIE_SECURE === 
   }
 
   app.use((error, _request, response, _next) => {
-    if (error.type !== 'entity.too.large' && error.type !== 'entity.parse.failed') console.error(`API request failed${error.code ? ` (${error.code})` : ''}`);
+    if (error.type !== 'entity.too.large' && error.type !== 'entity.parse.failed')
+      console.error(`API request failed${error.code ? ` (${error.code})` : ''}`);
     const status = error.type === 'entity.too.large' ? 413 : error.type === 'entity.parse.failed' ? 400 : 500;
-    response.status(status).json({ error: status === 413 ? 'A solicitação excede o limite de 4 MB.' : status === 400 ? 'O corpo da solicitação não contém JSON válido.' : 'Ocorreu um erro. Tente novamente.' });
+    response
+      .status(status)
+      .json({
+        error:
+          status === 413
+            ? 'A solicitação excede o limite de 4 MB.'
+            : status === 400
+              ? 'O corpo da solicitação não contém JSON válido.'
+              : 'Ocorreu um erro. Tente novamente.',
+      });
   });
   return app;
 }

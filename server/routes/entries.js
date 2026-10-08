@@ -32,9 +32,11 @@ export function parseEntry(body) {
   const plannedCents = body?.plannedCents;
   const categoryId = parseOptionalId(body?.categoryId);
   const paymentMethodId = parseOptionalId(body?.paymentMethodId);
-  const notes = body?.notes === undefined || body?.notes === null ? null : typeof body.notes === 'string' ? body.notes.trim() || null : undefined;
+  const notes =
+    body?.notes === undefined || body?.notes === null ? null : typeof body.notes === 'string' ? body.notes.trim() || null : undefined;
 
-  if (!entryKinds.has(kind) || !description || description.length > 200 || !isIsoDate(competenceOn) || competenceOn.slice(-2) !== '01') return null;
+  if (!entryKinds.has(kind) || !description || description.length > 200 || !isIsoDate(competenceOn) || competenceOn.slice(-2) !== '01')
+    return null;
   if (dueOn !== null && !isIsoDate(dueOn)) return null;
   if (!Number.isSafeInteger(plannedCents) || plannedCents <= 0) return null;
   if (categoryId === undefined || paymentMethodId === undefined || notes === undefined || (notes && notes.length > 2000)) return null;
@@ -50,27 +52,34 @@ function parseRealization(body) {
 
 export async function validateReferences(client, spaceId, entry, current = {}) {
   if (entry.categoryId) {
-    const category = await client.query(`
+    const category = await client.query(
+      `
       SELECT kind FROM categories
       WHERE id = $1 AND space_id = $2 AND (archived_at IS NULL OR id = $3)
       FOR SHARE
-    `, [entry.categoryId, spaceId, current.categoryId ?? null]);
+    `,
+      [entry.categoryId, spaceId, current.categoryId ?? null],
+    );
     if (!category.rows[0]) return 'Selecione uma categoria ativa deste espaço.';
     if (category.rows[0].kind !== entry.kind) return 'A categoria precisa corresponder ao tipo do lançamento.';
   }
   if (entry.paymentMethodId) {
-    const method = await client.query(`
+    const method = await client.query(
+      `
       SELECT id FROM payment_methods
       WHERE id = $1 AND space_id = $2 AND (archived_at IS NULL OR id = $3)
       FOR SHARE
-    `, [entry.paymentMethodId, spaceId, current.paymentMethodId ?? null]);
+    `,
+      [entry.paymentMethodId, spaceId, current.paymentMethodId ?? null],
+    );
     if (!method.rows[0]) return 'Selecione uma forma de pagamento ativa deste espaço.';
   }
   return null;
 }
 
 export async function selectEntry(client, spaceId, entryId) {
-  const result = await client.query(`
+  const result = await client.query(
+    `
     SELECT e.id, e.kind, e.description, e.category_id, c.name AS category_name,
       e.competence_on::text AS competence_on, e.due_on::text AS due_on,
       e.planned_cents, e.actual_cents, e.realized_on::text AS realized_on,
@@ -93,7 +102,9 @@ export async function selectEntry(client, spaceId, entryId) {
     LEFT JOIN card_invoices i ON i.space_id = cp.space_id AND i.card_id = cp.card_id
       AND i.invoice_month = date_trunc('month', e.due_on)::date
     WHERE e.id = $1 AND e.space_id = $2 AND NOT e.recurrence_skipped
-  `, [entryId, spaceId]);
+  `,
+    [entryId, spaceId],
+  );
   return result.rows[0] ?? null;
 }
 
@@ -105,7 +116,9 @@ function requestedBaseVersion(request) {
 }
 
 function versionConflict(response, entry) {
-  return response.status(409).json({ error: 'Este lançamento mudou em outro aparelho. Escolha qual versão manter.', conflict: true, serverEntry: entry });
+  return response
+    .status(409)
+    .json({ error: 'Este lançamento mudou em outro aparelho. Escolha qual versão manter.', conflict: true, serverEntry: entry });
 }
 
 export function createEntriesRouter({ pool, secureCookies = false, csrfSecret }) {
@@ -121,13 +134,16 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
     const month = request.query.month || null;
     const categoryId = request.query.categoryId || null;
     const status = request.query.status || null;
-    if (month !== null && (typeof month !== 'string' || !monthPattern.test(month))) return response.status(400).json({ error: 'Informe a competência no formato AAAA-MM.' });
+    if (month !== null && (typeof month !== 'string' || !monthPattern.test(month)))
+      return response.status(400).json({ error: 'Informe a competência no formato AAAA-MM.' });
     if (categoryId !== null && !isUuid(categoryId)) return response.status(400).json({ error: 'Categoria inválida.' });
-    if (status !== null && (typeof status !== 'string' || !statuses.has(status))) return response.status(400).json({ error: 'Situação inválida.' });
+    if (status !== null && (typeof status !== 'string' || !statuses.has(status)))
+      return response.status(400).json({ error: 'Situação inválida.' });
     try {
       await generateRecurrenceOccurrences(pool, { spaceId: request.auth.spaceId });
       const monthStart = month ? `${month}-01` : null;
-      const result = await pool.query(`
+      const result = await pool.query(
+        `
         SELECT e.id, e.kind, e.description, e.category_id, c.name AS category_name,
           e.competence_on::text AS competence_on, e.due_on::text AS due_on,
           e.planned_cents, e.actual_cents, e.realized_on::text AS realized_on,
@@ -158,7 +174,9 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
             ELSE 'pending'
           END = $4::text)
         ORDER BY e.competence_on DESC, e.due_on NULLS LAST, lower(e.description), e.id
-      `, [request.auth.spaceId, monthStart, categoryId, status]);
+      `,
+        [request.auth.spaceId, monthStart, categoryId, status],
+      );
       return response.json({ entries: result.rows });
     } catch (error) {
       return next(error);
@@ -177,15 +195,36 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
         await client.query('ROLLBACK');
         return response.status(400).json({ error: referenceError });
       }
-      const result = await client.query(`
+      const result = await client.query(
+        `
         INSERT INTO financial_entries (
           space_id, created_by_user_id, updated_by_user_id, kind, description,
           category_id, competence_on, due_on, planned_cents, payment_method_id, notes
         ) VALUES ($1, $2, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         RETURNING id
-      `, [request.auth.spaceId, request.auth.id, entry.kind, entry.description, entry.categoryId, entry.competenceOn, entry.dueOn, entry.plannedCents, entry.paymentMethodId, entry.notes]);
+      `,
+        [
+          request.auth.spaceId,
+          request.auth.id,
+          entry.kind,
+          entry.description,
+          entry.categoryId,
+          entry.competenceOn,
+          entry.dueOn,
+          entry.plannedCents,
+          entry.paymentMethodId,
+          entry.notes,
+        ],
+      );
       const created = await selectEntry(client, request.auth.spaceId, result.rows[0].id);
-      await recordEntryAudit(client, { spaceId: request.auth.spaceId, actorUserId: request.auth.id, actorName: request.auth.name, entry: created, action: 'created', after: created });
+      await recordEntryAudit(client, {
+        spaceId: request.auth.spaceId,
+        actorUserId: request.auth.id,
+        actorName: request.auth.name,
+        entry: created,
+        action: 'created',
+        after: created,
+      });
       await client.query('COMMIT');
       return response.status(201).json({ entry: created });
     } catch (error) {
@@ -217,7 +256,10 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
     try {
       client = await pool.connect();
       await client.query('BEGIN');
-      const existing = await client.query('SELECT id, category_id, payment_method_id, recurrence_rule_id, card_purchase_id, version FROM financial_entries WHERE id = $1 AND space_id = $2 AND NOT recurrence_skipped FOR UPDATE', [request.params.id, request.auth.spaceId]);
+      const existing = await client.query(
+        'SELECT id, category_id, payment_method_id, recurrence_rule_id, card_purchase_id, version FROM financial_entries WHERE id = $1 AND space_id = $2 AND NOT recurrence_skipped FOR UPDATE',
+        [request.params.id, request.auth.spaceId],
+      );
       if (!existing.rows[0]) {
         await client.query('ROLLBACK');
         return response.status(404).json({ error: 'Lançamento não encontrado.' });
@@ -239,16 +281,39 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
         await client.query('ROLLBACK');
         return response.status(400).json({ error: referenceError });
       }
-      await client.query(`
+      await client.query(
+        `
         UPDATE financial_entries SET kind = $1, description = $2, category_id = $3,
           competence_on = $4, due_on = $5, planned_cents = $6,
           payment_method_id = $7, notes = $8,
           recurrence_overridden = CASE WHEN recurrence_rule_id IS NULL THEN recurrence_overridden ELSE true END,
           updated_by_user_id = $9, updated_at = now(), version = version + 1
         WHERE id = $10 AND space_id = $11
-      `, [entry.kind, entry.description, entry.categoryId, entry.competenceOn, entry.dueOn, entry.plannedCents, entry.paymentMethodId, entry.notes, request.auth.id, request.params.id, request.auth.spaceId]);
+      `,
+        [
+          entry.kind,
+          entry.description,
+          entry.categoryId,
+          entry.competenceOn,
+          entry.dueOn,
+          entry.plannedCents,
+          entry.paymentMethodId,
+          entry.notes,
+          request.auth.id,
+          request.params.id,
+          request.auth.spaceId,
+        ],
+      );
       const updated = await selectEntry(client, request.auth.spaceId, request.params.id);
-      await recordEntryAudit(client, { spaceId: request.auth.spaceId, actorUserId: request.auth.id, actorName: request.auth.name, entry: updated, action: 'updated', before, after: updated });
+      await recordEntryAudit(client, {
+        spaceId: request.auth.spaceId,
+        actorUserId: request.auth.id,
+        actorName: request.auth.name,
+        entry: updated,
+        action: 'updated',
+        before,
+        after: updated,
+      });
       await client.query('COMMIT');
       return response.json({ entry: updated });
     } catch (error) {
@@ -267,7 +332,10 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
     try {
       client = await pool.connect();
       await client.query('BEGIN');
-      const existing = await client.query('SELECT actual_cents, planned_cents, card_purchase_id, version FROM financial_entries WHERE id = $1 AND space_id = $2 FOR UPDATE', [request.params.id, request.auth.spaceId]);
+      const existing = await client.query(
+        'SELECT actual_cents, planned_cents, card_purchase_id, version FROM financial_entries WHERE id = $1 AND space_id = $2 FOR UPDATE',
+        [request.params.id, request.auth.spaceId],
+      );
       if (!existing.rows[0]) {
         await client.query('ROLLBACK');
         return response.status(404).json({ error: 'Lançamento não encontrado.' });
@@ -288,19 +356,32 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
       }
       if (existing.rows[0].actual_cents !== null) {
         await client.query('ROLLBACK');
-        return response.status(409).json({ error: 'Este lançamento já foi confirmado. Desfaça a confirmação antes de alterar o valor realizado.' });
+        return response
+          .status(409)
+          .json({ error: 'Este lançamento já foi confirmado. Desfaça a confirmação antes de alterar o valor realizado.' });
       }
       if (existing.rows[0].card_purchase_id && BigInt(existing.rows[0].planned_cents) !== BigInt(realization.actualCents)) {
         await client.query('ROLLBACK');
         return response.status(400).json({ error: 'Confirme a parcela pelo valor integral previsto.' });
       }
-      await client.query(`
+      await client.query(
+        `
         UPDATE financial_entries
         SET actual_cents = $1, realized_on = $2, updated_by_user_id = $3, updated_at = now(), version = version + 1
         WHERE id = $4 AND space_id = $5
-      `, [realization.actualCents, realization.realizedOn, request.auth.id, request.params.id, request.auth.spaceId]);
+      `,
+        [realization.actualCents, realization.realizedOn, request.auth.id, request.params.id, request.auth.spaceId],
+      );
       const confirmed = await selectEntry(client, request.auth.spaceId, request.params.id);
-      await recordEntryAudit(client, { spaceId: request.auth.spaceId, actorUserId: request.auth.id, actorName: request.auth.name, entry: confirmed, action: 'confirmed', before, after: confirmed });
+      await recordEntryAudit(client, {
+        spaceId: request.auth.spaceId,
+        actorUserId: request.auth.id,
+        actorName: request.auth.name,
+        entry: confirmed,
+        action: 'confirmed',
+        before,
+        after: confirmed,
+      });
       await client.query('COMMIT');
       return response.json({ entry: confirmed });
     } catch (error) {
@@ -317,7 +398,10 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
     try {
       client = await pool.connect();
       await client.query('BEGIN');
-      const existing = await client.query('SELECT actual_cents, card_purchase_id, version FROM financial_entries WHERE id = $1 AND space_id = $2 FOR UPDATE', [request.params.id, request.auth.spaceId]);
+      const existing = await client.query(
+        'SELECT actual_cents, card_purchase_id, version FROM financial_entries WHERE id = $1 AND space_id = $2 FOR UPDATE',
+        [request.params.id, request.auth.spaceId],
+      );
       if (!existing.rows[0]) {
         await client.query('ROLLBACK');
         return response.status(404).json({ error: 'Lançamento não encontrado.' });
@@ -340,13 +424,24 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
         await client.query('ROLLBACK');
         return response.status(409).json({ error: 'A confirmação de uma parcela de cartão não pode ser desfeita.' });
       }
-      await client.query(`
+      await client.query(
+        `
         UPDATE financial_entries
         SET actual_cents = NULL, realized_on = NULL, updated_by_user_id = $1, updated_at = now(), version = version + 1
         WHERE id = $2 AND space_id = $3
-      `, [request.auth.id, request.params.id, request.auth.spaceId]);
+      `,
+        [request.auth.id, request.params.id, request.auth.spaceId],
+      );
       const unconfirmed = await selectEntry(client, request.auth.spaceId, request.params.id);
-      await recordEntryAudit(client, { spaceId: request.auth.spaceId, actorUserId: request.auth.id, actorName: request.auth.name, entry: unconfirmed, action: 'unconfirmed', before, after: unconfirmed });
+      await recordEntryAudit(client, {
+        spaceId: request.auth.spaceId,
+        actorUserId: request.auth.id,
+        actorName: request.auth.name,
+        entry: unconfirmed,
+        action: 'unconfirmed',
+        before,
+        after: unconfirmed,
+      });
       await client.query('COMMIT');
       return response.json({ entry: unconfirmed });
     } catch (error) {
@@ -363,7 +458,10 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
     try {
       client = await pool.connect();
       await client.query('BEGIN');
-      const existing = await client.query('SELECT id, recurrence_rule_id, card_purchase_id, version FROM financial_entries WHERE id = $1 AND space_id = $2 AND NOT recurrence_skipped FOR UPDATE', [request.params.id, request.auth.spaceId]);
+      const existing = await client.query(
+        'SELECT id, recurrence_rule_id, card_purchase_id, version FROM financial_entries WHERE id = $1 AND space_id = $2 AND NOT recurrence_skipped FOR UPDATE',
+        [request.params.id, request.auth.spaceId],
+      );
       if (!existing.rows[0]) {
         await client.query('ROLLBACK');
         return response.status(404).json({ error: 'Lançamento não encontrado.' });
@@ -382,9 +480,19 @@ export function createEntriesRouter({ pool, secureCookies = false, csrfSecret })
         await client.query('ROLLBACK');
         return versionConflict(response, deleted);
       }
-      await recordEntryAudit(client, { spaceId: request.auth.spaceId, actorUserId: request.auth.id, actorName: request.auth.name, entry: deleted, action: 'deleted', before: deleted });
+      await recordEntryAudit(client, {
+        spaceId: request.auth.spaceId,
+        actorUserId: request.auth.id,
+        actorName: request.auth.name,
+        entry: deleted,
+        action: 'deleted',
+        before: deleted,
+      });
       if (existing.rows[0].recurrence_rule_id) {
-        await client.query("UPDATE financial_entries SET recurrence_skipped = true, recurrence_skip_reason = 'user', updated_by_user_id = $1, updated_at = now(), version = version + 1 WHERE id = $2 AND space_id = $3", [request.auth.id, request.params.id, request.auth.spaceId]);
+        await client.query(
+          "UPDATE financial_entries SET recurrence_skipped = true, recurrence_skip_reason = 'user', updated_by_user_id = $1, updated_at = now(), version = version + 1 WHERE id = $2 AND space_id = $3",
+          [request.auth.id, request.params.id, request.auth.spaceId],
+        );
       } else {
         await client.query('DELETE FROM financial_entries WHERE id = $1 AND space_id = $2', [request.params.id, request.auth.spaceId]);
       }

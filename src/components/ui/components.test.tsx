@@ -10,12 +10,14 @@ import { MoneyValue } from './money-value';
 
 describe('finance UI components', () => {
   it('shows exact reais with tone, sign and a compact variant that keeps the exact value', () => {
-    render(<>
-      <MoneyValue cents={2500} data-testid="plain" />
-      <MoneyValue cents="-123456" tone="balance" data-testid="balance" />
-      <MoneyValue cents={2500} signDisplay="always" tone="income" data-testid="signed" />
-      <MoneyValue cents="123456789" compact data-testid="compact" />
-    </>);
+    render(
+      <>
+        <MoneyValue cents={2500} data-testid="plain" />
+        <MoneyValue cents="-123456" tone="balance" data-testid="balance" />
+        <MoneyValue cents={2500} signDisplay="always" tone="income" data-testid="signed" />
+        <MoneyValue cents="123456789" compact data-testid="compact" />
+      </>,
+    );
 
     expect(screen.getByTestId('plain')).toHaveTextContent('R$ 25,00');
     expect(screen.getByTestId('balance')).toHaveTextContent('-R$ 1.234,56');
@@ -33,7 +35,13 @@ describe('finance UI components', () => {
   });
 
   it('styles each financial status with its semantic state tokens', () => {
-    render(<><StatusBadge status="paid" /><StatusBadge status="pending" /><StatusBadge status="late" /></>);
+    render(
+      <>
+        <StatusBadge status="paid" />
+        <StatusBadge status="pending" />
+        <StatusBadge status="late" />
+      </>,
+    );
 
     expect(screen.getByText('Pago')).toHaveClass('bg-success-soft', 'text-success');
     expect(screen.getByText('Pendente')).toHaveClass('bg-warning-soft', 'text-warning');
@@ -41,10 +49,12 @@ describe('finance UI components', () => {
   });
 
   it('announces errors as alerts and successes as status with semantic tokens', () => {
-    render(<>
-      <Alert title="Falha ao carregar">Tente novamente.</Alert>
-      <Alert variant="success">Backup verificado.</Alert>
-    </>);
+    render(
+      <>
+        <Alert title="Falha ao carregar">Tente novamente.</Alert>
+        <Alert variant="success">Backup verificado.</Alert>
+      </>,
+    );
 
     const error = screen.getByRole('alert');
     expect(error).toHaveTextContent('Falha ao carregarTente novamente.');

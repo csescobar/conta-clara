@@ -21,8 +21,14 @@ describe('backup status endpoint', () => {
 
   function app() {
     const sessions = new Map([
-      [hashOpaqueToken('admin-session'), { user_id: 'admin-id', display_name: 'Administradora', email: 'admin@example.test', role: 'admin', space_id: 'space-id' }],
-      [hashOpaqueToken('member-session'), { user_id: 'member-id', display_name: 'Membro', email: 'member@example.test', role: 'member', space_id: 'space-id' }],
+      [
+        hashOpaqueToken('admin-session'),
+        { user_id: 'admin-id', display_name: 'Administradora', email: 'admin@example.test', role: 'admin', space_id: 'space-id' },
+      ],
+      [
+        hashOpaqueToken('member-session'),
+        { user_id: 'member-id', display_name: 'Membro', email: 'member@example.test', role: 'member', space_id: 'space-id' },
+      ],
     ]);
     const pool = {
       query: async (_sql, [sessionHash]) => ({ rows: sessions.has(sessionHash) ? [sessions.get(sessionHash)] : [] }),
@@ -33,17 +39,20 @@ describe('backup status endpoint', () => {
   }
 
   it('returns only sanitized status fields to an administrator', async () => {
-    await writeFile(statusFile, JSON.stringify({
-      runState: 'warning',
-      lastAttemptAt: '2026-10-06T06:00:00.000Z',
-      lastSuccessAt: '2026-10-05T06:00:00.000Z',
-      lastSuccessDate: '2026-10-05',
-      lastFailureAt: '2026-10-06T06:00:00.000Z',
-      lastFailureCode: 'retention',
-      retentionPending: true,
-      accessToken: 'never-return-this',
-      password: 'never-return-this-either',
-    }));
+    await writeFile(
+      statusFile,
+      JSON.stringify({
+        runState: 'warning',
+        lastAttemptAt: '2026-10-06T06:00:00.000Z',
+        lastSuccessAt: '2026-10-05T06:00:00.000Z',
+        lastSuccessDate: '2026-10-05',
+        lastFailureAt: '2026-10-06T06:00:00.000Z',
+        lastFailureCode: 'retention',
+        retentionPending: true,
+        accessToken: 'never-return-this',
+        password: 'never-return-this-either',
+      }),
+    );
 
     const response = await request(app()).get('/api/backups/status').set('Cookie', 'cc_session=admin-session').expect(200);
 

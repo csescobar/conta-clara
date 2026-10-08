@@ -11,24 +11,38 @@ function response(body: unknown, status = 200) {
 
 function emptyDashboard(month: string) {
   const zero = { incomeCents: '0', expenseCents: '0', investmentCents: '0', resultCents: '0' };
-  return { month: `${month}-01`, planned: zero, realized: zero, charts: { expensesByCategory: [] }, upcoming: { count: 0, entries: [] }, overdue: { count: 0, entries: [] } };
+  return {
+    month: `${month}-01`,
+    planned: zero,
+    realized: zero,
+    charts: { expensesByCategory: [] },
+    upcoming: { count: 0, entries: [] },
+    overdue: { count: 0, entries: [] },
+  };
 }
 
 function renderPage() {
-  return render(<MemoryRouter><DashboardPage /></MemoryRouter>);
+  return render(
+    <MemoryRouter>
+      <DashboardPage />
+    </MemoryRouter>,
+  );
 }
 
 afterEach(() => vi.unstubAllGlobals());
 
 beforeEach(() => {
-  vi.stubGlobal('ResizeObserver', class {
-    constructor(private readonly callback: ResizeObserverCallback) {}
-    observe(target: Element) {
-      this.callback([{ target, contentRect: { width: 640, height: 320 } } as ResizeObserverEntry], this as unknown as ResizeObserver);
-    }
-    unobserve() {}
-    disconnect() {}
-  });
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      constructor(private readonly callback: ResizeObserverCallback) {}
+      observe(target: Element) {
+        this.callback([{ target, contentRect: { width: 640, height: 320 } } as ResizeObserverEntry], this as unknown as ResizeObserver);
+      }
+      unobserve() {}
+      disconnect() {}
+    },
+  );
 });
 
 describe('financial dashboard', () => {
@@ -37,12 +51,22 @@ describe('financial dashboard', () => {
       month: '2025-12-01',
       planned: { incomeCents: '105000', expenseCents: '30000', investmentCents: '10000', resultCents: '65000' },
       realized: { incomeCents: '12000', expenseCents: '40000', investmentCents: '0', resultCents: '-28000' },
-      charts: { expensesByCategory: [
-        { categoryId: 'home', categoryName: 'Moradia', plannedCents: '30000', realizedCents: '28000' },
-        { categoryId: 'food', categoryName: 'Alimentação', plannedCents: '0', realizedCents: '12000' },
-      ] },
-      upcoming: { count: 1, entries: [{ id: 'soon', description: 'Energia', competence_on: '2025-12-01', due_on: '2025-12-18', planned_cents: '9990' }] },
-      overdue: { count: 1, entries: [{ id: 'late', description: 'Internet atrasada', competence_on: '2025-11-01', due_on: '2025-11-18', planned_cents: '5490' }] },
+      charts: {
+        expensesByCategory: [
+          { categoryId: 'home', categoryName: 'Moradia', plannedCents: '30000', realizedCents: '28000' },
+          { categoryId: 'food', categoryName: 'Alimentação', plannedCents: '0', realizedCents: '12000' },
+        ],
+      },
+      upcoming: {
+        count: 1,
+        entries: [{ id: 'soon', description: 'Energia', competence_on: '2025-12-01', due_on: '2025-12-18', planned_cents: '9990' }],
+      },
+      overdue: {
+        count: 1,
+        entries: [
+          { id: 'late', description: 'Internet atrasada', competence_on: '2025-11-01', due_on: '2025-11-18', planned_cents: '5490' },
+        ],
+      },
     };
     const fetchMock = vi.fn().mockImplementation(async (input: string) => {
       const month = new URL(input, window.location.origin).searchParams.get('month') ?? '2026-10';

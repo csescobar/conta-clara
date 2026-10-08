@@ -15,7 +15,10 @@ export function recurrenceHorizonMonth(currentCompetence, monthsAhead = RECURREN
 }
 
 export function listCompetenceMonths(startCompetenceOn, endCompetenceOn, throughMonth) {
-  if (![startCompetenceOn, throughMonth].every((value) => monthPattern.test(value)) || (endCompetenceOn && !monthPattern.test(endCompetenceOn))) {
+  if (
+    ![startCompetenceOn, throughMonth].every((value) => monthPattern.test(value)) ||
+    (endCompetenceOn && !monthPattern.test(endCompetenceOn))
+  ) {
     throw new TypeError('As competências devem estar no formato AAAA-MM-01.');
   }
   const lastMonth = endCompetenceOn && endCompetenceOn < throughMonth ? endCompetenceOn : throughMonth;
@@ -42,13 +45,16 @@ export function recurrenceDueDate(competenceOn, dueDay) {
 }
 
 async function currentRecurrenceHorizon(client) {
-  const result = await client.query("SELECT to_char(date_trunc('month', now() AT TIME ZONE 'America/Sao_Paulo'), 'YYYY-MM-DD') AS current_month");
+  const result = await client.query(
+    "SELECT to_char(date_trunc('month', now() AT TIME ZONE 'America/Sao_Paulo'), 'YYYY-MM-DD') AS current_month",
+  );
   const currentMonth = result.rows[0].current_month;
   return { currentMonth, horizonMonth: recurrenceHorizonMonth(currentMonth) };
 }
 
 async function selectOccurrenceForAudit(client, spaceId, entryId) {
-  const result = await client.query(`
+  const result = await client.query(
+    `
     SELECT e.id, e.kind, e.description, e.category_id, c.name AS category_name,
       e.competence_on::text AS competence_on, e.due_on::text AS due_on,
       e.planned_cents, e.actual_cents, e.realized_on::text AS realized_on,
@@ -57,25 +63,31 @@ async function selectOccurrenceForAudit(client, spaceId, entryId) {
     LEFT JOIN categories c ON c.space_id = e.space_id AND c.id = e.category_id
     LEFT JOIN payment_methods pm ON pm.space_id = e.space_id AND pm.id = e.payment_method_id
     WHERE e.id = $1 AND e.space_id = $2
-  `, [entryId, spaceId]);
+  `,
+    [entryId, spaceId],
+  );
   return result.rows[0];
 }
 
 /** Reconciles only future, rule-owned projections inside the rolling forecast horizon. */
 export async function synchronizeRecurrenceOccurrencesInTransaction(client, { spaceId, ruleId, actorUserId, actorName }) {
   const { currentMonth, horizonMonth } = await currentRecurrenceHorizon(client);
-  const ruleResult = await client.query(`
+  const ruleResult = await client.query(
+    `
     SELECT id, kind, description, category_id, payment_method_id,
       start_competence_on::text AS start_competence_on,
       end_competence_on::text AS end_competence_on, due_day, planned_cents, notes,
       archived_at
     FROM recurrence_rules
     WHERE id = $1 AND space_id = $2
-  `, [ruleId, spaceId]);
+  `,
+    [ruleId, spaceId],
+  );
   const rule = ruleResult.rows[0];
   if (!rule) return { updated: 0, removed: 0, restored: 0 };
 
-  const occurrences = await client.query(`
+  const occurrences = await client.query(
+    `
     SELECT e.id, e.kind, e.description, e.category_id, c.name AS category_name,
       e.competence_on::text AS competence_on, e.due_on::text AS due_on,
       e.planned_cents, e.actual_cents, e.realized_on::text AS realized_on,
@@ -88,7 +100,9 @@ export async function synchronizeRecurrenceOccurrencesInTransaction(client, { sp
       AND e.competence_on > $3::date
     ORDER BY e.competence_on, e.id
     FOR UPDATE OF e
-  `, [spaceId, ruleId, currentMonth]);
+  `,
+    [spaceId, ruleId, currentMonth],
+  );
 
   const eligible = (entry) => !entry.recurrence_overridden && entry.actual_cents === null;
   let updated = 0;
@@ -98,22 +112,35 @@ export async function synchronizeRecurrenceOccurrencesInTransaction(client, { sp
   for (const entry of occurrences.rows) {
     if (!eligible(entry)) continue;
     const competenceOn = entry.competence_on;
-    const inRulePeriod = !rule.archived_at
-      && competenceOn >= rule.start_competence_on
-      && (!rule.end_competence_on || competenceOn <= rule.end_competence_on);
+    const inRulePeriod =
+      !rule.archived_at && competenceOn >= rule.start_competence_on && (!rule.end_competence_on || competenceOn <= rule.end_competence_on);
     const inForecast = competenceOn <= horizonMonth;
     const shouldBeVisible = inRulePeriod && inForecast;
 
     if (entry.recurrence_skipped) {
       if (entry.recurrence_skip_reason !== 'rule' || !shouldBeVisible) continue;
-      await client.query(`
+      await client.query(
+        `
         UPDATE financial_entries
         SET kind = $1, description = $2, category_id = $3, due_on = $4,
           planned_cents = $5, payment_method_id = $6, notes = $7,
           recurrence_skipped = false, recurrence_skip_reason = NULL,
           updated_by_user_id = $8, updated_at = now(), version = version + 1
         WHERE id = $9 AND space_id = $10
-      `, [rule.kind, rule.description, rule.category_id, recurrenceDueDate(competenceOn, rule.due_day), rule.planned_cents, rule.payment_method_id, rule.notes, actorUserId, entry.id, spaceId]);
+      `,
+        [
+          rule.kind,
+          rule.description,
+          rule.category_id,
+          recurrenceDueDate(competenceOn, rule.due_day),
+          rule.planned_cents,
+          rule.payment_method_id,
+          rule.notes,
+          actorUserId,
+          entry.id,
+          spaceId,
+        ],
+      );
       const after = await selectOccurrenceForAudit(client, spaceId, entry.id);
       await recordEntryAudit(client, { spaceId, actorUserId, actorName, entry: after, action: 'updated', before: entry, after });
       restored += 1;
@@ -122,32 +149,50 @@ export async function synchronizeRecurrenceOccurrencesInTransaction(client, { sp
 
     if (!shouldBeVisible) {
       await recordEntryAudit(client, { spaceId, actorUserId, actorName, entry, action: 'deleted', before: entry });
-      await client.query(`
+      await client.query(
+        `
         UPDATE financial_entries
         SET recurrence_skipped = true, recurrence_skip_reason = 'rule',
           updated_by_user_id = $1, updated_at = now(), version = version + 1
         WHERE id = $2 AND space_id = $3
-      `, [actorUserId, entry.id, spaceId]);
+      `,
+        [actorUserId, entry.id, spaceId],
+      );
       removed += 1;
       continue;
     }
 
     const dueOn = recurrenceDueDate(competenceOn, rule.due_day);
-    const hasChanges = entry.kind !== rule.kind
-      || entry.description !== rule.description
-      || entry.category_id !== rule.category_id
-      || entry.due_on !== dueOn
-      || String(entry.planned_cents) !== String(rule.planned_cents)
-      || entry.payment_method_id !== rule.payment_method_id
-      || entry.notes !== rule.notes;
+    const hasChanges =
+      entry.kind !== rule.kind ||
+      entry.description !== rule.description ||
+      entry.category_id !== rule.category_id ||
+      entry.due_on !== dueOn ||
+      String(entry.planned_cents) !== String(rule.planned_cents) ||
+      entry.payment_method_id !== rule.payment_method_id ||
+      entry.notes !== rule.notes;
     if (!hasChanges) continue;
 
-    await client.query(`
+    await client.query(
+      `
       UPDATE financial_entries SET kind = $1, description = $2, category_id = $3,
         due_on = $4, planned_cents = $5, payment_method_id = $6, notes = $7,
         updated_by_user_id = $8, updated_at = now(), version = version + 1
       WHERE id = $9 AND space_id = $10
-    `, [rule.kind, rule.description, rule.category_id, dueOn, rule.planned_cents, rule.payment_method_id, rule.notes, actorUserId, entry.id, spaceId]);
+    `,
+      [
+        rule.kind,
+        rule.description,
+        rule.category_id,
+        dueOn,
+        rule.planned_cents,
+        rule.payment_method_id,
+        rule.notes,
+        actorUserId,
+        entry.id,
+        spaceId,
+      ],
+    );
     const after = await selectOccurrenceForAudit(client, spaceId, entry.id);
     await recordEntryAudit(client, { spaceId, actorUserId, actorName, entry: after, action: 'updated', before: entry, after });
     updated += 1;
@@ -156,11 +201,15 @@ export async function synchronizeRecurrenceOccurrencesInTransaction(client, { sp
   return { updated, removed, restored };
 }
 
-async function generateForClient(client, { spaceId = null, ruleId = null, throughMonth = null, actorUserId = null, actorName = null } = {}) {
+async function generateForClient(
+  client,
+  { spaceId = null, ruleId = null, throughMonth = null, actorUserId = null, actorName = null } = {},
+) {
   const horizon = throughMonth ? null : await currentRecurrenceHorizon(client);
   const lastMonth = throughMonth ?? horizon.horizonMonth;
   if (!monthPattern.test(lastMonth)) throw new TypeError('A competência final precisa ser o primeiro dia do mês.');
-  const rules = await client.query(`
+  const rules = await client.query(
+    `
     SELECT r.id, r.space_id, r.created_by_user_id, r.kind, r.description, r.category_id,
       r.payment_method_id, r.start_competence_on::text AS start_competence_on,
       r.end_competence_on::text AS end_competence_on, r.due_day, r.planned_cents,
@@ -172,13 +221,16 @@ async function generateForClient(client, { spaceId = null, ruleId = null, throug
       AND ($2::uuid IS NULL OR r.id = $2)
     ORDER BY r.space_id, r.id
     FOR UPDATE OF r
-  `, [spaceId, ruleId]);
+  `,
+    [spaceId, ruleId],
+  );
   let generated = 0;
 
   for (const rule of rules.rows) {
     const months = listCompetenceMonths(rule.start_competence_on, rule.end_competence_on, lastMonth);
     for (const competenceOn of months) {
-      const inserted = await client.query(`
+      const inserted = await client.query(
+        `
         INSERT INTO financial_entries (
           space_id, created_by_user_id, updated_by_user_id, kind, description, category_id,
           competence_on, due_on, planned_cents, payment_method_id, notes, recurrence_rule_id
@@ -186,10 +238,25 @@ async function generateForClient(client, { spaceId = null, ruleId = null, throug
         ON CONFLICT (space_id, recurrence_rule_id, competence_on)
           WHERE recurrence_rule_id IS NOT NULL DO NOTHING
         RETURNING id
-      `, [rule.space_id, rule.created_by_user_id, rule.kind, rule.description, rule.category_id, competenceOn, recurrenceDueDate(competenceOn, rule.due_day), rule.planned_cents, rule.payment_method_id, rule.notes, rule.id]);
+      `,
+        [
+          rule.space_id,
+          rule.created_by_user_id,
+          rule.kind,
+          rule.description,
+          rule.category_id,
+          competenceOn,
+          recurrenceDueDate(competenceOn, rule.due_day),
+          rule.planned_cents,
+          rule.payment_method_id,
+          rule.notes,
+          rule.id,
+        ],
+      );
       if (!inserted.rows[0]) continue;
 
-      const entryResult = await client.query(`
+      const entryResult = await client.query(
+        `
         SELECT e.id, e.kind, e.description, e.category_id, c.name AS category_name,
           e.competence_on::text AS competence_on, e.due_on::text AS due_on,
           e.planned_cents, e.actual_cents, e.realized_on::text AS realized_on,
@@ -199,7 +266,9 @@ async function generateForClient(client, { spaceId = null, ruleId = null, throug
         LEFT JOIN categories c ON c.space_id = e.space_id AND c.id = e.category_id
         LEFT JOIN payment_methods pm ON pm.space_id = e.space_id AND pm.id = e.payment_method_id
         WHERE e.id = $1 AND e.space_id = $2
-      `, [inserted.rows[0].id, rule.space_id]);
+      `,
+        [inserted.rows[0].id, rule.space_id],
+      );
       const entry = entryResult.rows[0];
       await recordEntryAudit(client, {
         spaceId: rule.space_id,

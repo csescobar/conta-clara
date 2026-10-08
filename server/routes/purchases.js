@@ -12,7 +12,9 @@ export function createPurchasesRouter({ pool, secureCookies = false }) {
 
   router.get('/', async (request, response, next) => {
     try {
-      const result = await pool.query('SELECT id FROM card_purchases WHERE space_id = $1 ORDER BY purchase_on DESC, created_at DESC, id', [request.auth.spaceId]);
+      const result = await pool.query('SELECT id FROM card_purchases WHERE space_id = $1 ORDER BY purchase_on DESC, created_at DESC, id', [
+        request.auth.spaceId,
+      ]);
       const purchases = [];
       for (const { id } of result.rows) purchases.push(await selectPurchase(pool, request.auth.spaceId, id));
       return response.json({ purchases });

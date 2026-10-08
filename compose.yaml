@@ -18,8 +18,8 @@ services:
     environment:
       NODE_ENV: production
       HOST: 0.0.0.0
-      PORT: "3001"
-      COOKIE_SECURE: "true"
+      PORT: '3001'
+      COOKIE_SECURE: 'true'
       DATABASE_URL: ${DATABASE_URL:?Defina DATABASE_URL no arquivo .env}
       BACKUP_STATUS_FILE: /var/lib/conta-clara-backup/status.json
     volumes:
@@ -128,7 +128,7 @@ services:
       RCLONE_CACHE_DIR: /tmp/rclone-cache
       BACKUP_DATABASE_URL: ${MIGRATION_DATABASE_URL:-${DATABASE_URL:?Defina DATABASE_URL no arquivo .env}}
       RCLONE_CONFIG: /run/rclone/rclone.conf
-      RCLONE_REMOTE: "conta-clara-crypt:"
+      RCLONE_REMOTE: 'conta-clara-crypt:'
       BACKUP_STATUS_FILE: /status/status.json
     volumes:
       - ./secrets/rclone:/run/rclone

@@ -5,10 +5,22 @@ import userEvent from '@testing-library/user-event';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { AuthContext } from '../auth/auth-gate';
 import { OfflineWorkspaceProvider, useOfflineWorkspace } from '../offline/offline-context';
-import { loadOfflineWorkspace, queueOfflineCardChange, saveOfflineCards, type OfflineCard, type OfflineScope } from '../offline/offline-store';
+import {
+  loadOfflineWorkspace,
+  queueOfflineCardChange,
+  saveOfflineCards,
+  type OfflineCard,
+  type OfflineScope,
+} from '../offline/offline-store';
 import { CardSettings } from './card-settings';
 
-const user = { id: 'card-settings-user', name: 'Pessoa teste', email: 'pessoa@example.test', role: 'member', spaceId: 'card-settings-space' };
+const user = {
+  id: 'card-settings-user',
+  name: 'Pessoa teste',
+  email: 'pessoa@example.test',
+  role: 'member',
+  spaceId: 'card-settings-space',
+};
 const csrfToken = 'csrf-card-settings-test';
 const scope: OfflineScope = { userId: user.id, spaceId: user.spaceId };
 let generatedId = 0;
@@ -19,16 +31,26 @@ function jsonResponse(body: unknown, status = 200) {
 
 function card(id: string, name: string, version = 1): OfflineCard {
   return {
-    id, name, holder_user_id: user.id, holder_name: user.name, closing_day: 25, due_day: 5,
-    archived_at: null, created_by_user_id: user.id, updated_by_user_id: user.id, version,
+    id,
+    name,
+    holder_user_id: user.id,
+    holder_name: user.name,
+    closing_day: 25,
+    due_day: 5,
+    archived_at: null,
+    created_by_user_id: user.id,
+    updated_by_user_id: user.id,
+    version,
   };
 }
 
 function renderCardSettings(offline = false, activeUser = user, activeScope = scope) {
-  const content = <AuthContext.Provider value={{ user: activeUser, csrfToken }}><CardSettings /></AuthContext.Provider>;
-  return offline
-    ? render(<OfflineWorkspaceProvider scope={activeScope}>{content}</OfflineWorkspaceProvider>)
-    : render(content);
+  const content = (
+    <AuthContext.Provider value={{ user: activeUser, csrfToken }}>
+      <CardSettings />
+    </AuthContext.Provider>
+  );
+  return offline ? render(<OfflineWorkspaceProvider scope={activeScope}>{content}</OfflineWorkspaceProvider>) : render(content);
 }
 
 function SyncProbe() {
@@ -36,7 +58,11 @@ function SyncProbe() {
   useEffect(() => {
     if (offline?.ready) void offline.sync(csrfToken);
   }, [offline?.ready, offline?.sync]);
-  return <button type="button" onClick={() => void offline?.sync(csrfToken)}>Retomar sincronização</button>;
+  return (
+    <button type="button" onClick={() => void offline?.sync(csrfToken)}>
+      Retomar sincronização
+    </button>
+  );
 }
 
 beforeAll(() => {
@@ -55,7 +81,12 @@ describe('shared card settings', () => {
       if (input === '/api/members' && !init?.method) return jsonResponse({ members });
       const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
       if (input === '/api/cards' && init?.method === 'POST') {
-        const created = { ...card('created-card', String(body.name)), holder_user_id: String(body.holderUserId), closing_day: Number(body.closingDay), due_day: Number(body.dueDay) };
+        const created = {
+          ...card('created-card', String(body.name)),
+          holder_user_id: String(body.holderUserId),
+          closing_day: Number(body.closingDay),
+          due_day: Number(body.dueDay),
+        };
         cards.push(created);
         return jsonResponse({ card: created }, 201);
       }
@@ -101,7 +132,9 @@ describe('shared card settings', () => {
   it('queues a new shared card locally while offline without sending it to the API', async () => {
     Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
     await saveOfflineCards(scope, [], [{ id: user.id, name: user.name, is_active: true }]);
-    const fetchMock = vi.fn(async () => { throw new TypeError('offline'); });
+    const fetchMock = vi.fn(async () => {
+      throw new TypeError('offline');
+    });
     vi.stubGlobal('fetch', fetchMock);
     const userEventInstance = userEvent.setup();
     renderCardSettings(true);
@@ -114,7 +147,10 @@ describe('shared card settings', () => {
     await waitFor(async () => expect((await loadOfflineWorkspace(scope)).cardOperations).toHaveLength(1));
     const snapshot = await loadOfflineWorkspace(scope);
     expect(snapshot.cardOperations[0]).toMatchObject({
-      userId: scope.userId, spaceId: scope.spaceId, kind: 'create', baseVersion: null,
+      userId: scope.userId,
+      spaceId: scope.spaceId,
+      kind: 'create',
+      baseVersion: null,
       payload: { name: 'Cartão offline', holderUserId: user.id, closingDay: 25, dueDay: 5, archived: false },
     });
     expect(fetchMock).not.toHaveBeenCalled();
@@ -126,7 +162,9 @@ describe('shared card settings', () => {
     const original = { ...card('cached-card', 'Cartão salvo'), holder_user_id: activeUser.id, holder_name: activeUser.name };
     Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
     await saveOfflineCards(activeScope, [original], [{ id: activeUser.id, name: activeUser.name, is_active: true }]);
-    const fetchMock = vi.fn(async () => { throw new TypeError('offline'); });
+    const fetchMock = vi.fn(async () => {
+      throw new TypeError('offline');
+    });
     vi.stubGlobal('fetch', fetchMock);
     const userEventInstance = userEvent.setup();
     renderCardSettings(true, activeUser, activeScope);
@@ -166,7 +204,11 @@ describe('shared card settings', () => {
     const onSessionExpired = vi.fn();
     window.addEventListener('conta-clara:session-expired', onSessionExpired);
     const userEventInstance = userEvent.setup();
-    render(<OfflineWorkspaceProvider scope={activeScope}><SyncProbe /></OfflineWorkspaceProvider>);
+    render(
+      <OfflineWorkspaceProvider scope={activeScope}>
+        <SyncProbe />
+      </OfflineWorkspaceProvider>,
+    );
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     expect(onSessionExpired).toHaveBeenCalledTimes(1);

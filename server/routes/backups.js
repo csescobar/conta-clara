@@ -21,13 +21,9 @@ const failureMessages = {
 };
 
 function publicStatus(status) {
-  const code = Object.hasOwn(failureMessages, status?.lastFailureCode)
-    ? status.lastFailureCode
-    : null;
+  const code = Object.hasOwn(failureMessages, status?.lastFailureCode) ? status.lastFailureCode : null;
   return {
-    runState: ['never', 'running', 'success', 'warning', 'failed'].includes(status?.runState)
-      ? status.runState
-      : 'never',
+    runState: ['never', 'running', 'success', 'warning', 'failed'].includes(status?.runState) ? status.runState : 'never',
     lastAttemptAt: typeof status?.lastAttemptAt === 'string' ? status.lastAttemptAt : null,
     lastSuccessAt: typeof status?.lastSuccessAt === 'string' ? status.lastSuccessAt : null,
     lastSuccessDate: typeof status?.lastSuccessDate === 'string' ? status.lastSuccessDate : null,

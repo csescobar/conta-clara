@@ -32,9 +32,11 @@ export function createDashboardRouter({ pool, secureCookies = false }) {
       await generateRecurrenceOccurrences(pool, { spaceId: request.auth.spaceId });
       const monthStart = requestedMonth
         ? `${requestedMonth}-01`
-        : (await pool.query("SELECT to_char(date_trunc('month', now() AT TIME ZONE 'America/Sao_Paulo'), 'YYYY-MM-DD') AS month_start")).rows[0].month_start;
+        : (await pool.query("SELECT to_char(date_trunc('month', now() AT TIME ZONE 'America/Sao_Paulo'), 'YYYY-MM-DD') AS month_start"))
+            .rows[0].month_start;
 
-      const summaryResult = await pool.query(`
+      const summaryResult = await pool.query(
+        `
         SELECT
           COALESCE(SUM(planned_cents) FILTER (WHERE kind = 'income' AND competence_on >= $2::date AND competence_on < ($2::date + interval '1 month')), 0)::text AS planned_income_cents,
           COALESCE(SUM(planned_cents) FILTER (WHERE kind = 'expense' AND (
@@ -52,10 +54,13 @@ export function createDashboardRouter({ pool, secureCookies = false }) {
             OR (card_purchase_id IS NOT NULL AND due_on >= $2::date AND due_on < ($2::date + interval '1 month'))
             OR (realized_on >= $2::date AND realized_on < ($2::date + interval '1 month'))
           )
-      `, [request.auth.spaceId, monthStart]);
+      `,
+        [request.auth.spaceId, monthStart],
+      );
 
       const [upcomingResult, overdueResult, expenseCategoriesResult] = await Promise.all([
-        pool.query(`
+        pool.query(
+          `
           SELECT count(*) OVER ()::integer AS total_count, id, description,
             competence_on::text AS competence_on, due_on::text AS due_on, planned_cents::text AS planned_cents
           FROM financial_entries
@@ -64,8 +69,11 @@ export function createDashboardRouter({ pool, secureCookies = false }) {
             AND due_on <= (now() AT TIME ZONE 'America/Sao_Paulo')::date + interval '7 days'
           ORDER BY due_on, lower(description), id
           LIMIT 5
-        `, [request.auth.spaceId]),
-        pool.query(`
+        `,
+          [request.auth.spaceId],
+        ),
+        pool.query(
+          `
           SELECT count(*) OVER ()::integer AS total_count, id, description,
             competence_on::text AS competence_on, due_on::text AS due_on, planned_cents::text AS planned_cents
           FROM financial_entries
@@ -73,8 +81,11 @@ export function createDashboardRouter({ pool, secureCookies = false }) {
             AND due_on < (now() AT TIME ZONE 'America/Sao_Paulo')::date
           ORDER BY due_on DESC, lower(description), id
           LIMIT 5
-        `, [request.auth.spaceId]),
-        pool.query(`
+        `,
+          [request.auth.spaceId],
+        ),
+        pool.query(
+          `
           SELECT c.id AS category_id,
             COALESCE(c.name, 'Sem categoria') AS category_name,
             COALESCE(SUM(e.planned_cents) FILTER (WHERE
@@ -103,7 +114,9 @@ export function createDashboardRouter({ pool, secureCookies = false }) {
             ), 0)
               + COALESCE(SUM(e.actual_cents) FILTER (WHERE e.realized_on >= $2::date AND e.realized_on < ($2::date + interval '1 month')), 0) DESC,
             lower(COALESCE(c.name, 'Sem categoria'))
-        `, [request.auth.spaceId, monthStart]),
+        `,
+          [request.auth.spaceId, monthStart],
+        ),
       ]);
 
       const totals = summaryResult.rows[0];

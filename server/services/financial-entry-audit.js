@@ -18,10 +18,13 @@ export async function recordEntryAudit(client, { spaceId, actorUserId, actorName
   const details = {};
   if (before) details.before = auditSnapshot(before);
   if (after) details.after = auditSnapshot(after);
-  await client.query(`
+  await client.query(
+    `
     INSERT INTO financial_entry_audit (
       space_id, entry_id, actor_user_id, actor_display_name,
       action, entry_kind, entry_description, details
     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-  `, [spaceId, entry.id, actorUserId, actorName, action, entry.kind, entry.description, JSON.stringify(details)]);
+  `,
+    [spaceId, entry.id, actorUserId, actorName, action, entry.kind, entry.description, JSON.stringify(details)],
+  );
 }

@@ -18,10 +18,21 @@ export type CsvFinancialEntry = {
 };
 
 const headers = [
-  'Tipo', 'Descrição', 'Categoria', 'Competência (AAAA-MM-DD)', 'Vencimento (AAAA-MM-DD)',
-  'Valor previsto (R$)', 'Valor realizado (R$)', 'Realizado em (AAAA-MM-DD)',
-  'Forma de pagamento', 'Situação', 'Observações', 'Cartão', 'Fatura (MM/AAAA)',
-  'Parcela', 'Situação da fatura',
+  'Tipo',
+  'Descrição',
+  'Categoria',
+  'Competência (AAAA-MM-DD)',
+  'Vencimento (AAAA-MM-DD)',
+  'Valor previsto (R$)',
+  'Valor realizado (R$)',
+  'Realizado em (AAAA-MM-DD)',
+  'Forma de pagamento',
+  'Situação',
+  'Observações',
+  'Cartão',
+  'Fatura (MM/AAAA)',
+  'Parcela',
+  'Situação da fatura',
 ];
 const kindLabels = { income: 'Receita', expense: 'Despesa', investment: 'Aporte' } as const;
 const statusLabels = { pending: 'Em aberto', late: 'Atrasado', paid: 'Pago' } as const;
@@ -82,7 +93,5 @@ export function downloadCsv(csv: string, filename: string) {
 }
 
 export function entriesCsvFilename(month: string) {
-  return /^\d{4}-(0[1-9]|1[0-2])$/.test(month)
-    ? `conta-clara-lancamentos-${month}.csv`
-    : 'conta-clara-lancamentos.csv';
+  return /^\d{4}-(0[1-9]|1[0-2])$/.test(month) ? `conta-clara-lancamentos-${month}.csv` : 'conta-clara-lancamentos.csv';
 }

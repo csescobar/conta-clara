@@ -6,7 +6,10 @@ import { AuthContext } from '../auth/auth-gate';
 import { currentMonthInputValue, formatBrazilianMoney } from '../lib/finance';
 import { NewTransactionPage, TransactionsPage } from './entries-pages';
 
-const auth = { user: { id: 'member-id', name: 'Membro', email: 'member@example.test', role: 'member', spaceId: 'space-id' }, csrfToken: 'csrf-entry-test' };
+const auth = {
+  user: { id: 'member-id', name: 'Membro', email: 'member@example.test', role: 'member', spaceId: 'space-id' },
+  csrfToken: 'csrf-entry-test',
+};
 const categories = [
   { id: 'expense-category', name: 'Moradia', kind: 'expense', expense_class: 'fixed' },
   { id: 'income-category', name: 'Renda', kind: 'income', expense_class: null },
@@ -18,7 +21,17 @@ function response(body: unknown, status = 200) {
 }
 
 function renderPage(path: string) {
-  return render(<MemoryRouter initialEntries={[path]}><AuthContext.Provider value={auth}><Routes><Route path="/lancamentos" element={<TransactionsPage />} /><Route path="/lancamentos/novo" element={<NewTransactionPage />} /><Route path="/lancamentos/:id/editar" element={<NewTransactionPage />} /></Routes></AuthContext.Provider></MemoryRouter>);
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <AuthContext.Provider value={auth}>
+        <Routes>
+          <Route path="/lancamentos" element={<TransactionsPage />} />
+          <Route path="/lancamentos/novo" element={<NewTransactionPage />} />
+          <Route path="/lancamentos/:id/editar" element={<NewTransactionPage />} />
+        </Routes>
+      </AuthContext.Provider>
+    </MemoryRouter>,
+  );
 }
 
 const originalCreateObjectURL = Object.getOwnPropertyDescriptor(URL, 'createObjectURL');
@@ -38,17 +51,33 @@ describe('financial entry pages', () => {
     const [year, month] = current.split('-').map(Number);
     const nextMonth = new Date(Date.UTC(year, month, 1)).toISOString().slice(0, 7);
     const listEntry = (id: string, description: string, competence: string) => ({
-      id, kind: 'expense', description, category_id: 'expense-category', category_name: 'Moradia', competence_on: `${competence}-01`,
-      due_on: `${competence}-10`, planned_cents: '1000', actual_cents: null, realized_on: null, payment_method_id: null,
-      payment_method_name: null, notes: null, created_by_user_id: 'member-id', updated_by_user_id: 'member-id', status: 'pending',
+      id,
+      kind: 'expense',
+      description,
+      category_id: 'expense-category',
+      category_name: 'Moradia',
+      competence_on: `${competence}-01`,
+      due_on: `${competence}-10`,
+      planned_cents: '1000',
+      actual_cents: null,
+      realized_on: null,
+      payment_method_id: null,
+      payment_method_name: null,
+      notes: null,
+      created_by_user_id: 'member-id',
+      updated_by_user_id: 'member-id',
+      status: 'pending',
     });
     let answerCurrentMonth: (() => void) | undefined;
     const fetchMock = vi.fn().mockImplementation(async (input: string) => {
       if (input === '/api/catalog/categories?includeArchived=true') return response({ categories });
       if (input === `/api/entries?month=${current}`) {
-        return new Promise((resolve) => { answerCurrentMonth = () => resolve(response({ entries: [listEntry('slow', 'Conta do mês anterior fictícia', current)] })); });
+        return new Promise((resolve) => {
+          answerCurrentMonth = () => resolve(response({ entries: [listEntry('slow', 'Conta do mês anterior fictícia', current)] }));
+        });
       }
-      if (input === `/api/entries?month=${nextMonth}`) return response({ entries: [listEntry('fast', 'Conta do mês escolhido fictícia', nextMonth)] });
+      if (input === `/api/entries?month=${nextMonth}`)
+        return response({ entries: [listEntry('fast', 'Conta do mês escolhido fictícia', nextMonth)] });
       throw new Error(`Unexpected request: ${input}`);
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -71,11 +100,23 @@ describe('financial entry pages', () => {
     const [year, month] = current.split('-').map(Number);
     const futureMonth = new Date(Date.UTC(year, month, 1)).toISOString().slice(0, 7);
     const occurrence = {
-      id: 'future-recurrence', kind: 'expense', description: 'Internet mensal projetada',
-      category_id: 'expense-category', category_name: 'Moradia', competence_on: `${futureMonth}-01`,
-      due_on: `${futureMonth}-10`, planned_cents: '8990', actual_cents: null, realized_on: null,
-      payment_method_id: 'payment-method', payment_method_name: 'Pix', notes: null,
-      recurrence_rule_id: 'rule-fixture', created_by_user_id: 'member-id', updated_by_user_id: 'member-id', status: 'pending',
+      id: 'future-recurrence',
+      kind: 'expense',
+      description: 'Internet mensal projetada',
+      category_id: 'expense-category',
+      category_name: 'Moradia',
+      competence_on: `${futureMonth}-01`,
+      due_on: `${futureMonth}-10`,
+      planned_cents: '8990',
+      actual_cents: null,
+      realized_on: null,
+      payment_method_id: 'payment-method',
+      payment_method_name: 'Pix',
+      notes: null,
+      recurrence_rule_id: 'rule-fixture',
+      created_by_user_id: 'member-id',
+      updated_by_user_id: 'member-id',
+      status: 'pending',
     };
     const fetchMock = vi.fn().mockImplementation(async (input: string) => {
       if (input === '/api/catalog/categories?includeArchived=true') return response({ categories });
@@ -98,10 +139,22 @@ describe('financial entry pages', () => {
 
   it('exports only the currently filtered, space-authorized list as a CSV download', async () => {
     const entry = {
-      id: 'csv-entry', kind: 'expense', description: 'Conta fictícia', category_id: 'expense-category', category_name: 'Moradia',
-      competence_on: `${currentMonthInputValue()}-01`, due_on: '2026-10-18', planned_cents: '123456', actual_cents: null,
-      realized_on: null, payment_method_id: null, payment_method_name: null, notes: null,
-      created_by_user_id: 'member-id', updated_by_user_id: 'member-id', status: 'pending',
+      id: 'csv-entry',
+      kind: 'expense',
+      description: 'Conta fictícia',
+      category_id: 'expense-category',
+      category_name: 'Moradia',
+      competence_on: `${currentMonthInputValue()}-01`,
+      due_on: '2026-10-18',
+      planned_cents: '123456',
+      actual_cents: null,
+      realized_on: null,
+      payment_method_id: null,
+      payment_method_name: null,
+      notes: null,
+      created_by_user_id: 'member-id',
+      updated_by_user_id: 'member-id',
+      status: 'pending',
     };
     const requestedUrls: string[] = [];
     const fetchMock = vi.fn().mockImplementation(async (input: string) => {
@@ -117,7 +170,9 @@ describe('financial entry pages', () => {
     Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL });
     Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeObjectURL });
     const downloadedNames: string[] = [];
-    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) { downloadedNames.push(this.download); });
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      downloadedNames.push(this.download);
+    });
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
     renderPage('/lancamentos');
@@ -171,20 +226,43 @@ describe('financial entry pages', () => {
     expect(await screen.findByRole('heading', { name: 'Lançamentos' })).toBeInTheDocument();
     const create = fetchMock.mock.calls.find(([input, init]) => input === '/api/entries' && init?.method === 'POST');
     expect(JSON.parse(String(create?.[1]?.body))).toMatchObject({
-      kind: 'expense', description: 'Conta de energia', categoryId: 'expense-category',
-      competenceOn: `${currentMonthInputValue()}-01`, dueOn: '2026-02-28', plannedCents: 123456,
-      paymentMethodId: 'payment-method', notes: null,
+      kind: 'expense',
+      description: 'Conta de energia',
+      categoryId: 'expense-category',
+      competenceOn: `${currentMonthInputValue()}-01`,
+      dueOn: '2026-02-28',
+      plannedCents: 123456,
+      paymentMethodId: 'payment-method',
+      notes: null,
     });
     expect(create?.[1]?.headers).toMatchObject({ 'X-CSRF-Token': 'csrf-entry-test' });
   });
 
   it('filters the shared list and deletes an entry after confirmation', async () => {
-    const archivedCategory = { id: 'old-category', name: 'Categoria antiga', kind: 'expense', expense_class: 'fixed', archived_at: '2026-01-01' };
+    const archivedCategory = {
+      id: 'old-category',
+      name: 'Categoria antiga',
+      kind: 'expense',
+      expense_class: 'fixed',
+      archived_at: '2026-01-01',
+    };
     const entry = {
-      id: 'entry-id', kind: 'expense', description: 'Conta de energia', category_id: 'expense-category', category_name: 'Moradia',
-      competence_on: `${currentMonthInputValue()}-01`, due_on: '2026-10-10', planned_cents: '123456', actual_cents: null,
-      realized_on: null, payment_method_id: null, payment_method_name: null, notes: null,
-      created_by_user_id: 'member-id', updated_by_user_id: 'member-id', status: 'pending',
+      id: 'entry-id',
+      kind: 'expense',
+      description: 'Conta de energia',
+      category_id: 'expense-category',
+      category_name: 'Moradia',
+      competence_on: `${currentMonthInputValue()}-01`,
+      due_on: '2026-10-10',
+      planned_cents: '123456',
+      actual_cents: null,
+      realized_on: null,
+      payment_method_id: null,
+      payment_method_name: null,
+      notes: null,
+      created_by_user_id: 'member-id',
+      updated_by_user_id: 'member-id',
+      status: 'pending',
     };
     let hasEntry = true;
     const fetchMock = vi.fn().mockImplementation(async (input: string, init?: RequestInit) => {
@@ -204,7 +282,13 @@ describe('financial entry pages', () => {
     expect(screen.getByRole('option', { name: 'Categoria antiga (arquivada)' })).toBeInTheDocument();
     await user.selectOptions(screen.getByRole('combobox', { name: 'Categoria' }), 'expense-category');
     await user.selectOptions(screen.getByRole('combobox', { name: 'Situação' }), 'pending');
-    await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => input === `/api/entries?month=${currentMonthInputValue()}&categoryId=expense-category&status=pending`)).toBe(true));
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(
+          ([input]) => input === `/api/entries?month=${currentMonthInputValue()}&categoryId=expense-category&status=pending`,
+        ),
+      ).toBe(true),
+    );
     expect(screen.getByRole('link', { name: 'Editar Conta de energia' })).toHaveAttribute('href', '/lancamentos/entry-id/editar');
 
     await user.click(screen.getByRole('button', { name: 'Excluir Conta de energia' }));
@@ -218,19 +302,40 @@ describe('financial entry pages', () => {
 
   it('confirms a different realized amount in a later month and can undo it', async () => {
     const pendingEntry = {
-      id: 'entry-id', kind: 'expense', description: 'Conta de energia', category_id: 'expense-category', category_name: 'Moradia',
-      competence_on: `${currentMonthInputValue()}-01`, due_on: '2026-10-05', planned_cents: '123456', actual_cents: null,
-      realized_on: null, payment_method_id: null, payment_method_name: null, notes: null,
-      created_by_user_id: 'member-id', updated_by_user_id: 'member-id', status: 'late',
+      id: 'entry-id',
+      kind: 'expense',
+      description: 'Conta de energia',
+      category_id: 'expense-category',
+      category_name: 'Moradia',
+      competence_on: `${currentMonthInputValue()}-01`,
+      due_on: '2026-10-05',
+      planned_cents: '123456',
+      actual_cents: null,
+      realized_on: null,
+      payment_method_id: null,
+      payment_method_name: null,
+      notes: null,
+      created_by_user_id: 'member-id',
+      updated_by_user_id: 'member-id',
+      status: 'late',
     };
-    type EntryState = Omit<typeof pendingEntry, 'actual_cents' | 'realized_on' | 'status'> & { actual_cents: string | null; realized_on: string | null; status: string };
+    type EntryState = Omit<typeof pendingEntry, 'actual_cents' | 'realized_on' | 'status'> & {
+      actual_cents: string | null;
+      realized_on: string | null;
+      status: string;
+    };
     let currentEntry: EntryState = pendingEntry;
     const fetchMock = vi.fn().mockImplementation(async (input: string, init?: RequestInit) => {
       if (input === '/api/catalog/categories?includeArchived=true') return response({ categories });
       if (input.startsWith('/api/entries?')) return response({ entries: [currentEntry] });
       if (input === '/api/entries/entry-id/confirm' && init?.method === 'POST') {
         const realization = JSON.parse(String(init.body));
-        currentEntry = { ...pendingEntry, actual_cents: String(realization.actualCents), realized_on: realization.realizedOn, status: 'paid' };
+        currentEntry = {
+          ...pendingEntry,
+          actual_cents: String(realization.actualCents),
+          realized_on: realization.realizedOn,
+          status: 'paid',
+        };
         return response({ entry: currentEntry });
       }
       if (input === '/api/entries/entry-id/confirm' && init?.method === 'DELETE') {
@@ -271,13 +376,31 @@ describe('financial entry pages', () => {
   });
 
   it('keeps an archived category and payment method on the entry being edited', async () => {
-    const archivedCategory = { id: 'archived-category', name: 'Antiga', kind: 'expense', expense_class: 'fixed', archived_at: '2026-01-01' };
+    const archivedCategory = {
+      id: 'archived-category',
+      name: 'Antiga',
+      kind: 'expense',
+      expense_class: 'fixed',
+      archived_at: '2026-01-01',
+    };
     const archivedMethod = { id: 'archived-method', name: 'Cheque', archived_at: '2026-01-01' };
     const entry = {
-      id: 'entry-id', kind: 'expense', description: 'Conta antiga', category_id: archivedCategory.id, category_name: archivedCategory.name,
-      competence_on: `${currentMonthInputValue()}-01`, due_on: null, planned_cents: '1234', actual_cents: null,
-      realized_on: null, payment_method_id: archivedMethod.id, payment_method_name: archivedMethod.name, notes: null,
-      created_by_user_id: 'member-id', updated_by_user_id: 'member-id', status: 'pending',
+      id: 'entry-id',
+      kind: 'expense',
+      description: 'Conta antiga',
+      category_id: archivedCategory.id,
+      category_name: archivedCategory.name,
+      competence_on: `${currentMonthInputValue()}-01`,
+      due_on: null,
+      planned_cents: '1234',
+      actual_cents: null,
+      realized_on: null,
+      payment_method_id: archivedMethod.id,
+      payment_method_name: archivedMethod.name,
+      notes: null,
+      created_by_user_id: 'member-id',
+      updated_by_user_id: 'member-id',
+      status: 'pending',
     };
     const fetchMock = vi.fn().mockImplementation(async (input: string, init?: RequestInit) => {
       if (input === '/api/catalog/categories?includeArchived=true') return response({ categories: [...categories, archivedCategory] });

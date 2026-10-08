@@ -15,14 +15,17 @@ export function createActivityRouter({ pool, secureCookies = false }) {
       return response.status(400).json({ error: 'Informe um deslocamento válido para o histórico.' });
     }
     try {
-      const result = await pool.query(`
+      const result = await pool.query(
+        `
         SELECT id, entry_id, actor_user_id, actor_display_name AS actor_name,
           action, entry_kind, entry_description, occurred_at, details
         FROM financial_entry_audit
         WHERE space_id = $1
         ORDER BY occurred_at DESC, id DESC
         LIMIT 101 OFFSET $2
-      `, [request.auth.spaceId, Number(offsetValue)]);
+      `,
+        [request.auth.spaceId, Number(offsetValue)],
+      );
       const events = result.rows.slice(0, 100);
       return response.json({ events, hasMore: result.rows.length > 100, nextOffset: Number(offsetValue) + events.length });
     } catch (error) {

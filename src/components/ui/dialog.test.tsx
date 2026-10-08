@@ -9,11 +9,28 @@ import { toast, Toaster } from './toast';
 function DeleteButton() {
   const [confirm, confirmDialog] = useConfirmDialog();
   const [result, setResult] = useState('');
-  return <>
-    <Button onClick={async () => setResult(String(await confirm({ title: 'Excluir “Conta fictícia”?', description: 'Esta ação não pode ser desfeita.', confirmLabel: 'Excluir lançamento', destructive: true })))}>Excluir</Button>
-    <output aria-label="resultado">{result}</output>
-    {confirmDialog}
-  </>;
+  return (
+    <>
+      <Button
+        onClick={async () =>
+          setResult(
+            String(
+              await confirm({
+                title: 'Excluir “Conta fictícia”?',
+                description: 'Esta ação não pode ser desfeita.',
+                confirmLabel: 'Excluir lançamento',
+                destructive: true,
+              }),
+            ),
+          )
+        }
+      >
+        Excluir
+      </Button>
+      <output aria-label="resultado">{result}</output>
+      {confirmDialog}
+    </>
+  );
 }
 
 describe('confirmation dialog', () => {

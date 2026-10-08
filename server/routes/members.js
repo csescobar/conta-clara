@@ -23,11 +23,14 @@ function requireAdmin(request, response, next) {
 
 async function issueInvitation(client, { spaceId, issuedByUserId, email }) {
   const { token, tokenHash } = createToken();
-  const result = await client.query(`
+  const result = await client.query(
+    `
     INSERT INTO account_tokens (space_id, purpose, email, token_hash, issued_by_user_id, expires_at)
     VALUES ($1, 'invite', $2, $3, $4, now() + interval '${inviteLifetimeHours} hours')
     RETURNING id, email, expires_at
-  `, [spaceId, email, tokenHash, issuedByUserId]);
+  `,
+    [spaceId, email, tokenHash, issuedByUserId],
+  );
   return { invitation: result.rows[0], activationPath: `/ativar/${token}` };
 }
 
@@ -42,7 +45,8 @@ export function createMembersRouter({ pool, secureCookies = false, csrfSecret })
 
   router.get('/', async (request, response, next) => {
     try {
-      const result = await pool.query(`
+      const result = await pool.query(
+        `
         SELECT u.id, u.display_name AS name, u.email, m.role, m.created_at AS joined_at,
           (u.is_active AND m.deactivated_at IS NULL) AS is_active
         FROM space_memberships m
@@ -50,7 +54,9 @@ export function createMembersRouter({ pool, secureCookies = false, csrfSecret })
         WHERE m.space_id = $1
           AND (m.deactivated_at IS NULL OR $2 = 'admin')
         ORDER BY CASE WHEN m.role = 'admin' THEN 0 ELSE 1 END, lower(u.display_name)
-      `, [request.auth.spaceId, request.auth.role]);
+      `,
+        [request.auth.spaceId, request.auth.role],
+      );
       return response.json({ members: result.rows });
     } catch (error) {
       next(error);
@@ -59,7 +65,8 @@ export function createMembersRouter({ pool, secureCookies = false, csrfSecret })
 
   router.get('/invitations', requireAdmin, async (request, response, next) => {
     try {
-      const result = await pool.query(`
+      const result = await pool.query(
+        `
         SELECT id, email, created_at, expires_at,
           CASE
             WHEN used_at IS NOT NULL THEN 'accepted'
@@ -71,7 +78,9 @@ export function createMembersRouter({ pool, secureCookies = false, csrfSecret })
         WHERE space_id = $1 AND purpose = 'invite'
         ORDER BY created_at DESC
         LIMIT 50
-      `, [request.auth.spaceId]);
+      `,
+        [request.auth.spaceId],
+      );
       return response.json({ invitations: result.rows });
     } catch (error) {
       next(error);
@@ -94,21 +103,27 @@ export function createMembersRouter({ pool, secureCookies = false, csrfSecret })
         await client.query('ROLLBACK');
         return response.status(409).json({ error: 'Este e-mail já possui um acesso ao Conta Clara.' });
       }
-      const pending = await client.query(`
+      const pending = await client.query(
+        `
         SELECT 1 FROM account_tokens
         WHERE space_id = $1 AND email = $2 AND purpose = 'invite'
           AND used_at IS NULL AND revoked_at IS NULL AND expires_at > now()
         LIMIT 1
-      `, [request.auth.spaceId, email]);
+      `,
+        [request.auth.spaceId, email],
+      );
       if (pending.rowCount) {
         await client.query('ROLLBACK');
         return response.status(409).json({ error: 'Já existe um convite válido para este e-mail. Reemita-o para gerar um novo link.' });
       }
-      await client.query(`
+      await client.query(
+        `
         UPDATE account_tokens SET revoked_at = now()
         WHERE space_id = $1 AND email = $2 AND purpose = 'invite'
           AND used_at IS NULL AND revoked_at IS NULL AND expires_at <= now()
-      `, [request.auth.spaceId, email]);
+      `,
+        [request.auth.spaceId, email],
+      );
       const created = await issueInvitation(client, { spaceId: request.auth.spaceId, issuedByUserId: request.auth.id, email });
       await client.query('COMMIT');
       return response.status(201).json(created);
@@ -126,21 +141,27 @@ export function createMembersRouter({ pool, secureCookies = false, csrfSecret })
     try {
       client = await pool.connect();
       await client.query('BEGIN');
-      const candidate = await client.query(`
+      const candidate = await client.query(
+        `
         SELECT id, email FROM account_tokens
         WHERE id = $1 AND space_id = $2 AND purpose = 'invite' AND used_at IS NULL
-      `, [request.params.id, request.auth.spaceId]);
+      `,
+        [request.params.id, request.auth.spaceId],
+      );
       if (!candidate.rows[0]) {
         await client.query('ROLLBACK');
         return response.status(404).json({ error: 'Convite não encontrado ou já utilizado.' });
       }
       const email = candidate.rows[0].email;
       await client.query('SELECT pg_advisory_xact_lock($1, hashtext($2))', [1717170003, email]);
-      const selected = await client.query(`
+      const selected = await client.query(
+        `
         SELECT id, email FROM account_tokens
         WHERE id = $1 AND space_id = $2 AND purpose = 'invite' AND used_at IS NULL
         FOR UPDATE
-      `, [request.params.id, request.auth.spaceId]);
+      `,
+        [request.params.id, request.auth.spaceId],
+      );
       if (!selected.rows[0]) {
         await client.query('ROLLBACK');
         return response.status(404).json({ error: 'Convite não encontrado ou já utilizado.' });
@@ -150,11 +171,14 @@ export function createMembersRouter({ pool, secureCookies = false, csrfSecret })
         await client.query('ROLLBACK');
         return response.status(409).json({ error: 'Este e-mail já possui um acesso ao Conta Clara.' });
       }
-      await client.query(`
+      await client.query(
+        `
         UPDATE account_tokens SET revoked_at = now()
         WHERE space_id = $1 AND email = $2 AND purpose = 'invite'
           AND used_at IS NULL AND revoked_at IS NULL
-      `, [request.auth.spaceId, email]);
+      `,
+        [request.auth.spaceId, email],
+      );
       const created = await issueInvitation(client, { spaceId: request.auth.spaceId, issuedByUserId: request.auth.id, email });
       await client.query('COMMIT');
       return response.status(201).json(created);
@@ -169,11 +193,14 @@ export function createMembersRouter({ pool, secureCookies = false, csrfSecret })
   router.post('/invitations/:id/revoke', csrf, requireAdmin, async (request, response, next) => {
     if (!isUuid(request.params.id)) return response.status(404).json({ error: 'Convite não encontrado.' });
     try {
-      const result = await pool.query(`
+      const result = await pool.query(
+        `
         UPDATE account_tokens SET revoked_at = now()
         WHERE id = $1 AND space_id = $2 AND purpose = 'invite'
           AND used_at IS NULL AND revoked_at IS NULL
-      `, [request.params.id, request.auth.spaceId]);
+      `,
+        [request.params.id, request.auth.spaceId],
+      );
       if (!result.rowCount) return response.status(404).json({ error: 'Convite não encontrado ou já utilizado.' });
       return response.status(204).end();
     } catch (error) {
@@ -188,30 +215,41 @@ export function createMembersRouter({ pool, secureCookies = false, csrfSecret })
       client = await pool.connect();
       await client.query('BEGIN');
       await client.query('SELECT pg_advisory_xact_lock($1, hashtext($2))', [1717170004, request.params.userId]);
-      const target = await client.query(`
+      const target = await client.query(
+        `
         SELECT u.id, u.email
         FROM users u
         JOIN space_memberships m ON m.user_id = u.id
         WHERE u.id = $1 AND m.space_id = $2 AND u.is_active AND m.deactivated_at IS NULL
         FOR SHARE OF m
-      `, [request.params.userId, request.auth.spaceId]);
+      `,
+        [request.params.userId, request.auth.spaceId],
+      );
       if (!target.rows[0]) {
         await client.query('ROLLBACK');
         return response.status(404).json({ error: 'Membro não encontrado.' });
       }
       const member = target.rows[0];
-      await client.query(`
+      await client.query(
+        `
         UPDATE account_tokens SET revoked_at = now()
         WHERE space_id = $1 AND target_user_id = $2 AND purpose = 'password_reset'
           AND used_at IS NULL AND revoked_at IS NULL
-      `, [request.auth.spaceId, member.id]);
+      `,
+        [request.auth.spaceId, member.id],
+      );
       const { token, tokenHash } = createToken();
-      await client.query(`
+      await client.query(
+        `
         INSERT INTO account_tokens (space_id, purpose, email, token_hash, issued_by_user_id, target_user_id, expires_at)
         VALUES ($1, 'password_reset', $2, $3, $4, $5, now() + interval '${resetLifetimeHours} hours')
-      `, [request.auth.spaceId, member.email, tokenHash, request.auth.id, member.id]);
+      `,
+        [request.auth.spaceId, member.email, tokenHash, request.auth.id, member.id],
+      );
       await client.query('COMMIT');
-      return response.status(201).json({ email: member.email, resetPath: `/redefinir-senha/${token}`, expiresInMinutes: resetLifetimeHours * 60 });
+      return response
+        .status(201)
+        .json({ email: member.email, resetPath: `/redefinir-senha/${token}`, expiresInMinutes: resetLifetimeHours * 60 });
     } catch (error) {
       if (client) await client.query('ROLLBACK').catch(() => {});
       next(error);
@@ -226,12 +264,15 @@ export function createMembersRouter({ pool, secureCookies = false, csrfSecret })
     try {
       client = await pool.connect();
       await client.query('BEGIN');
-      const target = await client.query(`
+      const target = await client.query(
+        `
         SELECT role, deactivated_at
         FROM space_memberships
         WHERE user_id = $1 AND space_id = $2
         FOR UPDATE
-      `, [request.params.userId, request.auth.spaceId]);
+      `,
+        [request.params.userId, request.auth.spaceId],
+      );
       if (!target.rows[0]) {
         await client.query('ROLLBACK');
         return response.status(404).json({ error: 'Membro não encontrado.' });
@@ -240,16 +281,22 @@ export function createMembersRouter({ pool, secureCookies = false, csrfSecret })
         await client.query('ROLLBACK');
         return response.status(409).json({ error: 'Administradores não podem ser desativados por esta operação.' });
       }
-      await client.query(`
+      await client.query(
+        `
         UPDATE space_memberships SET deactivated_at = COALESCE(deactivated_at, now())
         WHERE user_id = $1 AND space_id = $2
-      `, [request.params.userId, request.auth.spaceId]);
+      `,
+        [request.params.userId, request.auth.spaceId],
+      );
       await client.query('DELETE FROM sessions WHERE user_id = $1 AND space_id = $2', [request.params.userId, request.auth.spaceId]);
-      await client.query(`
+      await client.query(
+        `
         UPDATE account_tokens SET revoked_at = now()
         WHERE space_id = $1 AND target_user_id = $2 AND purpose = 'password_reset'
           AND used_at IS NULL AND revoked_at IS NULL
-      `, [request.auth.spaceId, request.params.userId]);
+      `,
+        [request.auth.spaceId, request.params.userId],
+      );
       await client.query('COMMIT');
       return response.status(204).end();
     } catch (error) {
@@ -266,12 +313,15 @@ export function createMembersRouter({ pool, secureCookies = false, csrfSecret })
     try {
       client = await pool.connect();
       await client.query('BEGIN');
-      const target = await client.query(`
+      const target = await client.query(
+        `
         SELECT role
         FROM space_memberships
         WHERE user_id = $1 AND space_id = $2
         FOR UPDATE
-      `, [request.params.userId, request.auth.spaceId]);
+      `,
+        [request.params.userId, request.auth.spaceId],
+      );
       if (!target.rows[0]) {
         await client.query('ROLLBACK');
         return response.status(404).json({ error: 'Membro não encontrado.' });
@@ -280,7 +330,10 @@ export function createMembersRouter({ pool, secureCookies = false, csrfSecret })
         await client.query('ROLLBACK');
         return response.status(409).json({ error: 'Administradores não podem ser reativados por esta operação.' });
       }
-      await client.query('UPDATE space_memberships SET deactivated_at = NULL WHERE user_id = $1 AND space_id = $2', [request.params.userId, request.auth.spaceId]);
+      await client.query('UPDATE space_memberships SET deactivated_at = NULL WHERE user_id = $1 AND space_id = $2', [
+        request.params.userId,
+        request.auth.spaceId,
+      ]);
       await client.query('COMMIT');
       return response.status(204).end();
     } catch (error) {

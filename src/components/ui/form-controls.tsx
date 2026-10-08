@@ -1,5 +1,13 @@
 import { ChevronDown } from 'lucide-react';
-import { useEffect, useState, type ChangeEvent, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
+import {
+  useEffect,
+  useState,
+  type ChangeEvent,
+  type InputHTMLAttributes,
+  type ReactNode,
+  type SelectHTMLAttributes,
+  type TextareaHTMLAttributes,
+} from 'react';
 import { formatBrazilianAmount, parseBrazilianCents } from '../../lib/finance';
 import { cn } from '../../lib/utils';
 import { Input, fieldControlClassName } from './input';
@@ -7,8 +15,13 @@ import { Input, fieldControlClassName } from './input';
 export function Select({ className, children, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <div className="relative">
-      <select className={cn(fieldControlClassName, 'appearance-none pr-10', className)} {...props}>{children}</select>
-      <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+      <select className={cn(fieldControlClassName, 'appearance-none pr-10', className)} {...props}>
+        {children}
+      </select>
+      <ChevronDown
+        aria-hidden="true"
+        className="pointer-events-none absolute right-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+      />
     </div>
   );
 }
@@ -20,13 +33,23 @@ export function Textarea({ className, rows = 3, ...props }: TextareaHTMLAttribut
 export function Checkbox({ className, children, ...props }: Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> & { children: ReactNode }) {
   return (
     <label className={cn('flex cursor-pointer items-start gap-3 text-sm leading-6', className)}>
-      <input type="checkbox" className="mt-1 size-4 shrink-0 accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" {...props} />
+      <input
+        type="checkbox"
+        className="mt-1 size-4 shrink-0 accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        {...props}
+      />
       <span>{children}</span>
     </label>
   );
 }
 
-export function RadioGroup<Value extends string>({ legend, name, value, options, onChange }: {
+export function RadioGroup<Value extends string>({
+  legend,
+  name,
+  value,
+  options,
+  onChange,
+}: {
   legend: string;
   name: string;
   value: Value;
@@ -39,8 +62,17 @@ export function RadioGroup<Value extends string>({ legend, name, value, options,
       <div className="flex flex-wrap gap-2">
         {options.map(([optionValue, label]) => (
           <label key={optionValue} className="cursor-pointer">
-            <input className="peer sr-only" type="radio" name={name} value={optionValue} checked={value === optionValue} onChange={() => onChange(optionValue)} />
-            <span className="inline-flex min-h-10 items-center rounded-xl border border-border bg-card px-4 text-sm font-medium text-muted-foreground peer-checked:border-primary peer-checked:bg-accent peer-checked:text-accent-foreground peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ring">{label}</span>
+            <input
+              className="peer sr-only"
+              type="radio"
+              name={name}
+              value={optionValue}
+              checked={value === optionValue}
+              onChange={() => onChange(optionValue)}
+            />
+            <span className="inline-flex min-h-10 items-center rounded-xl border border-border bg-card px-4 text-sm font-medium text-muted-foreground peer-checked:border-primary peer-checked:bg-accent peer-checked:text-accent-foreground peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ring">
+              {label}
+            </span>
           </label>
         ))}
       </div>
@@ -48,7 +80,10 @@ export function RadioGroup<Value extends string>({ legend, name, value, options,
   );
 }
 
-type MaskedFieldProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'type'> & { value: string; onChange: (value: string) => void };
+type MaskedFieldProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'type'> & {
+  value: string;
+  onChange: (value: string) => void;
+};
 
 function digitsOf(value: string, limit: number) {
   return value.replace(/\D/g, '').slice(0, limit);
@@ -64,7 +99,17 @@ export function maskBrazilianDate(value: string) {
 
 /** Campo de data no formato brasileiro. O valor é o texto DD/MM/AAAA, validado pelo formulário. */
 export function DateField({ value, onChange, placeholder = 'DD/MM/AAAA', ...props }: MaskedFieldProps) {
-  return <Input inputMode="numeric" autoComplete="off" maxLength={10} placeholder={placeholder} value={value} onChange={(event) => onChange(maskBrazilianDate(event.target.value))} {...props} />;
+  return (
+    <Input
+      inputMode="numeric"
+      autoComplete="off"
+      maxLength={10}
+      placeholder={placeholder}
+      value={value}
+      onChange={(event) => onChange(maskBrazilianDate(event.target.value))}
+      {...props}
+    />
+  );
 }
 
 function monthDisplay(isoMonth: string) {
@@ -111,7 +156,10 @@ export function MonthField({ value, onChange, onBlur, placeholder = 'MM/AAAA', .
       placeholder={placeholder}
       value={text}
       onChange={change}
-      onBlur={(event) => { if (incomplete) setText(monthDisplay(value)); onBlur?.(event); }}
+      onBlur={(event) => {
+        if (incomplete) setText(monthDisplay(value));
+        onBlur?.(event);
+      }}
       {...props}
     />
   );
@@ -121,14 +169,25 @@ export function MonthField({ value, onChange, onBlur, placeholder = 'MM/AAAA', .
  * Campo de valor em reais. O texto aceita vírgula e separador de milhar; ao sair do campo, um valor
  * válido é normalizado (ex.: "1234,5" → "1.234,50"). `onCentsChange` recebe centavos inteiros ou `null`.
  */
-export function MoneyInput({ value, onChange, onCentsChange, onBlur, allowZero = false, className, placeholder = '0,00', ...props }: MaskedFieldProps & { onCentsChange?: (cents: number | null) => void; allowZero?: boolean }) {
+export function MoneyInput({
+  value,
+  onChange,
+  onCentsChange,
+  onBlur,
+  allowZero = false,
+  className,
+  placeholder = '0,00',
+  ...props
+}: MaskedFieldProps & { onCentsChange?: (cents: number | null) => void; allowZero?: boolean }) {
   function update(next: string) {
     onChange(next);
     onCentsChange?.(parseBrazilianCents(next, allowZero));
   }
   return (
     <div className="relative">
-      <span aria-hidden="true" className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">R$</span>
+      <span aria-hidden="true" className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+        R$
+      </span>
       <Input
         inputMode="decimal"
         autoComplete="off"

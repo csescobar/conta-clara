@@ -59,7 +59,11 @@ export function CardSettings() {
         throw new Error(cardResult.error ?? 'Não foi possível carregar os cartões e titulares deste espaço.');
       }
       const loadedCards = cardResult.cards ?? [];
-      const loadedMembers = (memberResult.members ?? []).map(({ id, name: memberName, is_active }) => ({ id, name: memberName, is_active }));
+      const loadedMembers = (memberResult.members ?? []).map(({ id, name: memberName, is_active }) => ({
+        id,
+        name: memberName,
+        is_active,
+      }));
       setCards(loadedCards);
       setMembers(loadedMembers);
       setHolderUserId((current) => current || auth?.user.id || loadedMembers.find((member) => member.is_active)?.id || '');
@@ -92,7 +96,8 @@ export function CardSettings() {
   const holderOptions = useMemo(() => {
     const options = new Map(members.filter((member) => member.is_active).map((member) => [member.id, member]));
     for (const card of cards ?? []) {
-      if (!options.has(card.holder_user_id)) options.set(card.holder_user_id, { id: card.holder_user_id, name: card.holder_name, is_active: false });
+      if (!options.has(card.holder_user_id))
+        options.set(card.holder_user_id, { id: card.holder_user_id, name: card.holder_name, is_active: false });
     }
     return [...options.values()].sort((left, right) => left.name.localeCompare(right.name, 'pt-BR'));
   }, [cards, members]);
@@ -122,13 +127,24 @@ export function CardSettings() {
     event.preventDefault();
     setError('');
     const selectedHolder = holderOptions.find((member) => member.id === holderUserId);
-    if (!auth?.user.id || !selectedHolder || (!selectedHolder.is_active && selectedHolder.id !== (cards ?? []).find((card) => card.id === editingCardId)?.holder_user_id)) {
+    if (
+      !auth?.user.id ||
+      !selectedHolder ||
+      (!selectedHolder.is_active && selectedHolder.id !== (cards ?? []).find((card) => card.id === editingCardId)?.holder_user_id)
+    ) {
       setError('Selecione uma pessoa ativa deste espaço como titular.');
       return;
     }
     const selectedClosingDay = Number(closingDay);
     const selectedDueDay = Number(dueDay);
-    if (!Number.isInteger(selectedClosingDay) || selectedClosingDay < 1 || selectedClosingDay > 31 || !Number.isInteger(selectedDueDay) || selectedDueDay < 1 || selectedDueDay > 31) {
+    if (
+      !Number.isInteger(selectedClosingDay) ||
+      selectedClosingDay < 1 ||
+      selectedClosingDay > 31 ||
+      !Number.isInteger(selectedDueDay) ||
+      selectedDueDay < 1 ||
+      selectedDueDay > 31
+    ) {
       setError('Os dias de fechamento e vencimento devem ficar entre 1 e 31.');
       return;
     }
@@ -151,18 +167,25 @@ export function CardSettings() {
         if (!offlineSupported) throw new Error(offlineStorageError || 'O armazenamento offline não está disponível neste aparelho.');
         if (!offline) throw new Error('Não foi possível acessar o espaço offline.');
         await offline.queueCardChange(nextCard, existing ? 'update' : 'create');
-        setCards((current) => existing
-          ? (current ?? []).map((card) => card.id === nextCard.id ? nextCard : card)
-          : [...(current ?? []), nextCard]);
+        setCards((current) =>
+          existing ? (current ?? []).map((card) => (card.id === nextCard.id ? nextCard : card)) : [...(current ?? []), nextCard],
+        );
       } else if (existing) {
         const updated = await writeCard(`/api/cards/${existing.id}`, 'PUT', {
-          name: nextCard.name, holderUserId, closingDay: selectedClosingDay, dueDay: selectedDueDay, baseVersion: existing.version,
+          name: nextCard.name,
+          holderUserId,
+          closingDay: selectedClosingDay,
+          dueDay: selectedDueDay,
+          baseVersion: existing.version,
         });
         await load();
-        setCards((current) => (current ?? []).map((card) => card.id === updated.id ? updated : card));
+        setCards((current) => (current ?? []).map((card) => (card.id === updated.id ? updated : card)));
       } else {
         const created = await writeCard('/api/cards', 'POST', {
-          name: nextCard.name, holderUserId, closingDay: selectedClosingDay, dueDay: selectedDueDay,
+          name: nextCard.name,
+          holderUserId,
+          closingDay: selectedClosingDay,
+          dueDay: selectedDueDay,
         });
         await load();
         setCards((current) => [...(current ?? []).filter((card) => card.id !== created.id), created]);
@@ -196,7 +219,7 @@ export function CardSettings() {
           updated_by_user_id: auth?.user.id ?? card.updated_by_user_id,
         };
         await offline.queueCardChange(changed, 'update');
-        setCards((current) => (current ?? []).map((item) => item.id === card.id ? changed : item));
+        setCards((current) => (current ?? []).map((item) => (item.id === card.id ? changed : item)));
       } else {
         await writeCard(`/api/cards/${card.id}/${action}`, 'POST', { baseVersion: card.version });
         await load();
@@ -209,30 +232,151 @@ export function CardSettings() {
   }
 
   const selectableMembers = holderOptions.filter((member) => member.is_active || member.id === holderUserId);
-  return <Card>
-    <CardHeader>
-      <CardTitle><span className="flex items-center gap-2"><CreditCard aria-hidden="true" className="size-5 text-primary" />Cartões</span></CardTitle>
-      <CardDescription>Cadastre o apelido, titular e ciclo da fatura. O Conta Clara não guarda número, validade, CVV ou limite do cartão.</CardDescription>
-    </CardHeader>
-    <CardContent className="grid gap-5">
-      {error && <Alert>{error}</Alert>}
-      {offline?.storageError && !offline.supported && <Alert>{offline.storageError}</Alert>}
-      <form onSubmit={(event) => void submit(event)} className="grid gap-3">
-        <FormField id="credit-card-name" label="Apelido do cartão"><Input required maxLength={80} autoComplete="off" placeholder="Ex.: Cartão principal" value={name} onChange={(event) => setName(event.target.value)} /></FormField>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <FormField id="credit-card-holder" label="Titular"><Select required value={holderUserId} onChange={(event) => setHolderUserId(event.target.value)}><option value="">Selecione uma pessoa</option>{selectableMembers.map((member) => <option key={member.id} value={member.id}>{member.name}{member.is_active ? '' : ' (titular atual)'}</option>)}</Select></FormField>
-          <FormField id="credit-card-closing-day" label="Dia de fechamento"><Input type="number" min={1} max={31} step={1} inputMode="numeric" required value={closingDay} onChange={(event) => setClosingDay(event.target.value)} /></FormField>
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>
+          <span className="flex items-center gap-2">
+            <CreditCard aria-hidden="true" className="size-5 text-primary" />
+            Cartões
+          </span>
+        </CardTitle>
+        <CardDescription>
+          Cadastre o apelido, titular e ciclo da fatura. O Conta Clara não guarda número, validade, CVV ou limite do cartão.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-5">
+        {error && <Alert>{error}</Alert>}
+        {offline?.storageError && !offline.supported && <Alert>{offline.storageError}</Alert>}
+        <form onSubmit={(event) => void submit(event)} className="grid gap-3">
+          <FormField id="credit-card-name" label="Apelido do cartão">
+            <Input
+              required
+              maxLength={80}
+              autoComplete="off"
+              placeholder="Ex.: Cartão principal"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+            />
+          </FormField>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <FormField id="credit-card-holder" label="Titular">
+              <Select required value={holderUserId} onChange={(event) => setHolderUserId(event.target.value)}>
+                <option value="">Selecione uma pessoa</option>
+                {selectableMembers.map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {member.name}
+                    {member.is_active ? '' : ' (titular atual)'}
+                  </option>
+                ))}
+              </Select>
+            </FormField>
+            <FormField id="credit-card-closing-day" label="Dia de fechamento">
+              <Input
+                type="number"
+                min={1}
+                max={31}
+                step={1}
+                inputMode="numeric"
+                required
+                value={closingDay}
+                onChange={(event) => setClosingDay(event.target.value)}
+              />
+            </FormField>
+          </div>
+          <FormField id="credit-card-due-day" label="Dia de vencimento">
+            <Input
+              type="number"
+              min={1}
+              max={31}
+              step={1}
+              inputMode="numeric"
+              required
+              value={dueDay}
+              onChange={(event) => setDueDay(event.target.value)}
+            />
+          </FormField>
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" disabled={busy || !holderOptions.length}>
+              {editingCardId ? <Pencil aria-hidden="true" className="size-4" /> : <Plus aria-hidden="true" className="size-4" />}
+              {editingCardId ? 'Salvar cartão' : 'Adicionar cartão'}
+            </Button>
+            {editingCardId && (
+              <Button type="button" variant="outline" disabled={busy} onClick={clearForm}>
+                <X aria-hidden="true" className="size-4" />
+                Cancelar edição
+              </Button>
+            )}
+          </div>
+        </form>
+        <div className="grid gap-1" aria-label="Lista de cartões">
+          {cards === null ? (
+            <p className="text-sm text-muted-foreground">Carregando cartões…</p>
+          ) : cards.length ? (
+            cards.map((card) => (
+              <div
+                key={card.id}
+                className="flex min-w-0 flex-wrap items-center gap-2 border-t border-border py-3 first:border-0 first:pt-0"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold">{card.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {card.holder_name} · fecha dia {card.closing_day} · vence dia {card.due_day}
+                  </p>
+                </div>
+                {card.archived_at ? (
+                  <>
+                    <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">Arquivado</span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={busy}
+                      aria-label={`Restaurar cartão ${card.name}`}
+                      onClick={() => void changeStatus(card, 'restore')}
+                    >
+                      <RotateCcw aria-hidden="true" className="size-4" />
+                      Restaurar
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      disabled={busy}
+                      aria-label={`Editar cartão ${card.name}`}
+                      onClick={() => edit(card)}
+                    >
+                      <Pencil aria-hidden="true" className="size-4" />
+                      Editar
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={busy}
+                      aria-label={`Arquivar cartão ${card.name}`}
+                      onClick={() => void changeStatus(card, 'archive')}
+                    >
+                      <Archive aria-hidden="true" className="size-4" />
+                      Arquivar
+                    </Button>
+                  </>
+                )}
+              </div>
+            ))
+          ) : (
+            <p className="text-sm text-muted-foreground">Nenhum cartão cadastrado.</p>
+          )}
         </div>
-        <FormField id="credit-card-due-day" label="Dia de vencimento"><Input type="number" min={1} max={31} step={1} inputMode="numeric" required value={dueDay} onChange={(event) => setDueDay(event.target.value)} /></FormField>
-        <div className="flex flex-wrap gap-2"><Button type="submit" disabled={busy || !holderOptions.length}>{editingCardId ? <Pencil aria-hidden="true" className="size-4" /> : <Plus aria-hidden="true" className="size-4" />}{editingCardId ? 'Salvar cartão' : 'Adicionar cartão'}</Button>{editingCardId && <Button type="button" variant="outline" disabled={busy} onClick={clearForm}><X aria-hidden="true" className="size-4" />Cancelar edição</Button>}</div>
-      </form>
-      <div className="grid gap-1" aria-label="Lista de cartões">
-        {cards === null ? <p className="text-sm text-muted-foreground">Carregando cartões…</p> : cards.length ? cards.map((card) => <div key={card.id} className="flex min-w-0 flex-wrap items-center gap-2 border-t border-border py-3 first:border-0 first:pt-0">
-          <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{card.name}</p><p className="text-xs text-muted-foreground">{card.holder_name} · fecha dia {card.closing_day} · vence dia {card.due_day}</p></div>
-          {card.archived_at ? <><span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">Arquivado</span><Button type="button" size="sm" variant="outline" disabled={busy} aria-label={`Restaurar cartão ${card.name}`} onClick={() => void changeStatus(card, 'restore')}><RotateCcw aria-hidden="true" className="size-4" />Restaurar</Button></> : <><Button type="button" size="sm" variant="ghost" disabled={busy} aria-label={`Editar cartão ${card.name}`} onClick={() => edit(card)}><Pencil aria-hidden="true" className="size-4" />Editar</Button><Button type="button" size="sm" variant="outline" disabled={busy} aria-label={`Arquivar cartão ${card.name}`} onClick={() => void changeStatus(card, 'archive')}><Archive aria-hidden="true" className="size-4" />Arquivar</Button></>}
-        </div>) : <p className="text-sm text-muted-foreground">Nenhum cartão cadastrado.</p>}
-      </div>
-      {offline?.cardOperations.length ? <p role="status" className="text-xs text-muted-foreground">{offline.cardOperations.length} alteração(ões) de cartão aguardam sincronização.</p> : null}
-    </CardContent>
-  </Card>;
+        {offline?.cardOperations.length ? (
+          <p role="status" className="text-xs text-muted-foreground">
+            {offline.cardOperations.length} alteração(ões) de cartão aguardam sincronização.
+          </p>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
 }

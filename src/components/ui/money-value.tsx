@@ -23,5 +23,9 @@ type MoneyValueProps = Omit<HTMLAttributes<HTMLSpanElement>, 'children'> & {
 export function MoneyValue({ cents, tone = 'neutral', signDisplay, compact = false, className, ...props }: MoneyValueProps) {
   const exact = formatBrazilianMoney(cents, { signDisplay });
   const toneClass = tone === 'balance' ? (BigInt(cents) < 0n ? 'text-destructive' : 'text-success') : toneClassName[tone];
-  return <span className={cn('tabular-nums', toneClass, className)} title={compact ? exact : undefined} {...props}>{compact ? formatCompactBrazilianMoney(cents) : exact}</span>;
+  return (
+    <span className={cn('tabular-nums', toneClass, className)} title={compact ? exact : undefined} {...props}>
+      {compact ? formatCompactBrazilianMoney(cents) : exact}
+    </span>
+  );
 }

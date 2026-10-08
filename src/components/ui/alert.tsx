@@ -15,7 +15,13 @@ export type AlertVariant = keyof typeof variants;
  * Mensagem inline sempre com texto e ícone. Erros e avisos usam `role="alert"`; sucesso e
  * informação usam `role="status"`, anunciados sem interromper a leitura.
  */
-export function Alert({ variant = 'destructive', title, children, className, ...props }: Omit<HTMLAttributes<HTMLDivElement>, 'title'> & { variant?: AlertVariant; title?: ReactNode }) {
+export function Alert({
+  variant = 'destructive',
+  title,
+  children,
+  className,
+  ...props
+}: Omit<HTMLAttributes<HTMLDivElement>, 'title'> & { variant?: AlertVariant; title?: ReactNode }) {
   const { className: variantClassName, Icon, role } = variants[variant];
   return (
     <div role={role} className={cn('flex items-start gap-3 rounded-xl border px-4 py-3 text-sm', variantClassName, className)} {...props}>

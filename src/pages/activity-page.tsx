@@ -58,11 +58,16 @@ function snapshotSummary(event: ActivityEvent): string {
   if (event.action === 'updated' && before && after) {
     const changes: string[] = [];
     if (before.description !== after.description) changes.push(`Descrição: ${before.description} → ${after.description}`);
-    if (before.plannedCents !== after.plannedCents) changes.push(`Previsto: ${formatBrazilianMoney(before.plannedCents ?? '0')} → ${formatBrazilianMoney(after.plannedCents ?? '0')}`);
-    if (before.competenceOn !== after.competenceOn) changes.push(`Competência: ${formatBrazilianMonth(before.competenceOn)} → ${formatBrazilianMonth(after.competenceOn)}`);
-    if (before.dueOn !== after.dueOn) changes.push(`Vencimento: ${formatBrazilianDate(before.dueOn)} → ${formatBrazilianDate(after.dueOn)}`);
-    if (before.categoryName !== after.categoryName) changes.push(`Categoria: ${before.categoryName ?? 'Sem categoria'} → ${after.categoryName ?? 'Sem categoria'}`);
-    if (before.paymentMethodName !== after.paymentMethodName) changes.push(`Pagamento: ${before.paymentMethodName ?? 'Não definido'} → ${after.paymentMethodName ?? 'Não definido'}`);
+    if (before.plannedCents !== after.plannedCents)
+      changes.push(`Previsto: ${formatBrazilianMoney(before.plannedCents ?? '0')} → ${formatBrazilianMoney(after.plannedCents ?? '0')}`);
+    if (before.competenceOn !== after.competenceOn)
+      changes.push(`Competência: ${formatBrazilianMonth(before.competenceOn)} → ${formatBrazilianMonth(after.competenceOn)}`);
+    if (before.dueOn !== after.dueOn)
+      changes.push(`Vencimento: ${formatBrazilianDate(before.dueOn)} → ${formatBrazilianDate(after.dueOn)}`);
+    if (before.categoryName !== after.categoryName)
+      changes.push(`Categoria: ${before.categoryName ?? 'Sem categoria'} → ${after.categoryName ?? 'Sem categoria'}`);
+    if (before.paymentMethodName !== after.paymentMethodName)
+      changes.push(`Pagamento: ${before.paymentMethodName ?? 'Não definido'} → ${after.paymentMethodName ?? 'Não definido'}`);
     if (before.actualCents !== after.actualCents || before.realizedOn !== after.realizedOn) changes.push('Dados de realização atualizados');
     return changes.length ? changes.join(' · ') : 'Dados do lançamento atualizados.';
   }
@@ -81,7 +86,7 @@ export function ActivityPage() {
     let active = true;
     fetch('/api/activity', { credentials: 'same-origin', cache: 'no-store' })
       .then(async (response) => {
-        const result = await response.json() as ApiResponse;
+        const result = (await response.json()) as ApiResponse;
         if (!response.ok) throw new Error(result.error ?? 'Não foi possível carregar o histórico.');
         if (active) {
           setEvents(result.events ?? []);
@@ -92,8 +97,12 @@ export function ActivityPage() {
       .catch((loadError: unknown) => {
         if (active) setError(loadError instanceof Error ? loadError.message : 'Não foi possível carregar o histórico.');
       })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   async function loadMore() {
@@ -102,7 +111,7 @@ export function ActivityPage() {
     setError('');
     try {
       const response = await fetch(`/api/activity?offset=${nextOffset}`, { credentials: 'same-origin', cache: 'no-store' });
-      const result = await response.json() as ApiResponse;
+      const result = (await response.json()) as ApiResponse;
       if (!response.ok) throw new Error(result.error ?? 'Não foi possível carregar o histórico.');
       setEvents((current) => [...current, ...(result.events ?? [])]);
       setHasMore(result.hasMore ?? false);
@@ -114,17 +123,57 @@ export function ActivityPage() {
     }
   }
 
-  return <>
-    <PageHeader eyebrow="Transparência" title="Histórico" description="Veja quem cadastrou, alterou, confirmou ou removeu lançamentos do espaço compartilhado." />
-    {error && <Alert className="mb-4">{error}</Alert>}
-    <Card>
-      <CardHeader><CardTitle>Atividade recente</CardTitle><CardDescription>Histórico somente para consulta, com as alterações mais recentes primeiro.</CardDescription></CardHeader>
-      <CardContent>
-        {loading ? <LoadingState label="Carregando histórico" /> : events.length ? <><ol className="divide-y divide-border">{events.map((event) => <li key={event.id} className="flex gap-3 py-4 first:pt-0 last:pb-0 sm:gap-4">
-          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-accent text-accent-foreground"><History aria-hidden="true" className="size-[18px]" /></span>
-          <div className="min-w-0 flex-1"><p className="text-sm leading-6"><span className="font-semibold">{event.actor_name}</span> {actionWords[event.action]} {kindNames[event.entry_kind]} <span className="font-semibold">“{event.entry_description}”</span></p><p className="mt-1 text-xs leading-5 text-muted-foreground">{formatBrazilianDateTime(event.occurred_at)}</p><p className="mt-2 text-sm leading-6 text-muted-foreground">{snapshotSummary(event)}</p></div>
-        </li>)}</ol>{hasMore && <div className="flex justify-center pt-5"><Button type="button" variant="outline" disabled={loadingMore} onClick={() => void loadMore()}>{loadingMore ? 'Carregando…' : 'Carregar atividades anteriores'}</Button></div>}</> : <EmptyState title="Nenhuma alteração registrada" description="Quando alguém cadastrar ou atualizar um lançamento, a atividade aparecerá aqui." />}
-      </CardContent>
-    </Card>
-  </>;
+  return (
+    <>
+      <PageHeader
+        eyebrow="Transparência"
+        title="Histórico"
+        description="Veja quem cadastrou, alterou, confirmou ou removeu lançamentos do espaço compartilhado."
+      />
+      {error && <Alert className="mb-4">{error}</Alert>}
+      <Card>
+        <CardHeader>
+          <CardTitle>Atividade recente</CardTitle>
+          <CardDescription>Histórico somente para consulta, com as alterações mais recentes primeiro.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <LoadingState label="Carregando histórico" />
+          ) : events.length ? (
+            <>
+              <ol className="divide-y divide-border">
+                {events.map((event) => (
+                  <li key={event.id} className="flex gap-3 py-4 first:pt-0 last:pb-0 sm:gap-4">
+                    <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-accent text-accent-foreground">
+                      <History aria-hidden="true" className="size-[18px]" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm leading-6">
+                        <span className="font-semibold">{event.actor_name}</span> {actionWords[event.action]} {kindNames[event.entry_kind]}{' '}
+                        <span className="font-semibold">“{event.entry_description}”</span>
+                      </p>
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">{formatBrazilianDateTime(event.occurred_at)}</p>
+                      <p className="mt-2 text-sm leading-6 text-muted-foreground">{snapshotSummary(event)}</p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+              {hasMore && (
+                <div className="flex justify-center pt-5">
+                  <Button type="button" variant="outline" disabled={loadingMore} onClick={() => void loadMore()}>
+                    {loadingMore ? 'Carregando…' : 'Carregar atividades anteriores'}
+                  </Button>
+                </div>
+              )}
+            </>
+          ) : (
+            <EmptyState
+              title="Nenhuma alteração registrada"
+              description="Quando alguém cadastrar ou atualizar um lançamento, a atividade aparecerá aqui."
+            />
+          )}
+        </CardContent>
+      </Card>
+    </>
+  );
 }

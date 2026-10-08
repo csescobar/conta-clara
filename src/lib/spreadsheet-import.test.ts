@@ -5,7 +5,16 @@ import { parseSpreadsheetImport } from './spreadsheet-import';
 function makeWorkbook({ accountRows = [], cashFlowRows = [] }: { accountRows?: unknown[][]; cashFlowRows?: unknown[][] } = {}) {
   const workbook = XLSX.utils.book_new();
   const accounts = XLSX.utils.aoa_to_sheet([
-    ['Descrição da Conta', 'Categoria', 'Dia de Vencimento', 'Valor Previsto (R$)', 'Forma de Pagamento', 'Status', 'Data de Pagamento', 'Observações'],
+    [
+      'Descrição da Conta',
+      'Categoria',
+      'Dia de Vencimento',
+      'Valor Previsto (R$)',
+      'Forma de Pagamento',
+      'Status',
+      'Data de Pagamento',
+      'Observações',
+    ],
     ...accountRows,
   ]);
   const cashFlow = XLSX.utils.aoa_to_sheet([
@@ -23,10 +32,14 @@ function toBytes(workbook: XLSX.WorkBook) {
 
 describe('parseSpreadsheetImport', () => {
   it('parses en_US currency, uses the reviewed year, clamps due days, and leaves the source unchanged', () => {
-    const bytes = toBytes(makeWorkbook({
-      accountRows: [['Seguro fictício', 'Casa', 31, '$1,234.56', 'Cartão', 'Pago', '2/3', 'Conta de teste']],
-      cashFlowRows: [['January', 2500.25, { t: 'n', f: 'SUM(C2:D2)', v: 3100 }, 600, { t: 'n', f: 'C2+D2', v: 600 }, { t: 'n', f: 'B2-E2', v: 1900 }]],
-    }));
+    const bytes = toBytes(
+      makeWorkbook({
+        accountRows: [['Seguro fictício', 'Casa', 31, '$1,234.56', 'Cartão', 'Pago', '2/3', 'Conta de teste']],
+        cashFlowRows: [
+          ['January', 2500.25, { t: 'n', f: 'SUM(C2:D2)', v: 3100 }, 600, { t: 'n', f: 'C2+D2', v: 600 }, { t: 'n', f: 'B2-E2', v: 1900 }],
+        ],
+      }),
+    );
     const originalBytes = bytes.slice();
 
     const preview = parseSpreadsheetImport(bytes, { year: 2026, expenseMonth: 2, locale: 'en_US' });
@@ -34,12 +47,24 @@ describe('parseSpreadsheetImport', () => {
     expect(bytes).toEqual(originalBytes);
     expect(preview.entries).toEqual([
       expect.objectContaining({
-        kind: 'expense', description: 'Seguro fictício', sourceCategory: 'Casa', sourcePaymentMethod: 'Cartão',
-        competenceOn: '2026-02-01', dueOn: '2026-02-28', plannedCents: 123456,
-        actualCents: 123456, realizedOn: '2026-02-03', notes: 'Conta de teste',
+        kind: 'expense',
+        description: 'Seguro fictício',
+        sourceCategory: 'Casa',
+        sourcePaymentMethod: 'Cartão',
+        competenceOn: '2026-02-01',
+        dueOn: '2026-02-28',
+        plannedCents: 123456,
+        actualCents: 123456,
+        realizedOn: '2026-02-03',
+        notes: 'Conta de teste',
         warning: expect.stringContaining('não informa o ano'),
       }),
-      expect.objectContaining({ kind: 'income', description: 'Receita prevista de janeiro', competenceOn: '2026-01-01', plannedCents: 250025 }),
+      expect.objectContaining({
+        kind: 'income',
+        description: 'Receita prevista de janeiro',
+        competenceOn: '2026-01-01',
+        plannedCents: 250025,
+      }),
     ]);
     expect(preview.skipped).toEqual([]);
   });
@@ -62,18 +87,29 @@ describe('parseSpreadsheetImport', () => {
     const preview = parseSpreadsheetImport(toBytes(workbook), { year: 2026, expenseMonth: 2, locale: 'en_US' });
 
     expect(preview.entries).toEqual([]);
-    expect(preview.skipped).toEqual(expect.arrayContaining([
-      expect.objectContaining({ sourceRow: 2, reason: expect.stringContaining('fórmula') }),
-      expect.objectContaining({ sourceRow: 3, reason: expect.stringContaining('valor previsto') }),
-      expect.objectContaining({ sourceSheet: 'Fluxo de Caixa Mensal', reason: expect.stringContaining('fórmula') }),
-      expect.objectContaining({ sourceSheet: 'Fluxo de Caixa Mensal', sourceRow: 3, reason: expect.stringContaining('valor precisa ser positivo') }),
-    ]));
+    expect(preview.skipped).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sourceRow: 2, reason: expect.stringContaining('fórmula') }),
+        expect.objectContaining({ sourceRow: 3, reason: expect.stringContaining('valor previsto') }),
+        expect.objectContaining({ sourceSheet: 'Fluxo de Caixa Mensal', reason: expect.stringContaining('fórmula') }),
+        expect.objectContaining({
+          sourceSheet: 'Fluxo de Caixa Mensal',
+          sourceRow: 3,
+          reason: expect.stringContaining('valor precisa ser positivo'),
+        }),
+      ]),
+    );
   });
 
   it('reads Brazilian separators when explicitly selected', () => {
-    const preview = parseSpreadsheetImport(toBytes(makeWorkbook({
-      accountRows: [['Despesa fictícia', '', 4, '1.234,56', '', 'Em aberto', '', '']],
-    })), { year: 2026, expenseMonth: 3, locale: 'pt_BR' });
+    const preview = parseSpreadsheetImport(
+      toBytes(
+        makeWorkbook({
+          accountRows: [['Despesa fictícia', '', 4, '1.234,56', '', 'Em aberto', '', '']],
+        }),
+      ),
+      { year: 2026, expenseMonth: 3, locale: 'pt_BR' },
+    );
     expect(preview.entries[0]?.plannedCents).toBe(123456);
   });
 

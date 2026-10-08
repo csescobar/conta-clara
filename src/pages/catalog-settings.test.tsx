@@ -10,15 +10,28 @@ function response(body: unknown, status = 200) {
 
 function renderCatalogSettings() {
   const user = { id: 'member-id', name: 'Membro', email: 'membro@example.test', role: 'member', spaceId: 'space-id' };
-  return render(<AuthContext.Provider value={{ user, csrfToken: 'csrf-catalog-test' }}><CatalogSettings /></AuthContext.Provider>);
+  return render(
+    <AuthContext.Provider value={{ user, csrfToken: 'csrf-catalog-test' }}>
+      <CatalogSettings />
+    </AuthContext.Provider>,
+  );
 }
 
 afterEach(() => vi.unstubAllGlobals());
 
 describe('shared catalog settings', () => {
   it('lets a member create, edit, archive, and restore a category', async () => {
-    const categories: Array<{ id: string; name: string; kind: string; expense_class: string; archived_at: string | null; expenseClass?: string }> = [{ id: 'category-id', name: 'Moradia', kind: 'expense', expense_class: 'fixed', archived_at: null }];
-    const methods: Array<{ id: string; name: string; archived_at: string | null }> = [{ id: 'method-id', name: 'Transferência', archived_at: null }];
+    const categories: Array<{
+      id: string;
+      name: string;
+      kind: string;
+      expense_class: string;
+      archived_at: string | null;
+      expenseClass?: string;
+    }> = [{ id: 'category-id', name: 'Moradia', kind: 'expense', expense_class: 'fixed', archived_at: null }];
+    const methods: Array<{ id: string; name: string; archived_at: string | null }> = [
+      { id: 'method-id', name: 'Transferência', archived_at: null },
+    ];
     const fetchMock = vi.fn().mockImplementation(async (input: string, init?: RequestInit) => {
       if (input === '/api/catalog/categories?includeArchived=true' && !init?.method) return response({ categories });
       if (input === '/api/catalog/payment-methods?includeArchived=true' && !init?.method) return response({ paymentMethods: methods });
@@ -69,7 +82,9 @@ describe('shared catalog settings', () => {
 
   it('lets a member create and manage shared payment methods', async () => {
     const categories = [{ id: 'category-id', name: 'Moradia', kind: 'expense', expense_class: 'fixed', archived_at: null }];
-    const methods: Array<{ id: string; name: string; archived_at: string | null }> = [{ id: 'method-id', name: 'Transferência', archived_at: null }];
+    const methods: Array<{ id: string; name: string; archived_at: string | null }> = [
+      { id: 'method-id', name: 'Transferência', archived_at: null },
+    ];
     const fetchMock = vi.fn().mockImplementation(async (input: string, init?: RequestInit) => {
       if (input === '/api/catalog/categories?includeArchived=true' && !init?.method) return response({ categories });
       if (input === '/api/catalog/payment-methods?includeArchived=true' && !init?.method) return response({ paymentMethods: methods });

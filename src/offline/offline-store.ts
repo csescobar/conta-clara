@@ -25,7 +25,13 @@ export type OfflineEntry = {
   status: 'pending' | 'late' | 'paid';
   version?: number;
 };
-export type OfflineCategory = { id: string; name: string; kind: OfflineEntry['kind']; expense_class: 'fixed' | 'variable' | null; archived_at: string | null };
+export type OfflineCategory = {
+  id: string;
+  name: string;
+  kind: OfflineEntry['kind'];
+  expense_class: 'fixed' | 'variable' | null;
+  archived_at: string | null;
+};
 export type OfflinePaymentMethod = { id: string; name: string; archived_at: string | null };
 export type OfflineCard = {
   id: string;
@@ -41,33 +47,78 @@ export type OfflineCard = {
 };
 export type OfflineCardMember = { id: string; name: string; is_active: boolean };
 export type OfflinePurchaseInstallment = {
-  id: string; description: string; category_id: string; category_name: string;
-  invoice_on: string; due_on: string; planned_cents: string; actual_cents: string | null;
-  realized_on: string | null; created_by_user_id: string; updated_by_user_id: string;
-  version: number; installment_number: number; installment_count: number;
+  id: string;
+  description: string;
+  category_id: string;
+  category_name: string;
+  invoice_on: string;
+  due_on: string;
+  planned_cents: string;
+  actual_cents: string | null;
+  realized_on: string | null;
+  created_by_user_id: string;
+  updated_by_user_id: string;
+  version: number;
+  installment_number: number;
+  installment_count: number;
   status: 'pending' | 'late' | 'paid';
 };
 export type OfflinePurchase = {
-  id: string; card_id: string; card_name: string; description: string;
-  category_id: string; category_name: string; purchase_on: string; first_invoice_on: string;
-  total_cents: string; installment_count: number; canceled_at: string | null;
-  created_by_user_id: string; updated_by_user_id: string; version: number;
+  id: string;
+  card_id: string;
+  card_name: string;
+  description: string;
+  category_id: string;
+  category_name: string;
+  purchase_on: string;
+  first_invoice_on: string;
+  total_cents: string;
+  installment_count: number;
+  canceled_at: string | null;
+  created_by_user_id: string;
+  updated_by_user_id: string;
+  version: number;
   installments: OfflinePurchaseInstallment[];
 };
 export type OfflineInvoiceEntry = {
-  id: string; description: string; purchase_description: string; category_name: string | null;
-  invoice_on: string; due_on: string; planned_cents: string; actual_cents: string | null;
-  realized_on: string | null; version: number; installment_number: number; installment_count: number;
+  id: string;
+  description: string;
+  purchase_description: string;
+  category_name: string | null;
+  invoice_on: string;
+  due_on: string;
+  planned_cents: string;
+  actual_cents: string | null;
+  realized_on: string | null;
+  version: number;
+  installment_number: number;
+  installment_count: number;
 };
 export type OfflineInvoice = {
-  id: string; card_id: string; card_name: string; closing_day: number; due_day: number;
-  invoice_month: string; due_on: string; payment_status: 'open' | 'paid' | 'needs_review';
-  status: 'open' | 'late' | 'paid' | 'needs_review'; actual_cents: string | null; paid_on: string | null;
-  payment_method_id: string | null; payment_method_name: string | null; updated_by_user_id: string;
-  version: number; planned_cents: string; installment_count: number; entries: OfflineInvoiceEntry[];
+  id: string;
+  card_id: string;
+  card_name: string;
+  closing_day: number;
+  due_day: number;
+  invoice_month: string;
+  due_on: string;
+  payment_status: 'open' | 'paid' | 'needs_review';
+  status: 'open' | 'late' | 'paid' | 'needs_review';
+  actual_cents: string | null;
+  paid_on: string | null;
+  payment_method_id: string | null;
+  payment_method_name: string | null;
+  updated_by_user_id: string;
+  version: number;
+  planned_cents: string;
+  installment_count: number;
+  entries: OfflineInvoiceEntry[];
 };
 export type OfflineOperationKind = 'create' | 'update' | 'delete';
-export type OfflineSyncConflict = { reason: 'version_mismatch' | 'server_deleted' | 'id_collision' | 'idempotency_key_reused' | 'state_mismatch'; serverEntry: OfflineEntry | null };
+export type OfflineSyncConflict = {
+  reason: 'version_mismatch' | 'server_deleted' | 'id_collision' | 'idempotency_key_reused' | 'state_mismatch';
+  serverEntry: OfflineEntry | null;
+};
 export type OfflineOperation = {
   operationId: string;
   scope: string;
@@ -93,16 +144,32 @@ export type OfflineCardOperation = {
   conflict?: { reason: OfflineSyncConflict['reason']; serverCard: OfflineCard | null };
 };
 export type OfflinePurchaseOperation = {
-  operationId: string; scope: string; userId: string; spaceId: string;
-  purchaseId: string; kind: 'create' | 'update' | 'delete'; baseVersion: number | null;
-  payload: Record<string, unknown> | null; queuedAt: string;
+  operationId: string;
+  scope: string;
+  userId: string;
+  spaceId: string;
+  purchaseId: string;
+  kind: 'create' | 'update' | 'delete';
+  baseVersion: number | null;
+  payload: Record<string, unknown> | null;
+  queuedAt: string;
   conflict?: { reason: OfflineSyncConflict['reason']; serverPurchase: OfflinePurchase | null };
 };
 export type OfflineInvoiceOperation = {
-  operationId: string; scope: string; userId: string; spaceId: string;
-  cardId: string; invoiceMonth: string; kind: 'pay' | 'reverse'; baseVersion: number;
-  payload: Record<string, unknown> | null; queuedAt: string;
-  conflict?: { reason: 'version_mismatch' | 'server_deleted' | 'idempotency_key_reused' | 'state_mismatch'; serverInvoice: OfflineInvoice | null };
+  operationId: string;
+  scope: string;
+  userId: string;
+  spaceId: string;
+  cardId: string;
+  invoiceMonth: string;
+  kind: 'pay' | 'reverse';
+  baseVersion: number;
+  payload: Record<string, unknown> | null;
+  queuedAt: string;
+  conflict?: {
+    reason: 'version_mismatch' | 'server_deleted' | 'idempotency_key_reused' | 'state_mismatch';
+    serverInvoice: OfflineInvoice | null;
+  };
 };
 export type OfflineWorkspaceSnapshot = {
   entries: OfflineEntry[];
@@ -140,8 +207,21 @@ const databaseVersion = 5;
 const deviceSessionKey = '@last-authenticated-user';
 const deviceLogoutKey = '@offline-logout';
 export const offlineSessionLeaseMs = 7 * 24 * 60 * 60 * 1000;
-const storeNames = ['entries', 'catalogs', 'operations', 'metadata', 'snapshots', 'creditCards', 'cardMembers', 'cardOperations', 'purchases', 'purchaseOperations', 'cardInvoices', 'invoiceOperations'] as const;
-type StoreName = typeof storeNames[number];
+const storeNames = [
+  'entries',
+  'catalogs',
+  'operations',
+  'metadata',
+  'snapshots',
+  'creditCards',
+  'cardMembers',
+  'cardOperations',
+  'purchases',
+  'purchaseOperations',
+  'cardInvoices',
+  'invoiceOperations',
+] as const;
+type StoreName = (typeof storeNames)[number];
 let databasePromise: Promise<IDBDatabase> | null = null;
 
 export function offlineScopeKey(scope: OfflineScope) {
@@ -173,7 +253,8 @@ function openDatabase(): Promise<IDBDatabase> {
           const cursor = entries.result;
           if (!cursor) return;
           const record = cursor.value as StoredEntry;
-          if (typeof record.entry.version !== 'number') cursor.update({ ...record, entry: { ...record.entry, version: 1 } } satisfies StoredEntry);
+          if (typeof record.entry.version !== 'number')
+            cursor.update({ ...record, entry: { ...record.entry, version: 1 } } satisfies StoredEntry);
           cursor.continue();
         };
         const operations = transaction.objectStore('operations').openCursor();
@@ -232,7 +313,19 @@ export async function loadOfflineWorkspace(scope: OfflineScope): Promise<Offline
   const scopeKey = offlineScopeKey(scope);
   const transaction = database.transaction([...storeNames], 'readonly');
   const done = transactionDone(transaction);
-  const [entries, catalogs, operations, metadata, cards, cardMembers, cardOperations, purchases, purchaseOperations, invoices, invoiceOperations] = await Promise.all([
+  const [
+    entries,
+    catalogs,
+    operations,
+    metadata,
+    cards,
+    cardMembers,
+    cardOperations,
+    purchases,
+    purchaseOperations,
+    invoices,
+    invoiceOperations,
+  ] = await Promise.all([
     scopedValues<StoredEntry>(transaction, 'entries', scopeKey),
     requestValue(transaction.objectStore('catalogs').get(scopeKey) as IDBRequest<StoredCatalog | undefined>),
     scopedValues<StoredOperation>(transaction, 'operations', scopeKey),
@@ -253,17 +346,30 @@ export async function loadOfflineWorkspace(scope: OfflineScope): Promise<Offline
     paymentMethods: catalogs?.paymentMethods ?? [],
     cards: cards.map((record) => record.card),
     cardMembers: cardMembers?.members ?? [],
-    operations: operations.sort((left, right) => left.queuedAt.localeCompare(right.queuedAt)).map(({ key: _key, ...operation }) => operation),
-    cardOperations: cardOperations.sort((left, right) => left.queuedAt.localeCompare(right.queuedAt)).map(({ key: _key, ...operation }) => operation),
+    operations: operations
+      .sort((left, right) => left.queuedAt.localeCompare(right.queuedAt))
+      .map(({ key: _key, ...operation }) => operation),
+    cardOperations: cardOperations
+      .sort((left, right) => left.queuedAt.localeCompare(right.queuedAt))
+      .map(({ key: _key, ...operation }) => operation),
     purchases: purchases.map((record) => record.purchase),
-    purchaseOperations: purchaseOperations.sort((left, right) => left.queuedAt.localeCompare(right.queuedAt)).map(({ key: _key, ...operation }) => operation),
+    purchaseOperations: purchaseOperations
+      .sort((left, right) => left.queuedAt.localeCompare(right.queuedAt))
+      .map(({ key: _key, ...operation }) => operation),
     invoices: invoices.map((record) => record.invoice),
-    invoiceOperations: invoiceOperations.sort((left, right) => left.queuedAt.localeCompare(right.queuedAt)).map(({ key: _key, ...operation }) => operation),
+    invoiceOperations: invoiceOperations
+      .sort((left, right) => left.queuedAt.localeCompare(right.queuedAt))
+      .map(({ key: _key, ...operation }) => operation),
     lastSyncedAt: metadata?.lastSyncedAt ?? null,
   };
 }
 
-export async function saveOfflineCatalogs(scope: OfflineScope, categories: OfflineCategory[], paymentMethods: OfflinePaymentMethod[], now = new Date().toISOString()) {
+export async function saveOfflineCatalogs(
+  scope: OfflineScope,
+  categories: OfflineCategory[],
+  paymentMethods: OfflinePaymentMethod[],
+  now = new Date().toISOString(),
+) {
   const database = await openDatabase();
   const key = offlineScopeKey(scope);
   const transaction = database.transaction(['catalogs', 'metadata'], 'readwrite');
@@ -272,7 +378,12 @@ export async function saveOfflineCatalogs(scope: OfflineScope, categories: Offli
   await transactionDone(transaction);
 }
 
-export async function saveOfflineCards(scope: OfflineScope, cards: OfflineCard[], members: OfflineCardMember[], now = new Date().toISOString()) {
+export async function saveOfflineCards(
+  scope: OfflineScope,
+  cards: OfflineCard[],
+  members: OfflineCardMember[],
+  now = new Date().toISOString(),
+) {
   const database = await openDatabase();
   const scopeKey = offlineScopeKey(scope);
   const transaction = database.transaction(['creditCards', 'cardMembers', 'cardOperations', 'metadata'], 'readwrite');
@@ -301,7 +412,12 @@ function cardPayload(card: OfflineCard) {
   };
 }
 
-export async function queueOfflineCardChange(scope: OfflineScope, card: OfflineCard, kind: 'create' | 'update', now = new Date().toISOString()) {
+export async function queueOfflineCardChange(
+  scope: OfflineScope,
+  card: OfflineCard,
+  kind: 'create' | 'update',
+  now = new Date().toISOString(),
+) {
   const database = await openDatabase();
   const scopeKey = offlineScopeKey(scope);
   const key = recordKey(scope, card.id);
@@ -366,9 +482,10 @@ export async function acknowledgeOfflineCardOperation(
   const finish = () => {
     completedReads += 1;
     if (completedReads < 2 || !currentOperation || currentOperation.operationId !== sentOperation.operationId) return;
-    const unchanged = currentOperation.kind === sentOperation.kind
-      && currentOperation.baseVersion === sentOperation.baseVersion
-      && JSON.stringify(currentOperation.payload) === JSON.stringify(sentOperation.payload);
+    const unchanged =
+      currentOperation.kind === sentOperation.kind &&
+      currentOperation.baseVersion === sentOperation.baseVersion &&
+      JSON.stringify(currentOperation.payload) === JSON.stringify(sentOperation.payload);
     if (unchanged) {
       operationStore.delete(key);
       if (result.card) cardStore.put({ key, scope: scopeKey, card: result.card } satisfies StoredCard);
@@ -380,10 +497,18 @@ export async function acknowledgeOfflineCardOperation(
       operationStore.put(currentOperation);
       if (localCard) cardStore.put({ ...localCard, card: { ...localCard.card, version: result.card.version } } satisfies StoredCard);
     }
-    transaction.objectStore('metadata').put({ key: scopeKey, scope: scopeKey, lastSyncedAt: new Date().toISOString() } satisfies StoredMetadata);
+    transaction
+      .objectStore('metadata')
+      .put({ key: scopeKey, scope: scopeKey, lastSyncedAt: new Date().toISOString() } satisfies StoredMetadata);
   };
-  currentRequest.onsuccess = () => { currentOperation = currentRequest.result; finish(); };
-  localCardRequest.onsuccess = () => { localCard = localCardRequest.result; finish(); };
+  currentRequest.onsuccess = () => {
+    currentOperation = currentRequest.result;
+    finish();
+  };
+  localCardRequest.onsuccess = () => {
+    localCard = localCardRequest.result;
+    finish();
+  };
   await transactionDone(transaction);
 }
 
@@ -429,10 +554,16 @@ export async function resolveOfflineCardConflict(scope: OfflineScope, operationI
       return;
     }
 
-    operationStore.put({ ...operation, operationId: crypto.randomUUID(), baseVersion: serverCard.version, conflict: undefined } satisfies StoredCardOperation);
+    operationStore.put({
+      ...operation,
+      operationId: crypto.randomUUID(),
+      baseVersion: serverCard.version,
+      conflict: undefined,
+    } satisfies StoredCardOperation);
     const localRequest = cardStore.get(key) as IDBRequest<StoredCard | undefined>;
     localRequest.onsuccess = () => {
-      if (localRequest.result) cardStore.put({ ...localRequest.result, card: { ...localRequest.result.card, version: serverCard.version } } satisfies StoredCard);
+      if (localRequest.result)
+        cardStore.put({ ...localRequest.result, card: { ...localRequest.result.card, version: serverCard.version } } satisfies StoredCard);
     };
   };
   await transactionDone(transaction);
@@ -440,14 +571,24 @@ export async function resolveOfflineCardConflict(scope: OfflineScope, operationI
 
 function purchaseAsEntry(purchase: OfflinePurchase, installment: OfflinePurchaseInstallment): OfflineEntry {
   return {
-    id: installment.id, kind: 'expense', description: installment.description,
-    category_id: installment.category_id, category_name: installment.category_name,
-    competence_on: installment.invoice_on, due_on: installment.due_on,
-    planned_cents: installment.planned_cents, actual_cents: installment.actual_cents,
-    realized_on: installment.realized_on, payment_method_id: null, payment_method_name: null,
-    notes: null, created_by_user_id: installment.created_by_user_id,
-    updated_by_user_id: installment.updated_by_user_id, status: installment.status,
-    card_purchase_id: purchase.id, installment_number: installment.installment_number,
+    id: installment.id,
+    kind: 'expense',
+    description: installment.description,
+    category_id: installment.category_id,
+    category_name: installment.category_name,
+    competence_on: installment.invoice_on,
+    due_on: installment.due_on,
+    planned_cents: installment.planned_cents,
+    actual_cents: installment.actual_cents,
+    realized_on: installment.realized_on,
+    payment_method_id: null,
+    payment_method_name: null,
+    notes: null,
+    created_by_user_id: installment.created_by_user_id,
+    updated_by_user_id: installment.updated_by_user_id,
+    status: installment.status,
+    card_purchase_id: purchase.id,
+    installment_number: installment.installment_number,
     installment_count: installment.installment_count,
     version: installment.version,
   };
@@ -457,7 +598,9 @@ export async function saveOfflinePurchases(scope: OfflineScope, purchases: Offli
   const database = await openDatabase();
   const scopeKey = offlineScopeKey(scope);
   const transaction = database.transaction(['purchases', 'purchaseOperations', 'entries', 'operations', 'metadata'], 'readwrite');
-  const purchaseOperationsRequest = transaction.objectStore('purchaseOperations').index('scope').getAll(scopeKey) as IDBRequest<StoredPurchaseOperation[]>;
+  const purchaseOperationsRequest = transaction.objectStore('purchaseOperations').index('scope').getAll(scopeKey) as IDBRequest<
+    StoredPurchaseOperation[]
+  >;
   const entryOperationsRequest = transaction.objectStore('operations').index('scope').getAll(scopeKey) as IDBRequest<StoredOperation[]>;
   const cachedPurchasesRequest = transaction.objectStore('purchases').index('scope').getAll(scopeKey) as IDBRequest<StoredPurchase[]>;
   const purchaseStore = transaction.objectStore('purchases');
@@ -475,10 +618,12 @@ export async function saveOfflinePurchases(scope: OfflineScope, purchases: Offli
       const installmentIds = new Set(purchase.installments.map((installment) => installment.id));
       for (const installment of purchase.installments) {
         const entry = purchaseAsEntry(purchase, installment);
-        if (!protectedEntries.has(entry.id)) entryStore.put({ key: recordKey(scope, entry.id), scope: scopeKey, entry, isLocal: false } satisfies StoredEntry);
+        if (!protectedEntries.has(entry.id))
+          entryStore.put({ key: recordKey(scope, entry.id), scope: scopeKey, entry, isLocal: false } satisfies StoredEntry);
       }
       for (const installment of previous?.installments ?? []) {
-        if (!installmentIds.has(installment.id) && !protectedEntries.has(installment.id)) entryStore.delete(recordKey(scope, installment.id));
+        if (!installmentIds.has(installment.id) && !protectedEntries.has(installment.id))
+          entryStore.delete(recordKey(scope, installment.id));
       }
     }
     transaction.objectStore('metadata').put({ key: scopeKey, scope: scopeKey, lastSyncedAt: now } satisfies StoredMetadata);
@@ -512,22 +657,36 @@ export async function queueOfflinePurchaseChange(
     if (reads < 2) return;
     const operationKind = previous?.kind === 'create' ? 'create' : kind;
     operationStore.put({
-      key, scope: scopeKey, userId: scope.userId, spaceId: scope.spaceId,
-      purchaseId: purchase.id, operationId: previous?.operationId ?? crypto.randomUUID(),
-      kind: operationKind, baseVersion: previous ? previous.baseVersion : operationKind === 'create' ? null : purchase.version,
-      payload, queuedAt: previous?.queuedAt ?? now, ...(previous?.conflict ? { conflict: previous.conflict } : {}),
+      key,
+      scope: scopeKey,
+      userId: scope.userId,
+      spaceId: scope.spaceId,
+      purchaseId: purchase.id,
+      operationId: previous?.operationId ?? crypto.randomUUID(),
+      kind: operationKind,
+      baseVersion: previous ? previous.baseVersion : operationKind === 'create' ? null : purchase.version,
+      payload,
+      queuedAt: previous?.queuedAt ?? now,
+      ...(previous?.conflict ? { conflict: previous.conflict } : {}),
     } satisfies StoredPurchaseOperation);
     transaction.objectStore('purchases').put({ key, scope: scopeKey, purchase } satisfies StoredPurchase);
     const entries = transaction.objectStore('entries');
     const newIds = new Set(purchase.installments.map((installment) => installment.id));
-    for (const installment of previousPurchase?.purchase.installments ?? []) if (!newIds.has(installment.id)) entries.delete(recordKey(scope, installment.id));
+    for (const installment of previousPurchase?.purchase.installments ?? [])
+      if (!newIds.has(installment.id)) entries.delete(recordKey(scope, installment.id));
     for (const installment of purchase.installments) {
       const entry = purchaseAsEntry(purchase, installment);
       entries.put({ key: recordKey(scope, entry.id), scope: scopeKey, entry, isLocal: true } satisfies StoredEntry);
     }
   };
-  previousRequest.onsuccess = () => { previous = previousRequest.result; apply(); };
-  previousPurchaseRequest.onsuccess = () => { previousPurchase = previousPurchaseRequest.result; apply(); };
+  previousRequest.onsuccess = () => {
+    previous = previousRequest.result;
+    apply();
+  };
+  previousPurchaseRequest.onsuccess = () => {
+    previousPurchase = previousPurchaseRequest.result;
+    apply();
+  };
   await transactionDone(transaction);
 }
 
@@ -548,12 +707,19 @@ export async function queueOfflinePurchaseDelete(scope: OfflineScope, purchase: 
       return;
     }
     const kept = purchase.installments.filter((installment) => installment.actual_cents !== null);
-    for (const installment of purchase.installments) if (installment.actual_cents === null) entries.delete(recordKey(scope, installment.id));
+    for (const installment of purchase.installments)
+      if (installment.actual_cents === null) entries.delete(recordKey(scope, installment.id));
     const canceled = { ...purchase, canceled_at: now, installments: kept };
     operations.put({
-      key, scope: scopeKey, userId: scope.userId, spaceId: scope.spaceId,
-      purchaseId: purchase.id, operationId: previous?.operationId ?? crypto.randomUUID(),
-      kind: 'delete', baseVersion: previous?.baseVersion ?? purchase.version, payload: null,
+      key,
+      scope: scopeKey,
+      userId: scope.userId,
+      spaceId: scope.spaceId,
+      purchaseId: purchase.id,
+      operationId: previous?.operationId ?? crypto.randomUUID(),
+      kind: 'delete',
+      baseVersion: previous?.baseVersion ?? purchase.version,
+      payload: null,
       queuedAt: previous?.queuedAt ?? now,
     } satisfies StoredPurchaseOperation);
     transaction.objectStore('purchases').put({ key, scope: scopeKey, purchase: canceled } satisfies StoredPurchase);
@@ -572,7 +738,8 @@ export async function markOfflinePurchaseConflict(
   const request = store.get(recordKey(scope, sentOperation.purchaseId)) as IDBRequest<StoredPurchaseOperation | undefined>;
   request.onsuccess = () => {
     const current = request.result;
-    if (current?.operationId === sentOperation.operationId && current.baseVersion === sentOperation.baseVersion) store.put({ ...current, conflict } satisfies StoredPurchaseOperation);
+    if (current?.operationId === sentOperation.operationId && current.baseVersion === sentOperation.baseVersion)
+      store.put({ ...current, conflict } satisfies StoredPurchaseOperation);
   };
   await transactionDone(transaction);
 }
@@ -596,7 +763,10 @@ export async function acknowledgeOfflinePurchaseOperation(
   const finish = () => {
     reads += 1;
     if (reads < 2 || current?.operationId !== sentOperation.operationId) return;
-    const unchanged = current.kind === sentOperation.kind && current.baseVersion === sentOperation.baseVersion && JSON.stringify(current.payload) === JSON.stringify(sentOperation.payload);
+    const unchanged =
+      current.kind === sentOperation.kind &&
+      current.baseVersion === sentOperation.baseVersion &&
+      JSON.stringify(current.payload) === JSON.stringify(sentOperation.payload);
     if (unchanged) operationStore.delete(key);
     else if (result.purchase) {
       if (current.kind === 'create') current.kind = 'update';
@@ -616,10 +786,18 @@ export async function acknowledgeOfflinePurchaseOperation(
         entryStore.put({ key: recordKey(scope, entry.id), scope: scopeKey, entry, isLocal: !unchanged } satisfies StoredEntry);
       }
     }
-    transaction.objectStore('metadata').put({ key: scopeKey, scope: scopeKey, lastSyncedAt: new Date().toISOString() } satisfies StoredMetadata);
+    transaction
+      .objectStore('metadata')
+      .put({ key: scopeKey, scope: scopeKey, lastSyncedAt: new Date().toISOString() } satisfies StoredMetadata);
   };
-  currentRequest.onsuccess = () => { current = currentRequest.result; finish(); };
-  localRequest.onsuccess = () => { local = localRequest.result; finish(); };
+  currentRequest.onsuccess = () => {
+    current = currentRequest.result;
+    finish();
+  };
+  localRequest.onsuccess = () => {
+    local = localRequest.result;
+    finish();
+  };
   await transactionDone(transaction);
 }
 
@@ -658,20 +836,39 @@ export async function resolveOfflinePurchaseConflict(scope: OfflineScope, operat
         for (const installment of local.installments) transaction.objectStore('entries').delete(recordKey(scope, installment.id));
         return;
       }
-      const recreateLocal = !serverPurchase || operation.conflict!.reason === 'id_collision'
-        || (operation.conflict!.reason === 'server_deleted' && operation.kind !== 'delete');
+      const recreateLocal =
+        !serverPurchase ||
+        operation.conflict!.reason === 'id_collision' ||
+        (operation.conflict!.reason === 'server_deleted' && operation.kind !== 'delete');
       if (recreateLocal) {
         const newId = crypto.randomUUID();
-        const purchase = { ...local, id: newId, version: 1, installments: local.installments.map((item) => ({ ...item, id: crypto.randomUUID(), version: 1 })) };
+        const purchase = {
+          ...local,
+          id: newId,
+          version: 1,
+          installments: local.installments.map((item) => ({ ...item, id: crypto.randomUUID(), version: 1 })),
+        };
         const payload = operation.payload as { purchase: Record<string, unknown>; installments: Array<Record<string, unknown>> } | null;
-        if (payload) payload.installments = payload.installments.map((item) => ({
-          ...item,
-          id: purchase.installments.find((installment) => installment.installment_number === Number(item.installmentNumber))?.id ?? crypto.randomUUID(),
-        }));
+        if (payload)
+          payload.installments = payload.installments.map((item) => ({
+            ...item,
+            id:
+              purchase.installments.find((installment) => installment.installment_number === Number(item.installmentNumber))?.id ??
+              crypto.randomUUID(),
+          }));
         purchaseStore.delete(key);
         operationStore.delete(key);
         purchaseStore.put({ key: recordKey(scope, newId), scope: scopeKey, purchase } satisfies StoredPurchase);
-        operationStore.put({ ...operation, key: recordKey(scope, newId), purchaseId: newId, operationId: crypto.randomUUID(), kind: 'create', baseVersion: null, payload, conflict: undefined } satisfies StoredPurchaseOperation);
+        operationStore.put({
+          ...operation,
+          key: recordKey(scope, newId),
+          purchaseId: newId,
+          operationId: crypto.randomUUID(),
+          kind: 'create',
+          baseVersion: null,
+          payload,
+          conflict: undefined,
+        } satisfies StoredPurchaseOperation);
         const entries = transaction.objectStore('entries');
         for (const installment of local.installments) entries.delete(recordKey(scope, installment.id));
         for (const installment of purchase.installments) {
@@ -680,7 +877,12 @@ export async function resolveOfflinePurchaseConflict(scope: OfflineScope, operat
         }
         return;
       }
-      operationStore.put({ ...operation, operationId: crypto.randomUUID(), baseVersion: serverPurchase.version, conflict: undefined } satisfies StoredPurchaseOperation);
+      operationStore.put({
+        ...operation,
+        operationId: crypto.randomUUID(),
+        baseVersion: serverPurchase.version,
+        conflict: undefined,
+      } satisfies StoredPurchaseOperation);
       purchaseStore.put({ key, scope: scopeKey, purchase: { ...local, version: serverPurchase.version } } satisfies StoredPurchase);
     };
   };
@@ -691,26 +893,39 @@ function offlineInvoiceKey(cardId: string, invoiceMonth: string) {
   return `${cardId}:${invoiceMonth.slice(0, 7)}`;
 }
 
-function optimisticallyApplyInvoice(invoice: OfflineInvoice, kind: 'pay' | 'reverse', payload: Record<string, unknown> | null): OfflineInvoice {
-  if (kind === 'reverse') return {
-    ...invoice, status: 'open', payment_status: 'open', actual_cents: null, paid_on: null,
-    payment_method_id: null, payment_method_name: null,
-    entries: invoice.entries.map((entry) => ({ ...entry, actual_cents: null, realized_on: null })),
-  };
+function optimisticallyApplyInvoice(
+  invoice: OfflineInvoice,
+  kind: 'pay' | 'reverse',
+  payload: Record<string, unknown> | null,
+): OfflineInvoice {
+  if (kind === 'reverse')
+    return {
+      ...invoice,
+      status: 'open',
+      payment_status: 'open',
+      actual_cents: null,
+      paid_on: null,
+      payment_method_id: null,
+      payment_method_name: null,
+      entries: invoice.entries.map((entry) => ({ ...entry, actual_cents: null, realized_on: null })),
+    };
   const actualCents = String(payload?.actualCents ?? invoice.planned_cents);
   const plannedTotal = invoice.entries.reduce((sum, entry) => sum + BigInt(entry.planned_cents), 0n);
   const actualTotal = BigInt(actualCents);
   let allocated = 0n;
   const entries = invoice.entries.map((entry, index) => {
-    const share = index === invoice.entries.length - 1
-      ? actualTotal - allocated
-      : actualTotal * BigInt(entry.planned_cents) / plannedTotal;
+    const share =
+      index === invoice.entries.length - 1 ? actualTotal - allocated : (actualTotal * BigInt(entry.planned_cents)) / plannedTotal;
     allocated += share;
-    return { ...entry, actual_cents: share.toString(), realized_on: String(payload?.paidOn ?? '' ) };
+    return { ...entry, actual_cents: share.toString(), realized_on: String(payload?.paidOn ?? '') };
   });
   return {
-    ...invoice, status: 'paid', payment_status: 'paid', actual_cents: actualCents,
-    paid_on: String(payload?.paidOn ?? ''), payment_method_id: typeof payload?.paymentMethodId === 'string' ? payload.paymentMethodId : null,
+    ...invoice,
+    status: 'paid',
+    payment_status: 'paid',
+    actual_cents: actualCents,
+    paid_on: String(payload?.paidOn ?? ''),
+    payment_method_id: typeof payload?.paymentMethodId === 'string' ? payload.paymentMethodId : null,
     payment_method_name: typeof payload?.paymentMethodName === 'string' ? payload.paymentMethodName : null,
     entries,
   };
@@ -721,7 +936,9 @@ export async function saveOfflineInvoices(scope: OfflineScope, invoices: Offline
   const scopeKey = offlineScopeKey(scope);
   const transaction = database.transaction(['cardInvoices', 'invoiceOperations', 'metadata'], 'readwrite');
   const invoiceStore = transaction.objectStore('cardInvoices');
-  const operationRequest = transaction.objectStore('invoiceOperations').index('scope').getAll(scopeKey) as IDBRequest<StoredInvoiceOperation[]>;
+  const operationRequest = transaction.objectStore('invoiceOperations').index('scope').getAll(scopeKey) as IDBRequest<
+    StoredInvoiceOperation[]
+  >;
   const cachedRequest = invoiceStore.index('scope').getAll(scopeKey) as IDBRequest<StoredInvoice[]>;
   let reads = 0;
   const save = () => {
@@ -735,7 +952,11 @@ export async function saveOfflineInvoices(scope: OfflineScope, invoices: Offline
     }
     for (const invoice of invoices) {
       if (!pending.has(offlineInvoiceKey(invoice.card_id, invoice.invoice_month))) {
-        invoiceStore.put({ key: recordKey(scope, offlineInvoiceKey(invoice.card_id, invoice.invoice_month)), scope: scopeKey, invoice } satisfies StoredInvoice);
+        invoiceStore.put({
+          key: recordKey(scope, offlineInvoiceKey(invoice.card_id, invoice.invoice_month)),
+          scope: scopeKey,
+          invoice,
+        } satisfies StoredInvoice);
       }
     }
     transaction.objectStore('metadata').put({ key: scopeKey, scope: scopeKey, lastSyncedAt: now } satisfies StoredMetadata);
@@ -762,14 +983,22 @@ export async function queueOfflineInvoiceChange(
   previousRequest.onsuccess = () => {
     const previous = previousRequest.result;
     operationStore.put({
-      key, scope: scopeKey, userId: scope.userId, spaceId: scope.spaceId,
-      cardId: invoice.card_id, invoiceMonth: invoice.invoice_month.slice(0, 7),
-      operationId: previous?.operationId ?? crypto.randomUUID(), kind,
-      baseVersion: previous?.baseVersion ?? invoice.version, payload,
+      key,
+      scope: scopeKey,
+      userId: scope.userId,
+      spaceId: scope.spaceId,
+      cardId: invoice.card_id,
+      invoiceMonth: invoice.invoice_month.slice(0, 7),
+      operationId: previous?.operationId ?? crypto.randomUUID(),
+      kind,
+      baseVersion: previous?.baseVersion ?? invoice.version,
+      payload,
       queuedAt: previous?.queuedAt ?? now,
     } satisfies StoredInvoiceOperation);
     transaction.objectStore('cardInvoices').put({
-      key, scope: scopeKey, invoice: optimisticallyApplyInvoice(invoice, kind, payload),
+      key,
+      scope: scopeKey,
+      invoice: optimisticallyApplyInvoice(invoice, kind, payload),
     } satisfies StoredInvoice);
   };
   await transactionDone(transaction);
@@ -783,10 +1012,13 @@ export async function markOfflineInvoiceConflict(
   const database = await openDatabase();
   const transaction = database.transaction(['invoiceOperations'], 'readwrite');
   const store = transaction.objectStore('invoiceOperations');
-  const request = store.get(recordKey(scope, offlineInvoiceKey(sentOperation.cardId, sentOperation.invoiceMonth))) as IDBRequest<StoredInvoiceOperation | undefined>;
+  const request = store.get(recordKey(scope, offlineInvoiceKey(sentOperation.cardId, sentOperation.invoiceMonth))) as IDBRequest<
+    StoredInvoiceOperation | undefined
+  >;
   request.onsuccess = () => {
     const current = request.result;
-    if (current?.operationId === sentOperation.operationId && current.baseVersion === sentOperation.baseVersion) store.put({ ...current, conflict } satisfies StoredInvoiceOperation);
+    if (current?.operationId === sentOperation.operationId && current.baseVersion === sentOperation.baseVersion)
+      store.put({ ...current, conflict } satisfies StoredInvoiceOperation);
   };
   await transactionDone(transaction);
 }
@@ -810,7 +1042,10 @@ export async function acknowledgeOfflineInvoiceOperation(
   const finish = () => {
     reads += 1;
     if (reads < 2 || current?.operationId !== sentOperation.operationId) return;
-    const unchanged = current.kind === sentOperation.kind && current.baseVersion === sentOperation.baseVersion && JSON.stringify(current.payload) === JSON.stringify(sentOperation.payload);
+    const unchanged =
+      current.kind === sentOperation.kind &&
+      current.baseVersion === sentOperation.baseVersion &&
+      JSON.stringify(current.payload) === JSON.stringify(sentOperation.payload);
     if (unchanged) operationStore.delete(key);
     else if (result.invoice) {
       current.baseVersion = result.invoice.version;
@@ -818,11 +1053,24 @@ export async function acknowledgeOfflineInvoiceOperation(
       delete current.conflict;
       operationStore.put(current);
     }
-    if (result.invoice) invoiceStore.put({ key, scope: scopeKey, invoice: unchanged || !local ? result.invoice : { ...local.invoice, version: result.invoice.version } } satisfies StoredInvoice);
-    transaction.objectStore('metadata').put({ key: scopeKey, scope: scopeKey, lastSyncedAt: new Date().toISOString() } satisfies StoredMetadata);
+    if (result.invoice)
+      invoiceStore.put({
+        key,
+        scope: scopeKey,
+        invoice: unchanged || !local ? result.invoice : { ...local.invoice, version: result.invoice.version },
+      } satisfies StoredInvoice);
+    transaction
+      .objectStore('metadata')
+      .put({ key: scopeKey, scope: scopeKey, lastSyncedAt: new Date().toISOString() } satisfies StoredMetadata);
   };
-  currentRequest.onsuccess = () => { current = currentRequest.result; finish(); };
-  localRequest.onsuccess = () => { local = localRequest.result; finish(); };
+  currentRequest.onsuccess = () => {
+    current = currentRequest.result;
+    finish();
+  };
+  localRequest.onsuccess = () => {
+    local = localRequest.result;
+    finish();
+  };
   await transactionDone(transaction);
 }
 
@@ -845,11 +1093,21 @@ export async function resolveOfflineInvoiceConflict(scope: OfflineScope, operati
       return;
     }
     if (!serverInvoice) return;
-    if (operation.kind === 'pay' && serverInvoice.payment_status === 'paid') operation.payload = { ...operation.payload, replacePaid: true };
-    operationStore.put({ ...operation, operationId: crypto.randomUUID(), baseVersion: serverInvoice.version, conflict: undefined } satisfies StoredInvoiceOperation);
+    if (operation.kind === 'pay' && serverInvoice.payment_status === 'paid')
+      operation.payload = { ...operation.payload, replacePaid: true };
+    operationStore.put({
+      ...operation,
+      operationId: crypto.randomUUID(),
+      baseVersion: serverInvoice.version,
+      conflict: undefined,
+    } satisfies StoredInvoiceOperation);
     const localRequest = invoiceStore.get(key) as IDBRequest<StoredInvoice | undefined>;
     localRequest.onsuccess = () => {
-      if (localRequest.result) invoiceStore.put({ ...localRequest.result, invoice: { ...localRequest.result.invoice, version: serverInvoice.version } } satisfies StoredInvoice);
+      if (localRequest.result)
+        invoiceStore.put({
+          ...localRequest.result,
+          invoice: { ...localRequest.result.invoice, version: serverInvoice.version },
+        } satisfies StoredInvoice);
     };
   };
   await transactionDone(transaction);
@@ -888,7 +1146,12 @@ function entryPayload(entry: OfflineEntry) {
   };
 }
 
-export async function queueOfflineEntryChange(scope: OfflineScope, entry: OfflineEntry, kind: Exclude<OfflineOperationKind, 'delete'>, now = new Date().toISOString()) {
+export async function queueOfflineEntryChange(
+  scope: OfflineScope,
+  entry: OfflineEntry,
+  kind: Exclude<OfflineOperationKind, 'delete'>,
+  now = new Date().toISOString(),
+) {
   const database = await openDatabase();
   const scopeKey = offlineScopeKey(scope);
   const key = recordKey(scope, entry.id);
@@ -906,7 +1169,7 @@ export async function queueOfflineEntryChange(scope: OfflineScope, entry: Offlin
       entryId: entry.id,
       operationId: prior?.operationId ?? crypto.randomUUID(),
       kind: operationKind,
-      baseVersion: prior ? prior.baseVersion : operationKind === 'create' ? null : entry.version ?? 1,
+      baseVersion: prior ? prior.baseVersion : operationKind === 'create' ? null : (entry.version ?? 1),
       payload: entryPayload(entry),
       queuedAt: prior?.queuedAt ?? now,
     } satisfies StoredOperation);
@@ -923,20 +1186,21 @@ export async function queueOfflineEntryDelete(scope: OfflineScope, entry: Offlin
   const operationStore = transaction.objectStore('operations');
   const previous = operationStore.get(key) as IDBRequest<StoredOperation | undefined>;
   previous.onsuccess = () => {
-      transaction.objectStore('entries').delete(key);
-      if (previous.result?.kind === 'create') operationStore.delete(key);
-      else operationStore.put({
-      key,
-      scope: scopeKey,
-      userId: scope.userId,
-      spaceId: scope.spaceId,
+    transaction.objectStore('entries').delete(key);
+    if (previous.result?.kind === 'create') operationStore.delete(key);
+    else
+      operationStore.put({
+        key,
+        scope: scopeKey,
+        userId: scope.userId,
+        spaceId: scope.spaceId,
         entryId: entry.id,
         operationId: previous.result?.operationId ?? crypto.randomUUID(),
         kind: 'delete',
         baseVersion: previous.result?.baseVersion ?? entry.version ?? 1,
         payload: null,
-      queuedAt: previous.result?.queuedAt ?? now,
-    } satisfies StoredOperation);
+        queuedAt: previous.result?.queuedAt ?? now,
+      } satisfies StoredOperation);
   };
   await transactionDone(transaction);
 }
@@ -948,7 +1212,8 @@ export async function markOfflineConflict(scope: OfflineScope, sentOperation: Of
   const request = store.get(recordKey(scope, sentOperation.entryId)) as IDBRequest<StoredOperation | undefined>;
   request.onsuccess = () => {
     const current = request.result;
-    if (current?.operationId === sentOperation.operationId && current.baseVersion === sentOperation.baseVersion) store.put({ ...current, conflict } satisfies StoredOperation);
+    if (current?.operationId === sentOperation.operationId && current.baseVersion === sentOperation.baseVersion)
+      store.put({ ...current, conflict } satisfies StoredOperation);
   };
   await transactionDone(transaction);
 }
@@ -971,9 +1236,10 @@ export async function acknowledgeOfflineOperation(scope: OfflineScope, sentOpera
     completedReads += 1;
     if (completedReads < 2) return;
     if (!currentOperation || currentOperation.operationId !== sentOperation.operationId) return;
-    const unchanged = currentOperation.kind === sentOperation.kind
-      && currentOperation.baseVersion === sentOperation.baseVersion
-      && JSON.stringify(currentOperation.payload) === JSON.stringify(sentOperation.payload);
+    const unchanged =
+      currentOperation.kind === sentOperation.kind &&
+      currentOperation.baseVersion === sentOperation.baseVersion &&
+      JSON.stringify(currentOperation.payload) === JSON.stringify(sentOperation.payload);
 
     if (unchanged) {
       operationStore.delete(key);
@@ -985,7 +1251,12 @@ export async function acknowledgeOfflineOperation(scope: OfflineScope, sentOpera
       currentOperation.operationId = crypto.randomUUID();
       delete currentOperation.conflict;
       operationStore.put(currentOperation);
-      if (localEntry) entryStore.put({ ...localEntry, entry: { ...localEntry.entry, version: result.entry.version ?? 1 }, isLocal: true } satisfies StoredEntry);
+      if (localEntry)
+        entryStore.put({
+          ...localEntry,
+          entry: { ...localEntry.entry, version: result.entry.version ?? 1 },
+          isLocal: true,
+        } satisfies StoredEntry);
     } else if (result.deleted && currentOperation.kind === 'delete') {
       operationStore.delete(key);
       entryStore.delete(key);
@@ -993,14 +1264,35 @@ export async function acknowledgeOfflineOperation(scope: OfflineScope, sentOpera
       const newEntryId = crypto.randomUUID();
       const newKey = recordKey(scope, newEntryId);
       entryStore.delete(key);
-      entryStore.put({ ...localEntry, key: newKey, entry: { ...localEntry.entry, id: newEntryId, version: undefined }, isLocal: true } satisfies StoredEntry);
+      entryStore.put({
+        ...localEntry,
+        key: newKey,
+        entry: { ...localEntry.entry, id: newEntryId, version: undefined },
+        isLocal: true,
+      } satisfies StoredEntry);
       operationStore.delete(key);
-      operationStore.put({ ...currentOperation, key: newKey, entryId: newEntryId, operationId: crypto.randomUUID(), kind: 'create', baseVersion: null, conflict: undefined } satisfies StoredOperation);
+      operationStore.put({
+        ...currentOperation,
+        key: newKey,
+        entryId: newEntryId,
+        operationId: crypto.randomUUID(),
+        kind: 'create',
+        baseVersion: null,
+        conflict: undefined,
+      } satisfies StoredOperation);
     }
-    transaction.objectStore('metadata').put({ key: scopeKey, scope: scopeKey, lastSyncedAt: new Date().toISOString() } satisfies StoredMetadata);
+    transaction
+      .objectStore('metadata')
+      .put({ key: scopeKey, scope: scopeKey, lastSyncedAt: new Date().toISOString() } satisfies StoredMetadata);
   };
-  currentRequest.onsuccess = () => { currentOperation = currentRequest.result; finish(); };
-  localEntryRequest.onsuccess = () => { localEntry = localEntryRequest.result; finish(); };
+  currentRequest.onsuccess = () => {
+    currentOperation = currentRequest.result;
+    finish();
+  };
+  localEntryRequest.onsuccess = () => {
+    localEntry = localEntryRequest.result;
+    finish();
+  };
   await transactionDone(transaction);
 }
 
@@ -1032,10 +1324,21 @@ export async function resolveOfflineConflict(scope: OfflineScope, operationId: s
       return;
     }
     if (operation.kind === 'create' && serverEntry && operation.conflict!.reason === 'idempotency_key_reused') {
-      operationStore.put({ ...operation, operationId: crypto.randomUUID(), kind: 'update', baseVersion: serverEntry.version ?? 1, conflict: undefined } satisfies StoredOperation);
+      operationStore.put({
+        ...operation,
+        operationId: crypto.randomUUID(),
+        kind: 'update',
+        baseVersion: serverEntry.version ?? 1,
+        conflict: undefined,
+      } satisfies StoredOperation);
       const localRequest = entryStore.get(key) as IDBRequest<StoredEntry | undefined>;
       localRequest.onsuccess = () => {
-        if (localRequest.result) entryStore.put({ ...localRequest.result, entry: { ...localRequest.result.entry, version: serverEntry.version ?? 1 }, isLocal: true } satisfies StoredEntry);
+        if (localRequest.result)
+          entryStore.put({
+            ...localRequest.result,
+            entry: { ...localRequest.result.entry, version: serverEntry.version ?? 1 },
+            isLocal: true,
+          } satisfies StoredEntry);
       };
       return;
     }
@@ -1049,15 +1352,33 @@ export async function resolveOfflineConflict(scope: OfflineScope, operationId: s
         entryStore.delete(key);
         entryStore.put({ key: newKey, scope: scopeKey, entry, isLocal: true } satisfies StoredEntry);
         operationStore.delete(key);
-        operationStore.put({ ...operation, key: newKey, entryId: newEntryId, operationId: crypto.randomUUID(), kind: 'create', baseVersion: null, conflict: undefined } satisfies StoredOperation);
+        operationStore.put({
+          ...operation,
+          key: newKey,
+          entryId: newEntryId,
+          operationId: crypto.randomUUID(),
+          kind: 'create',
+          baseVersion: null,
+          conflict: undefined,
+        } satisfies StoredOperation);
       };
       return;
     }
-    operationStore.put({ ...operation, operationId: crypto.randomUUID(), baseVersion: serverEntry.version ?? 1, conflict: undefined } satisfies StoredOperation);
+    operationStore.put({
+      ...operation,
+      operationId: crypto.randomUUID(),
+      baseVersion: serverEntry.version ?? 1,
+      conflict: undefined,
+    } satisfies StoredOperation);
     if (operation.kind !== 'delete') {
       const localRequest = entryStore.get(key) as IDBRequest<StoredEntry | undefined>;
       localRequest.onsuccess = () => {
-        if (localRequest.result) entryStore.put({ ...localRequest.result, entry: { ...localRequest.result.entry, version: serverEntry.version ?? 1 }, isLocal: true } satisfies StoredEntry);
+        if (localRequest.result)
+          entryStore.put({
+            ...localRequest.result,
+            entry: { ...localRequest.result.entry, version: serverEntry.version ?? 1 },
+            isLocal: true,
+          } satisfies StoredEntry);
       };
     }
   };
@@ -1097,7 +1418,9 @@ export async function loadRememberedOfflineUser(now = Date.now()): Promise<Store
   const database = await openDatabase();
   const transaction = database.transaction(['metadata'], 'readonly');
   const done = transactionDone(transaction);
-  const session = await requestValue(transaction.objectStore('metadata').get(deviceSessionKey) as IDBRequest<StoredDeviceSession | undefined>);
+  const session = await requestValue(
+    transaction.objectStore('metadata').get(deviceSessionKey) as IDBRequest<StoredDeviceSession | undefined>,
+  );
   await done;
   if (!session) return null;
   const age = now - new Date(session.verifiedAt).getTime();
@@ -1151,9 +1474,11 @@ export async function loadOfflineSnapshot<T>(scope: OfflineScope, path: string):
   const database = await openDatabase();
   const transaction = database.transaction(['snapshots'], 'readonly');
   const done = transactionDone(transaction);
-  const snapshot = await requestValue(transaction.objectStore('snapshots').get(recordKey(scope, path)) as IDBRequest<StoredSnapshot | undefined>);
+  const snapshot = await requestValue(
+    transaction.objectStore('snapshots').get(recordKey(scope, path)) as IDBRequest<StoredSnapshot | undefined>,
+  );
   await done;
-  return snapshot ? snapshot.data as T : null;
+  return snapshot ? (snapshot.data as T) : null;
 }
 
 export async function clearOfflineWorkspace(scope: OfflineScope) {
@@ -1161,7 +1486,17 @@ export async function clearOfflineWorkspace(scope: OfflineScope) {
   const scopeKey = offlineScopeKey(scope);
   const transaction = database.transaction([...storeNames], 'readwrite');
   const done = transactionDone(transaction);
-  const scopedStores: StoreName[] = ['entries', 'operations', 'snapshots', 'creditCards', 'cardOperations', 'purchases', 'purchaseOperations', 'cardInvoices', 'invoiceOperations'];
+  const scopedStores: StoreName[] = [
+    'entries',
+    'operations',
+    'snapshots',
+    'creditCards',
+    'cardOperations',
+    'purchases',
+    'purchaseOperations',
+    'cardInvoices',
+    'invoiceOperations',
+  ];
   const deletes = scopedStores.map((name) => {
     const store = transaction.objectStore(name);
     const request = store.index('scope').getAllKeys(scopeKey);
@@ -1179,7 +1514,8 @@ export async function clearOfflineWorkspace(scope: OfflineScope) {
   metadata.delete(scopeKey);
   const rememberedUser = metadata.get(deviceSessionKey) as IDBRequest<StoredDeviceSession | undefined>;
   rememberedUser.onsuccess = () => {
-    if (rememberedUser.result?.user.id === scope.userId && rememberedUser.result.user.spaceId === scope.spaceId) metadata.delete(deviceSessionKey);
+    if (rememberedUser.result?.user.id === scope.userId && rememberedUser.result.user.spaceId === scope.spaceId)
+      metadata.delete(deviceSessionKey);
   };
   await Promise.all([...deletes, done]);
 }

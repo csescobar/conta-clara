@@ -15,7 +15,13 @@ describe('GET /api/health', () => {
 
   it('does not log database error messages that may contain sensitive data', async () => {
     const failure = Object.assign(new Error('synthetic-secret-must-not-be-logged'), { code: 'XX001' });
-    const failingApp = createApp({ pool: { query: async () => { throw failure; } } });
+    const failingApp = createApp({
+      pool: {
+        query: async () => {
+          throw failure;
+        },
+      },
+    });
     const logger = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     const response = await request(failingApp).get('/api/auth/state').expect(500);

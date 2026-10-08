@@ -10,13 +10,16 @@ function passwordIsValid(password) {
 
 async function findValidToken(pool, purpose, token) {
   if (typeof token !== 'string' || !inviteTokenPattern.test(token)) return null;
-  const result = await pool.query(`
+  const result = await pool.query(
+    `
     SELECT id, space_id, email, target_user_id
     FROM account_tokens
     WHERE token_hash = $1 AND purpose = $2
       AND used_at IS NULL AND revoked_at IS NULL AND expires_at > now()
     LIMIT 1
-  `, [hashOpaqueToken(token), purpose]);
+  `,
+    [hashOpaqueToken(token), purpose],
+  );
   return result.rows[0] ?? null;
 }
 
@@ -48,13 +51,16 @@ export function createAccountActivationRouter({ pool, secureCookies = false, csr
 
       client = await pool.connect();
       await client.query('BEGIN');
-      const locked = await client.query(`
+      const locked = await client.query(
+        `
         SELECT id, space_id, email
         FROM account_tokens
         WHERE id = $1 AND purpose = 'invite'
           AND used_at IS NULL AND revoked_at IS NULL AND expires_at > now()
         FOR UPDATE
-      `, [preview.id]);
+      `,
+        [preview.id],
+      );
       if (!locked.rows[0]) {
         await client.query('ROLLBACK');
         return response.status(400).json({ error: invalidTokenMessage });
@@ -72,10 +78,7 @@ export function createAccountActivationRouter({ pool, secureCookies = false, csr
       );
       const user = userResult.rows[0];
       const spaceId = locked.rows[0].space_id;
-      await client.query(
-        'INSERT INTO space_memberships (space_id, user_id, role) VALUES ($1, $2, $3)',
-        [spaceId, user.id, 'member'],
-      );
+      await client.query('INSERT INTO space_memberships (space_id, user_id, role) VALUES ($1, $2, $3)', [spaceId, user.id, 'member']);
       await client.query('UPDATE account_tokens SET used_at = now() WHERE id = $1', [locked.rows[0].id]);
       const sessionToken = await createSession(client, { user_id: user.id, space_id: spaceId });
       await client.query('COMMIT');
@@ -94,7 +97,8 @@ export function createAccountActivationRouter({ pool, secureCookies = false, csr
 
   router.get('/password-resets/:token', async (request, response, next) => {
     try {
-      const reset = await pool.query(`
+      const reset = await pool.query(
+        `
         SELECT t.email
         FROM account_tokens t
         JOIN users u ON u.id = t.target_user_id AND u.is_active
@@ -102,7 +106,9 @@ export function createAccountActivationRouter({ pool, secureCookies = false, csr
         WHERE t.token_hash = $1 AND t.purpose = 'password_reset'
           AND t.used_at IS NULL AND t.revoked_at IS NULL AND t.expires_at > now()
         LIMIT 1
-      `, [inviteTokenPattern.test(request.params.token) ? hashOpaqueToken(request.params.token) : '']);
+      `,
+        [inviteTokenPattern.test(request.params.token) ? hashOpaqueToken(request.params.token) : ''],
+      );
       return response.json(reset.rows[0] ? { valid: true, email: reset.rows[0].email } : { valid: false });
     } catch (error) {
       next(error);
@@ -120,7 +126,8 @@ export function createAccountActivationRouter({ pool, secureCookies = false, csr
       if (typeof token !== 'string' || !inviteTokenPattern.test(token)) {
         return response.status(400).json({ error: invalidTokenMessage });
       }
-      const preview = await pool.query(`
+      const preview = await pool.query(
+        `
         SELECT t.id, t.space_id, t.target_user_id
         FROM account_tokens t
         JOIN users u ON u.id = t.target_user_id AND u.is_active
@@ -128,23 +135,29 @@ export function createAccountActivationRouter({ pool, secureCookies = false, csr
         WHERE t.token_hash = $1 AND t.purpose = 'password_reset'
           AND t.used_at IS NULL AND t.revoked_at IS NULL AND t.expires_at > now()
         LIMIT 1
-      `, [hashOpaqueToken(token)]);
+      `,
+        [hashOpaqueToken(token)],
+      );
       if (!preview.rows[0]) return response.status(400).json({ error: invalidTokenMessage });
       const passwordHash = await hashPassword(password);
 
       client = await pool.connect();
       await client.query('BEGIN');
-      const membership = await client.query(`
+      const membership = await client.query(
+        `
         SELECT role
         FROM space_memberships
         WHERE space_id = $1 AND user_id = $2 AND deactivated_at IS NULL
         FOR UPDATE
-      `, [preview.rows[0].space_id, preview.rows[0].target_user_id]);
+      `,
+        [preview.rows[0].space_id, preview.rows[0].target_user_id],
+      );
       if (!membership.rows[0]) {
         await client.query('ROLLBACK');
         return response.status(400).json({ error: invalidTokenMessage });
       }
-      const locked = await client.query(`
+      const locked = await client.query(
+        `
         SELECT t.id, t.space_id, t.target_user_id, u.display_name, u.email, m.role
         FROM account_tokens t
         JOIN users u ON u.id = t.target_user_id AND u.is_active
@@ -152,7 +165,9 @@ export function createAccountActivationRouter({ pool, secureCookies = false, csr
         WHERE t.id = $1 AND t.purpose = 'password_reset'
           AND t.used_at IS NULL AND t.revoked_at IS NULL AND t.expires_at > now()
         FOR UPDATE OF t
-      `, [preview.rows[0].id]);
+      `,
+        [preview.rows[0].id],
+      );
       if (!locked.rows[0]) {
         await client.query('ROLLBACK');
         return response.status(400).json({ error: invalidTokenMessage });
@@ -164,7 +179,16 @@ export function createAccountActivationRouter({ pool, secureCookies = false, csr
       const sessionToken = await createSession(client, { user_id: tokenRow.target_user_id, space_id: tokenRow.space_id });
       await client.query('COMMIT');
       response.cookie('cc_session', sessionToken, sessionCookieOptions(secureCookies));
-      return response.json({ ok: true, user: { id: tokenRow.target_user_id, name: tokenRow.display_name, email: tokenRow.email, role: tokenRow.role, spaceId: tokenRow.space_id } });
+      return response.json({
+        ok: true,
+        user: {
+          id: tokenRow.target_user_id,
+          name: tokenRow.display_name,
+          email: tokenRow.email,
+          role: tokenRow.role,
+          spaceId: tokenRow.space_id,
+        },
+      });
     } catch (error) {
       if (client) await client.query('ROLLBACK').catch(() => {});
       next(error);

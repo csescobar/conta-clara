@@ -10,7 +10,11 @@ export function CardHeader({ className, ...props }: HTMLAttributes<HTMLDivElemen
 }
 
 export function CardTitle({ className, children, ...props }: HTMLAttributes<HTMLHeadingElement>) {
-  return <h3 className={cn('text-base font-semibold tracking-tight', className)} {...props}>{children}</h3>;
+  return (
+    <h3 className={cn('text-base font-semibold tracking-tight', className)} {...props}>
+      {children}
+    </h3>
+  );
 }
 
 export function CardDescription({ className, ...props }: HTMLAttributes<HTMLParagraphElement>) {

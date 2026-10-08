@@ -41,7 +41,11 @@ function isValidCsrfToken(token, secret) {
   if (!nonce || !signature || extra.length || !/^[\w-]{43}$/.test(nonce)) return false;
   const expected = createHmac('sha256', secret).update(nonce).digest();
   let supplied;
-  try { supplied = Buffer.from(signature, 'base64url'); } catch { return false; }
+  try {
+    supplied = Buffer.from(signature, 'base64url');
+  } catch {
+    return false;
+  }
   return supplied.length === expected.length && timingSafeEqual(supplied, expected);
 }
 
@@ -96,7 +100,16 @@ export async function hashPassword(password) {
 
 export async function verifyPassword(password, storedHash) {
   const [algorithm, cost, blockSize, parallel, saltText, hashText, ...extra] = String(storedHash).split('$');
-  if (algorithm !== 'scrypt' || cost !== String(passwordCost) || blockSize !== String(passwordBlockSize) || parallel !== String(passwordParallel) || !saltText || !hashText || extra.length) return false;
+  if (
+    algorithm !== 'scrypt' ||
+    cost !== String(passwordCost) ||
+    blockSize !== String(passwordBlockSize) ||
+    parallel !== String(passwordParallel) ||
+    !saltText ||
+    !hashText ||
+    extra.length
+  )
+    return false;
   let salt;
   let expected;
   try {
@@ -106,12 +119,14 @@ export async function verifyPassword(password, storedHash) {
     return false;
   }
   if (salt.length !== 16 || expected.length !== passwordLength) return false;
-  const actual = Buffer.from(await scrypt(password, salt, passwordLength, {
-    N: passwordCost,
-    r: passwordBlockSize,
-    p: passwordParallel,
-    maxmem: 64 * 1024 * 1024,
-  }));
+  const actual = Buffer.from(
+    await scrypt(password, salt, passwordLength, {
+      N: passwordCost,
+      r: passwordBlockSize,
+      p: passwordParallel,
+      maxmem: 64 * 1024 * 1024,
+    }),
+  );
   return timingSafeEqual(actual, expected);
 }
 
@@ -127,24 +142,28 @@ function publicUser(row) {
 
 export async function createSession(client, user) {
   const token = randomBytes(32).toString('base64url');
-  await client.query(
-    'INSERT INTO sessions (space_id, user_id, token_hash, expires_at) VALUES ($1, $2, $3, now() + interval \'7 days\')',
-    [user.space_id, user.user_id, hashOpaqueToken(token)],
-  );
+  await client.query("INSERT INTO sessions (space_id, user_id, token_hash, expires_at) VALUES ($1, $2, $3, now() + interval '7 days')", [
+    user.space_id,
+    user.user_id,
+    hashOpaqueToken(token),
+  ]);
   return token;
 }
 
 async function findSessionUser(pool, request) {
   const token = readCookie(request, sessionCookie);
   if (!token) return null;
-  const result = await pool.query(`
+  const result = await pool.query(
+    `
     SELECT u.id AS user_id, u.display_name, u.email, m.role, m.space_id
     FROM sessions s
     JOIN users u ON u.id = s.user_id AND u.is_active
     JOIN space_memberships m ON m.space_id = s.space_id AND m.user_id = s.user_id AND m.deactivated_at IS NULL
     WHERE s.token_hash = $1 AND s.expires_at > now()
     LIMIT 1
-  `, [hashOpaqueToken(token)]);
+  `,
+    [hashOpaqueToken(token)],
+  );
   return result.rows[0] ?? null;
 }
 
@@ -196,7 +215,14 @@ export function createAuthRouter({ pool, secureCookies = false, secret = randomB
     const displayName = typeof request.body?.displayName === 'string' ? request.body.displayName.trim() : '';
     const email = typeof request.body?.email === 'string' ? request.body.email.trim().toLowerCase() : '';
     const password = typeof request.body?.password === 'string' ? request.body.password : '';
-    if (!displayName || displayName.length > 160 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254 || password.length < 12 || password.length > 1024) {
+    if (
+      !displayName ||
+      displayName.length > 160 ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+      email.length > 254 ||
+      password.length < 12 ||
+      password.length > 1024
+    ) {
       return response.status(400).json({ error: 'Confira o nome, o e-mail e use uma senha com pelo menos 12 caracteres.' });
     }
 
@@ -216,15 +242,12 @@ export function createAuthRouter({ pool, secureCookies = false, secret = randomB
         [email, displayName, passwordHash],
       );
       const user = userResult.rows[0];
-      const spaceResult = await client.query(
-        'INSERT INTO finance_spaces (name, created_by_user_id) VALUES ($1, $2) RETURNING id',
-        ['Finanças da família', user.id],
-      );
+      const spaceResult = await client.query('INSERT INTO finance_spaces (name, created_by_user_id) VALUES ($1, $2) RETURNING id', [
+        'Finanças da família',
+        user.id,
+      ]);
       const spaceId = spaceResult.rows[0].id;
-      await client.query(
-        'INSERT INTO space_memberships (space_id, user_id, role) VALUES ($1, $2, $3)',
-        [spaceId, user.id, 'admin'],
-      );
+      await client.query('INSERT INTO space_memberships (space_id, user_id, role) VALUES ($1, $2, $3)', [spaceId, user.id, 'admin']);
       const sessionToken = await createSession(client, { user_id: user.id, space_id: spaceId });
       await client.query('COMMIT');
       response.cookie(sessionCookie, sessionToken, sessionCookieOptions(secureCookies));
@@ -248,7 +271,8 @@ export function createAuthRouter({ pool, secureCookies = false, secret = randomB
     try {
       client = await pool.connect();
       await client.query('BEGIN');
-      const result = await client.query(`
+      const result = await client.query(
+        `
         SELECT u.id AS user_id, u.display_name, u.email, u.password_hash,
                m.role, m.space_id
         FROM users u
@@ -257,9 +281,11 @@ export function createAuthRouter({ pool, secureCookies = false, secret = randomB
         ORDER BY m.created_at
         LIMIT 1
         FOR SHARE OF u, m
-      `, [email]);
+      `,
+        [email],
+      );
       const user = result.rows[0];
-      const valid = await verifyPassword(password, user?.password_hash ?? await dummyPasswordHash);
+      const valid = await verifyPassword(password, user?.password_hash ?? (await dummyPasswordHash));
       if (!user || !valid) {
         await client.query('ROLLBACK');
         return response.status(401).json({ error: 'E-mail ou senha inválidos.' });

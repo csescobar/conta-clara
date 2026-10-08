@@ -15,7 +15,9 @@ function isIsoDate(value) {
 
 function optionalUuid(value) {
   if (value === undefined || value === null || value === '') return null;
-  return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value) ? value : undefined;
+  return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+    ? value
+    : undefined;
 }
 
 function parseImportedEntry(body) {
@@ -26,7 +28,12 @@ function parseImportedEntry(body) {
   const plannedCents = body?.plannedCents;
   const actualCents = body?.actualCents === undefined ? null : body.actualCents;
   const realizedOn = body?.realizedOn === undefined ? null : body.realizedOn;
-  const notes = body?.notes === undefined || body?.notes === null || body?.notes === '' ? null : typeof body.notes === 'string' ? body.notes.trim() : undefined;
+  const notes =
+    body?.notes === undefined || body?.notes === null || body?.notes === ''
+      ? null
+      : typeof body.notes === 'string'
+        ? body.notes.trim()
+        : undefined;
 
   if (!kinds.has(body?.kind) || !description || description.length > 200) return null;
   if (!isIsoDate(body?.competenceOn) || body.competenceOn.slice(-2) !== '01') return null;
@@ -36,7 +43,18 @@ function parseImportedEntry(body) {
   if (actualCents !== null && (!Number.isSafeInteger(actualCents) || actualCents < 0)) return null;
   if ((actualCents === null) !== (realizedOn === null) || (realizedOn !== null && !isIsoDate(realizedOn))) return null;
   if (notes === undefined || (notes && notes.length > 2000)) return null;
-  return { kind: body.kind, description, categoryId, competenceOn: body.competenceOn, dueOn, plannedCents, actualCents, realizedOn, paymentMethodId, notes };
+  return {
+    kind: body.kind,
+    description,
+    categoryId,
+    competenceOn: body.competenceOn,
+    dueOn,
+    plannedCents,
+    actualCents,
+    realizedOn,
+    paymentMethodId,
+    notes,
+  };
 }
 
 function canonicalFingerprint(entries) {
@@ -59,7 +77,8 @@ export function createImportsRouter({ pool, secureCookies = false, csrfSecret })
       return response.status(400).json({ error: `Confirme entre 1 e ${maxEntries} lançamentos válidos.` });
     }
     const entries = rawEntries.map(parseImportedEntry);
-    if (entries.some((entry) => !entry)) return response.status(400).json({ error: 'Um ou mais lançamentos têm tipo, descrição, competência, valor ou datas inválidas.' });
+    if (entries.some((entry) => !entry))
+      return response.status(400).json({ error: 'Um ou mais lançamentos têm tipo, descrição, competência, valor ou datas inválidas.' });
     const validatedEntries = entries;
     const fingerprint = canonicalFingerprint(validatedEntries);
 
@@ -70,22 +89,34 @@ export function createImportsRouter({ pool, secureCookies = false, csrfSecret })
 
       const categoryIds = [...new Set(validatedEntries.map((entry) => entry.categoryId).filter(Boolean))];
       const paymentMethodIds = [...new Set(validatedEntries.map((entry) => entry.paymentMethodId).filter(Boolean))];
-      const categoryResult = categoryIds.length ? await client.query(`
+      const categoryResult = categoryIds.length
+        ? await client.query(
+            `
         SELECT id, name, kind FROM categories
         WHERE space_id = $1 AND id = ANY($2::uuid[]) AND archived_at IS NULL
         FOR SHARE
-      `, [request.auth.spaceId, categoryIds]) : { rows: [] };
-      const methodResult = paymentMethodIds.length ? await client.query(`
+      `,
+            [request.auth.spaceId, categoryIds],
+          )
+        : { rows: [] };
+      const methodResult = paymentMethodIds.length
+        ? await client.query(
+            `
         SELECT id, name FROM payment_methods
         WHERE space_id = $1 AND id = ANY($2::uuid[]) AND archived_at IS NULL
         FOR SHARE
-      `, [request.auth.spaceId, paymentMethodIds]) : { rows: [] };
+      `,
+            [request.auth.spaceId, paymentMethodIds],
+          )
+        : { rows: [] };
       const categories = new Map(categoryResult.rows.map((row) => [row.id, row]));
       const methods = new Map(methodResult.rows.map((row) => [row.id, row]));
       for (const entry of validatedEntries) {
         if (entry.categoryId && (!categories.has(entry.categoryId) || categories.get(entry.categoryId).kind !== entry.kind)) {
           await client.query('ROLLBACK');
-          return response.status(400).json({ error: 'Cada categoria precisa estar ativa, pertencer a este espaço e corresponder ao tipo do lançamento.' });
+          return response
+            .status(400)
+            .json({ error: 'Cada categoria precisa estar ativa, pertencer a este espaço e corresponder ao tipo do lançamento.' });
         }
         if (entry.paymentMethodId && !methods.has(entry.paymentMethodId)) {
           await client.query('ROLLBACK');
@@ -93,21 +124,40 @@ export function createImportsRouter({ pool, secureCookies = false, csrfSecret })
         }
       }
 
-      const batchResult = await client.query(`
+      const batchResult = await client.query(
+        `
         INSERT INTO spreadsheet_import_batches (space_id, imported_by_user_id, fingerprint, item_count)
         VALUES ($1, $2, $3, $4)
         RETURNING id, fingerprint, item_count, imported_at
-      `, [request.auth.spaceId, request.auth.id, fingerprint, validatedEntries.length]);
+      `,
+        [request.auth.spaceId, request.auth.id, fingerprint, validatedEntries.length],
+      );
       const imported = [];
       for (const entry of validatedEntries) {
-        const result = await client.query(`
+        const result = await client.query(
+          `
           INSERT INTO financial_entries (
             space_id, created_by_user_id, updated_by_user_id, kind, description,
             category_id, competence_on, due_on, planned_cents, actual_cents, realized_on,
             payment_method_id, notes
           ) VALUES ($1, $2, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
           RETURNING id
-        `, [request.auth.spaceId, request.auth.id, entry.kind, entry.description, entry.categoryId, entry.competenceOn, entry.dueOn, entry.plannedCents, entry.actualCents, entry.realizedOn, entry.paymentMethodId, entry.notes]);
+        `,
+          [
+            request.auth.spaceId,
+            request.auth.id,
+            entry.kind,
+            entry.description,
+            entry.categoryId,
+            entry.competenceOn,
+            entry.dueOn,
+            entry.plannedCents,
+            entry.actualCents,
+            entry.realizedOn,
+            entry.paymentMethodId,
+            entry.notes,
+          ],
+        );
         const category = entry.categoryId ? categories.get(entry.categoryId) : null;
         const method = entry.paymentMethodId ? methods.get(entry.paymentMethodId) : null;
         const auditEntry = {
@@ -123,7 +173,14 @@ export function createImportsRouter({ pool, secureCookies = false, csrfSecret })
           payment_method_id: entry.paymentMethodId,
           payment_method_name: method?.name ?? null,
         };
-        await recordEntryAudit(client, { spaceId: request.auth.spaceId, actorUserId: request.auth.id, actorName: request.auth.name, entry: auditEntry, action: 'created', after: auditEntry });
+        await recordEntryAudit(client, {
+          spaceId: request.auth.spaceId,
+          actorUserId: request.auth.id,
+          actorName: request.auth.name,
+          entry: auditEntry,
+          action: 'created',
+          after: auditEntry,
+        });
         imported.push({ id: auditEntry.id, description: entry.description, kind: entry.kind });
       }
       await client.query('COMMIT');

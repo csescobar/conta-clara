@@ -15,7 +15,8 @@ const demoDashboard = {
   planned: { incomeCents: '780000', expenseCents: '346247', investmentCents: '50000', resultCents: '383753' },
   realized: { incomeCents: '780000', expenseCents: '346247', investmentCents: '50000', resultCents: '383753' },
   charts: { expensesByCategory: [{ categoryId: 'demo-home', categoryName: 'Moradia', plannedCents: '180000', realizedCents: '180000' }] },
-  upcoming: { count: 0, entries: [] }, overdue: { count: 0, entries: [] },
+  upcoming: { count: 0, entries: [] },
+  overdue: { count: 0, entries: [] },
 };
 
 async function renderSignedInApp() {
@@ -26,11 +27,23 @@ async function renderSignedInApp() {
 
 beforeEach(() => {
   window.history.replaceState({}, '', '/');
-  vi.stubGlobal('fetch', vi.fn().mockImplementation(async (input: string | URL | Request) => {
-    const path = String(input);
-    const body = path === '/api/auth/state' ? signedInState : path.startsWith('/api/dashboard?') ? demoDashboard : path === '/api/members' ? { members: [demoMember] } : path === '/api/members/invitations' ? { invitations: [] } : {};
-    return { ok: true, json: async () => body };
-  }));
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockImplementation(async (input: string | URL | Request) => {
+      const path = String(input);
+      const body =
+        path === '/api/auth/state'
+          ? signedInState
+          : path.startsWith('/api/dashboard?')
+            ? demoDashboard
+            : path === '/api/members'
+              ? { members: [demoMember] }
+              : path === '/api/members/invitations'
+                ? { invitations: [] }
+                : {};
+      return { ok: true, json: async () => body };
+    }),
+  );
 });
 
 afterEach(() => vi.unstubAllGlobals());

@@ -18,7 +18,11 @@ describe('Google Drive backup runner', () => {
     statusFile = join(directory, 'status.json');
     configFile = join(directory, 'rclone.conf');
     await writeFile(configFile, '[drive-crypt]\ntype = crypt\n');
-    remoteFiles = new Map([['daily', new Map()], ['weekly', new Map()], ['monthly', new Map()]]);
+    remoteFiles = new Map([
+      ['daily', new Map()],
+      ['weekly', new Map()],
+      ['monthly', new Map()],
+    ]);
     commands = [];
     failures = new Set();
   });
@@ -75,7 +79,11 @@ describe('Google Drive backup runner', () => {
 
   it('backs up at 03:00 São Paulo, verifies every upload, then applies retention', async () => {
     const now = new Date('2026-11-01T06:00:00.000Z'); // Sunday, 03:00 in São Paulo.
-    for (const [bucket, count] of [['daily', 8], ['weekly', 5], ['monthly', 7]]) {
+    for (const [bucket, count] of [
+      ['daily', 8],
+      ['weekly', 5],
+      ['monthly', 7],
+    ]) {
       for (let index = 0; index < count; index += 1) {
         const day = String(index + 1).padStart(2, '0');
         remoteFiles.get(bucket).set(`conta-clara-202501${day}T030000Z-00000000.dump`, 'old valid dump');
@@ -84,15 +92,29 @@ describe('Google Drive backup runner', () => {
 
     const result = await runBackup({ env: env(), now: () => now, execute });
 
-    expect(result).toMatchObject({ skipped: false, ok: true, status: { runState: 'success', lastSuccessDate: '2026-11-01', retentionPending: false } });
+    expect(result).toMatchObject({
+      skipped: false,
+      ok: true,
+      status: { runState: 'success', lastSuccessDate: '2026-11-01', retentionPending: false },
+    });
     expect(localBackupDate(now)).toBe('2026-11-01');
-    expect([...remoteFiles].map(([bucket, files]) => [bucket, files.size])).toEqual([['daily', 7], ['weekly', 4], ['monthly', 6]]);
+    expect([...remoteFiles].map(([bucket, files]) => [bucket, files.size])).toEqual([
+      ['daily', 7],
+      ['weekly', 4],
+      ['monthly', 6],
+    ]);
     const lastVerificationIndex = commands.map(({ args }) => args[2]).lastIndexOf('cryptcheck');
     const firstDeletionIndex = commands.map(({ args }) => args[2]).indexOf('deletefile');
     expect(lastVerificationIndex).toBeGreaterThanOrEqual(0);
     expect(firstDeletionIndex).toBeGreaterThan(lastVerificationIndex);
     const pgDump = commands.find(({ command }) => command === 'pg_dump');
-    expect(pgDump.options.env).toMatchObject({ PGHOST: 'postgres', PGPORT: '5432', PGUSER: 'backup_user', PGPASSWORD: 'local@password', PGDATABASE: 'conta_clara' });
+    expect(pgDump.options.env).toMatchObject({
+      PGHOST: 'postgres',
+      PGPORT: '5432',
+      PGUSER: 'backup_user',
+      PGPASSWORD: 'local@password',
+      PGDATABASE: 'conta_clara',
+    });
     expect(pgDump.options.env.BACKUP_DATABASE_URL).toBeUndefined();
     expect(commands.some(({ args }) => args.some((argument) => argument.includes('local@password')))).toBe(false);
   });
@@ -113,18 +135,24 @@ describe('Google Drive backup runner', () => {
     const previousSuccess = '2026-10-31T06:00:00.000Z';
     const previousFile = 'conta-clara-20261031T060000Z-00000000.dump';
     remoteFiles.get('daily').set(previousFile, 'last valid backup');
-    await writeFile(statusFile, JSON.stringify({
-      version: 1,
-      runState: 'success',
-      lastSuccessAt: previousSuccess,
-      lastSuccessDate: '2026-10-31',
-      retentionPending: false,
-    }));
+    await writeFile(
+      statusFile,
+      JSON.stringify({
+        version: 1,
+        runState: 'success',
+        lastSuccessAt: previousSuccess,
+        lastSuccessDate: '2026-10-31',
+        retentionPending: false,
+      }),
+    );
     failures.add('mkdir');
 
     const result = await runBackup({ env: env(), now: () => new Date('2026-11-01T06:00:00.000Z'), execute });
 
-    expect(result).toMatchObject({ ok: false, status: { runState: 'failed', lastSuccessAt: previousSuccess, lastFailureCode: 'drive_upload' } });
+    expect(result).toMatchObject({
+      ok: false,
+      status: { runState: 'failed', lastSuccessAt: previousSuccess, lastFailureCode: 'drive_upload' },
+    });
     expect(remoteFiles.get('daily').get(previousFile)).toBe('last valid backup');
     expect(commands.some(({ args }) => args[2] === 'deletefile')).toBe(false);
     expect(commands.some(({ command }) => command === 'pg_dump')).toBe(false);
@@ -139,7 +167,10 @@ describe('Google Drive backup runner', () => {
     }
     const result = await runBackup({ env: env(), now: () => now, execute });
 
-    expect(result).toMatchObject({ ok: true, status: { runState: 'warning', lastSuccessDate: '2026-11-01', retentionPending: true, lastFailureCode: 'retention' } });
+    expect(result).toMatchObject({
+      ok: true,
+      status: { runState: 'warning', lastSuccessDate: '2026-11-01', retentionPending: true, lastFailureCode: 'retention' },
+    });
     const dumpCount = commands.filter(({ command }) => command === 'pg_dump').length;
     failures.clear();
     const retry = await runBackup({ env: env(), now: () => new Date(now.getTime() + 16 * 60_000), execute });

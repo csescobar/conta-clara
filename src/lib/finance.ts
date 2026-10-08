@@ -1,5 +1,8 @@
 export function parseBrazilianCents(value: string, allowZero = false): number | null {
-  const normalized = value.trim().replace(/^R\$\s*/i, '').replace(/\s/g, '');
+  const normalized = value
+    .trim()
+    .replace(/^R\$\s*/i, '')
+    .replace(/\s/g, '');
   const match = normalized.match(/^(\d{1,3}(?:\.\d{3})+|\d+)(?:,(\d{1,2}))?$/);
   if (!match) return null;
   const whole = Number(match[1].replace(/\./g, ''));
@@ -34,7 +37,10 @@ function toCents(cents: number | string | bigint): bigint {
 const wholeReais = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 });
 
 /** Formata centavos inteiros (número, string ou BigInt) em reais sem perder precisão. */
-export function formatBrazilianMoney(cents: number | string | bigint, { signDisplay = 'auto' }: { signDisplay?: MoneySignDisplay } = {}): string {
+export function formatBrazilianMoney(
+  cents: number | string | bigint,
+  { signDisplay = 'auto' }: { signDisplay?: MoneySignDisplay } = {},
+): string {
   const value = toCents(cents);
   const absolute = value < 0n ? -value : value;
   const sign = value < 0n ? '-' : value > 0n && signDisplay !== 'auto' ? '+' : '';

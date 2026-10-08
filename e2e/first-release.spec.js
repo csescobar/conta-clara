@@ -2,8 +2,9 @@ import { expect, test } from '@playwright/test';
 import * as XLSX from 'xlsx';
 
 function currentMonth() {
-  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit' })
-    .formatToParts(new Date());
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit' }).formatToParts(
+    new Date(),
+  );
   const year = parts.find((part) => part.type === 'year').value;
   const month = parts.find((part) => part.type === 'month').value;
   return `${year}-${month}`;
@@ -15,8 +16,12 @@ function monthAfter(value, offset) {
 }
 
 function brazilianToday() {
-  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' })
-    .formatToParts(new Date());
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
   const day = parts.find((part) => part.type === 'day').value;
   const month = parts.find((part) => part.type === 'month').value;
   const year = parts.find((part) => part.type === 'year').value;
@@ -25,13 +30,24 @@ function brazilianToday() {
 
 function syntheticWorkbook() {
   const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
-    ['Descrição da Conta', 'Categoria', 'Dia de Vencimento', 'Valor Previsto (R$)', 'Forma de Pagamento', 'Status', 'Data de Pagamento', 'Observações'],
-    ['Conta sintética importada', 'Moradia fictícia', 15, '$50.00', 'Pix fictício', 'Em aberto', '', 'Fixture de navegador'],
-  ]), 'Contas e Vencimentos');
-  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
-    ['Mês', 'Receitas Previstas'],
-  ]), 'Fluxo de Caixa Mensal');
+  XLSX.utils.book_append_sheet(
+    workbook,
+    XLSX.utils.aoa_to_sheet([
+      [
+        'Descrição da Conta',
+        'Categoria',
+        'Dia de Vencimento',
+        'Valor Previsto (R$)',
+        'Forma de Pagamento',
+        'Status',
+        'Data de Pagamento',
+        'Observações',
+      ],
+      ['Conta sintética importada', 'Moradia fictícia', 15, '$50.00', 'Pix fictício', 'Em aberto', '', 'Fixture de navegador'],
+    ]),
+    'Contas e Vencimentos',
+  );
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([['Mês', 'Receitas Previstas']]), 'Fluxo de Caixa Mensal');
   return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
 }
 
@@ -53,18 +69,24 @@ test('administra um espaço compartilhado, importa e sincroniza uma alteração 
     const mobileNav = admin.getByRole('navigation', { name: 'Navegação principal móvel' });
     await expect(mobileNav).toBeVisible();
     expect(await admin.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
-    const navigationItems = await mobileNav.locator('a, button').evaluateAll((items) => items.map((item) => {
-      const rect = item.getBoundingClientRect();
-      return { left: rect.left, right: rect.right, width: rect.width };
-    }));
+    const navigationItems = await mobileNav.locator('a, button').evaluateAll((items) =>
+      items.map((item) => {
+        const rect = item.getBoundingClientRect();
+        return { left: rect.left, right: rect.right, width: rect.width };
+      }),
+    );
     expect(navigationItems).toHaveLength(5);
     expect(navigationItems.every((item) => item.width >= 44 && item.left >= 0 && item.right <= width)).toBe(true);
     for (let index = 0; index < navigationItems.length - 1; index += 1) {
       expect(navigationItems[index].right).toBeLessThanOrEqual(navigationItems[index + 1].left + 1);
     }
-    const clippedLabels = await mobileNav.locator('span').evaluateAll((labels) => labels.some((label) => label.scrollWidth > label.clientWidth + 1));
+    const clippedLabels = await mobileNav
+      .locator('span')
+      .evaluateAll((labels) => labels.some((label) => label.scrollWidth > label.clientWidth + 1));
     expect(clippedLabels).toBe(false);
-    const smallestLabel = await mobileNav.locator('span').evaluateAll((labels) => Math.min(...labels.map((label) => Number.parseFloat(getComputedStyle(label).fontSize))));
+    const smallestLabel = await mobileNav
+      .locator('span')
+      .evaluateAll((labels) => Math.min(...labels.map((label) => Number.parseFloat(getComputedStyle(label).fontSize))));
     expect(smallestLabel).toBeGreaterThanOrEqual(12);
   }
 
@@ -219,14 +241,13 @@ test('administra um espaço compartilhado, importa e sincroniza uma alteração 
     const createObjectURL = URL.createObjectURL.bind(URL);
     Object.defineProperty(window, '__contaClaraCsv', { value: '', writable: true });
     URL.createObjectURL = (blob) => {
-      void blob.text().then((content) => { window.__contaClaraCsv = content; });
+      void blob.text().then((content) => {
+        window.__contaClaraCsv = content;
+      });
       return createObjectURL(blob);
     };
   });
-  const [csvDownload] = await Promise.all([
-    admin.waitForEvent('download'),
-    admin.getByRole('button', { name: 'Exportar CSV' }).click(),
-  ]);
+  const [csvDownload] = await Promise.all([admin.waitForEvent('download'), admin.getByRole('button', { name: 'Exportar CSV' }).click()]);
   expect(csvDownload.suggestedFilename()).toBe('conta-clara-lancamentos-2026-11.csv');
   await expect.poll(() => admin.evaluate(() => window.__contaClaraCsv)).toContain('"Cartão da família fictício"');
   const csvContent = await admin.evaluate(() => window.__contaClaraCsv);
@@ -266,9 +287,12 @@ test('administra um espaço compartilhado, importa e sincroniza uma alteração 
   const forecastDashboard = await (await forecastRequest).json();
   const cardInstallmentCents = forecastMonth === '2026-11' ? 334 : 0;
   expect(forecastDashboard.planned.expenseCents).toBe(String(2000 + cardInstallmentCents));
-  expect(forecastDashboard.charts.expensesByCategory).toContainEqual(expect.objectContaining({
-    categoryName: 'Moradia fictícia', plannedCents: String(2000 + cardInstallmentCents),
-  }));
+  expect(forecastDashboard.charts.expensesByCategory).toContainEqual(
+    expect.objectContaining({
+      categoryName: 'Moradia fictícia',
+      plannedCents: String(2000 + cardInstallmentCents),
+    }),
+  );
 
   await admin.getByRole('link', { name: 'Lançamentos' }).click();
   await admin.getByLabel('Competência').fill(forecastMonth);
@@ -301,7 +325,10 @@ test('administra um espaço compartilhado, importa e sincroniza uma alteração 
   await admin.getByLabel('Competência').fill(skippedMonth);
   await expect(admin.getByText('Moradia recorrente fictícia')).toBeVisible();
   await admin.getByRole('button', { name: 'Excluir Moradia recorrente fictícia' }).click();
-  await admin.getByRole('alertdialog', { name: 'Excluir “Moradia recorrente fictícia”?' }).getByRole('button', { name: 'Excluir lançamento' }).click();
+  await admin
+    .getByRole('alertdialog', { name: 'Excluir “Moradia recorrente fictícia”?' })
+    .getByRole('button', { name: 'Excluir lançamento' })
+    .click();
   await expect(admin.getByText('Moradia recorrente fictícia')).toHaveCount(0);
 
   await admin.getByRole('link', { name: 'Recorrências' }).click();
@@ -374,9 +401,13 @@ test('administra um espaço compartilhado, importa e sincroniza uma alteração 
   await member.getByRole('button', { name: 'Ativar acesso' }).click();
   await expect(member.getByRole('heading', { name: 'Visão geral' })).toBeVisible();
   await expect.poll(() => member.evaluate(() => Boolean(navigator.serviceWorker?.controller))).toBe(true);
-  const cachedUrls = await member.evaluate(async () => (await Promise.all((await caches.keys()).map(async (name) =>
-    (await (await caches.open(name)).keys()).map((request) => new URL(request.url).pathname),
-  ))).flat());
+  const cachedUrls = await member.evaluate(async () =>
+    (
+      await Promise.all(
+        (await caches.keys()).map(async (name) => (await (await caches.open(name)).keys()).map((request) => new URL(request.url).pathname)),
+      )
+    ).flat(),
+  );
   expect(cachedUrls).toContain('/');
   expect(cachedUrls.some((url) => url.endsWith('.js'))).toBe(true);
 
