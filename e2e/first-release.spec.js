@@ -173,6 +173,43 @@ test('administra um espaço compartilhado, importa e sincroniza uma alteração 
   await expect(novemberExpenses).toContainText('3,34');
   await expect(novemberExpenses).toContainText('3,01');
 
+  const chartTables = admin.locator('details');
+  await expect(chartTables).toHaveCount(2);
+  for (const width of [320, 390, 430]) {
+    await admin.setViewportSize({ width, height: 844 });
+    for (let index = 0; index < 2; index += 1) {
+      const disclosure = chartTables.nth(index);
+      const summary = disclosure.locator('summary');
+      await summary.focus();
+      await admin.keyboard.press('Enter');
+      await expect(disclosure).toHaveJSProperty('open', true);
+      const table = disclosure.locator('table');
+      const geometry = await table.evaluate((element) => {
+        const container = element.parentElement;
+        const containerRect = container.getBoundingClientRect();
+        const numericCells = Array.from(element.querySelectorAll('tbody td'));
+        return {
+          viewportWidth: window.innerWidth,
+          documentWidth: document.documentElement.scrollWidth,
+          tableWidth: element.getBoundingClientRect().width,
+          tableScrollWidth: element.scrollWidth,
+          containerWidth: container.clientWidth,
+          valuesFit: numericCells.every((cell) => {
+            const rect = cell.getBoundingClientRect();
+            return cell.scrollWidth <= cell.clientWidth + 1 && rect.left >= containerRect.left - 1 && rect.right <= containerRect.right + 1;
+          }),
+        };
+      });
+      expect(geometry.documentWidth).toBeLessThanOrEqual(geometry.viewportWidth);
+      expect(geometry.tableWidth).toBeLessThanOrEqual(geometry.containerWidth + 1);
+      expect(geometry.tableScrollWidth).toBeLessThanOrEqual(geometry.containerWidth + 1);
+      expect(geometry.valuesFit).toBe(true);
+      await admin.keyboard.press('Space');
+      await expect(disclosure).toHaveJSProperty('open', false);
+    }
+  }
+  await admin.setViewportSize({ width: 1280, height: 900 });
+
   await admin.getByRole('link', { name: 'Lançamentos' }).click();
   await admin.getByLabel('Competência').fill('2026-11');
   await expect(admin.getByText('Compra parcelada fictícia (1/3)')).toBeVisible();

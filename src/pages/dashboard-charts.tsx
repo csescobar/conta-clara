@@ -58,13 +58,18 @@ function ChartTooltip({ active, payload, label, mode = 'both' }: TooltipContentP
 }
 
 function DataTable({ title, data, mode = 'both' }: { title: string; data: ChartPoint[]; mode?: CategoryFilter }) {
-  return <details className="rounded-xl border border-border px-3 py-2 text-sm">
+  return <details className="min-w-0 rounded-xl border border-border px-3 py-2 text-sm">
     <summary className="cursor-pointer font-medium text-primary focus-visible:rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Ver dados em tabela</summary>
-    <div className="mt-3 overflow-x-auto">
-      <table className="w-full min-w-[24rem] text-sm">
+    <div className="mt-3 min-w-0 overflow-x-auto">
+      <table className="w-full table-fixed text-xs sm:text-sm">
         <caption className="sr-only">{title}</caption>
-        <thead><tr className="border-b border-border text-left text-xs text-muted-foreground"><th scope="col" className="py-2 pr-3 font-medium">Grupo</th>{mode !== 'realized' && <th scope="col" className="px-3 py-2 text-right font-medium">Previsto</th>}{mode !== 'planned' && <th scope="col" className="py-2 pl-3 text-right font-medium">Realizado</th>}</tr></thead>
-        <tbody>{data.map((point) => <tr key={point.label} className="border-b border-border last:border-0"><th scope="row" className="py-2 pr-3 text-left font-medium">{point.label}</th>{mode !== 'realized' && <td className="px-3 py-2 text-right tabular-nums">{formatCents(point.plannedCents)}</td>}{mode !== 'planned' && <td className="py-2 pl-3 text-right tabular-nums">{formatCents(point.realizedCents)}</td>}</tr>)}</tbody>
+        <colgroup>
+          <col className={mode === 'both' ? 'w-[34%]' : 'w-[40%]'} />
+          {mode !== 'realized' && <col className={mode === 'both' ? 'w-[33%]' : 'w-[60%]'} />}
+          {mode !== 'planned' && <col className={mode === 'both' ? 'w-[33%]' : 'w-[60%]'} />}
+        </colgroup>
+        <thead><tr className="border-b border-border text-left text-xs text-muted-foreground"><th scope="col" className="break-words py-2 pr-1.5 font-medium sm:pr-3">Grupo</th>{mode !== 'realized' && <th scope="col" className="whitespace-nowrap px-1.5 py-2 text-right font-medium sm:px-3">Previsto</th>}{mode !== 'planned' && <th scope="col" className="whitespace-nowrap py-2 pl-1.5 text-right font-medium sm:pl-3">Realizado</th>}</tr></thead>
+        <tbody>{data.map((point) => <tr key={point.label} className="border-b border-border last:border-0"><th scope="row" className="break-words py-2 pr-1.5 text-left font-medium sm:pr-3">{point.label}</th>{mode !== 'realized' && <td className="whitespace-nowrap px-1.5 py-2 text-right tabular-nums sm:px-3">{formatCents(point.plannedCents)}</td>}{mode !== 'planned' && <td className="whitespace-nowrap py-2 pl-1.5 text-right tabular-nums sm:pl-3">{formatCents(point.realizedCents)}</td>}</tr>)}</tbody>
       </table>
     </div>
   </details>;
@@ -139,7 +144,7 @@ export function DashboardCharts({ monthLabel, planned, realized, expensesByCateg
   return <section aria-label="Gráficos financeiros" className="mt-4 grid gap-4 xl:grid-cols-2">
     <Card>
       <CardHeader><CardTitle>Previsto versus realizado</CardTitle><CardDescription>Valores de {monthLabel}. Aportes aparecem separados das despesas.</CardDescription></CardHeader>
-      <CardContent className="grid gap-3">
+      <CardContent className="grid min-w-0 gap-3">
         {hasComparison ? <>
           <p className="text-xs leading-5 text-muted-foreground">Receitas, despesas e aportes lado a lado, conforme a tabela do painel acima.</p>
           <ResponsiveFinanceBarChart data={comparisonData} title={`Gráfico previsto versus realizado em ${monthLabel}`} />
@@ -149,7 +154,7 @@ export function DashboardCharts({ monthLabel, planned, realized, expensesByCateg
     </Card>
     <Card>
       <CardHeader><CardTitle>Despesas por categoria</CardTitle><CardDescription>Previsto por competência e realizado pela data efetiva em {monthLabel}.</CardDescription></CardHeader>
-      <CardContent className="grid gap-3">
+      <CardContent className="grid min-w-0 gap-3">
         <label htmlFor="category-chart-filter" className="grid gap-2 text-sm font-medium sm:flex sm:items-center sm:gap-3">Valores exibidos
           <select id="category-chart-filter" aria-label="Valores do gráfico por categoria" className="min-h-11 w-full rounded-xl border border-input bg-card px-3.5 py-2 text-sm text-foreground shadow-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20 sm:w-auto" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value as CategoryFilter)}>
             <option value="both">Previsto e realizado</option><option value="planned">Somente previsto</option><option value="realized">Somente realizado</option>
