@@ -39,6 +39,7 @@ npm run dev
 A interface abre em `http://localhost:5173`; o endpoint de saúde da API fica em `http://localhost:3001/api/health`. No primeiro acesso, crie o administrador inicial. O servidor de desenvolvimento escuta apenas em `127.0.0.1`; para usar outro dispositivo, configure o HTTPS local descrito em [docs/docker-local-https.md](docs/docker-local-https.md).
 
 ```sh
+npm run lint
 npm run typecheck
 npm test
 npm run build
