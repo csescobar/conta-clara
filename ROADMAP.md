@@ -104,8 +104,7 @@ Fases definidas a partir da auditoria de design system e engenharia de 2026-10-0
 - [ ] [Verificar mudanças localmente antes de publicar](https://github.com/csescobar/conta-clara/issues/50) — dependências: #48, #49.
 - [ ] [Reduzir o bundle inicial](https://github.com/csescobar/conta-clara/issues/51) — dependências: nenhuma.
 - [ ] [Tipar o servidor gradualmente](https://github.com/csescobar/conta-clara/issues/52) — dependências: #48.
-
-- [ ] [Corrigir condições de corrida em listas filtradas e formulários](https://github.com/csescobar/conta-clara/issues/54) — dependências: nenhuma; estabiliza o E2E, pré-requisito prático para validar as demais histórias.
+- [x] [Corrigir condições de corrida em listas filtradas e formulários](https://github.com/csescobar/conta-clara/issues/54) — dependências: nenhuma; respostas de filtros antigos descartadas, campos editados preservados ao reconectar e E2E estável em 5 execuções seguidas (`f5c02a2`).
 
 Integração contínua remota fica fora desta etapa: a verificação acontece localmente antes do push (#50), sem consumo de serviços pagos.
 
