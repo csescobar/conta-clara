@@ -19,6 +19,20 @@ describe('finance UI components', () => {
     expect(screen.getByText('Atrasado')).toBeInTheDocument();
   });
 
+  it('styles each financial status with its semantic state tokens', () => {
+    render(<><StatusBadge status="paid" /><StatusBadge status="pending" /><StatusBadge status="late" /></>);
+
+    expect(screen.getByText('Pago')).toHaveClass('bg-success-soft', 'text-success');
+    expect(screen.getByText('Pendente')).toHaveClass('bg-warning-soft', 'text-warning');
+    expect(screen.getByText('Atrasado')).toHaveClass('bg-destructive-soft', 'text-destructive');
+  });
+
+  it('presents errors on the destructive surface tokens', () => {
+    render(<ErrorState title="Falha ao carregar" description="Tente novamente." />);
+
+    expect(screen.getByRole('alert', { name: 'Falha ao carregar' })).toHaveClass('border-destructive-border', 'bg-destructive-surface');
+  });
+
   it('keeps the action reachable by keyboard', async () => {
     const user = userEvent.setup();
     render(<Button>Continuar</Button>);

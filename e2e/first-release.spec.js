@@ -64,6 +64,8 @@ test('administra um espaço compartilhado, importa e sincroniza uma alteração 
     }
     const clippedLabels = await mobileNav.locator('span').evaluateAll((labels) => labels.some((label) => label.scrollWidth > label.clientWidth + 1));
     expect(clippedLabels).toBe(false);
+    const smallestLabel = await mobileNav.locator('span').evaluateAll((labels) => Math.min(...labels.map((label) => Number.parseFloat(getComputedStyle(label).fontSize))));
+    expect(smallestLabel).toBeGreaterThanOrEqual(12);
   }
 
   await admin.setViewportSize({ width: 390, height: 844 });

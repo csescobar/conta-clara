@@ -115,7 +115,7 @@ export function ActivityPage() {
 
   return <>
     <PageHeader eyebrow="Transparência" title="Histórico" description="Veja quem cadastrou, alterou, confirmou ou removeu lançamentos do espaço compartilhado." />
-    {error && <p role="alert" className="mb-4 rounded-xl bg-[#fdecec] px-4 py-3 text-sm font-medium text-destructive">{error}</p>}
+    {error && <p role="alert" className="mb-4 rounded-xl bg-destructive-soft px-4 py-3 text-sm font-medium text-destructive">{error}</p>}
     <Card>
       <CardHeader><CardTitle>Atividade recente</CardTitle><CardDescription>Histórico somente para consulta, com as alterações mais recentes primeiro.</CardDescription></CardHeader>
       <CardContent>

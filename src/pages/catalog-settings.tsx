@@ -134,7 +134,7 @@ export function CatalogSettings() {
   }
 
   return <section aria-label="Cadastros financeiros compartilhados" className="grid gap-4 xl:grid-cols-2">
-    {error && <p role="alert" className="rounded-xl bg-[#fdecec] px-4 py-3 text-sm font-medium text-destructive xl:col-span-2">{error}</p>}
+    {error && <p role="alert" className="rounded-xl bg-destructive-soft px-4 py-3 text-sm font-medium text-destructive xl:col-span-2">{error}</p>}
     <Card>
       <CardHeader><CardTitle>Categorias</CardTitle><CardDescription>Receitas, despesas e aportes usados pelos dois membros do espaço.</CardDescription></CardHeader>
       <CardContent className="grid gap-5">

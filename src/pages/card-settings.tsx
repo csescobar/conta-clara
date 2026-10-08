@@ -213,8 +213,8 @@ export function CardSettings() {
       <CardDescription>Cadastre o apelido, titular e ciclo da fatura. O Conta Clara não guarda número, validade, CVV ou limite do cartão.</CardDescription>
     </CardHeader>
     <CardContent className="grid gap-5">
-      {error && <p role="alert" className="rounded-xl bg-[#fdecec] px-4 py-3 text-sm font-medium text-destructive">{error}</p>}
-      {offline?.storageError && !offline.supported && <p role="alert" className="rounded-xl bg-[#fdecec] px-4 py-3 text-sm font-medium text-destructive">{offline.storageError}</p>}
+      {error && <p role="alert" className="rounded-xl bg-destructive-soft px-4 py-3 text-sm font-medium text-destructive">{error}</p>}
+      {offline?.storageError && !offline.supported && <p role="alert" className="rounded-xl bg-destructive-soft px-4 py-3 text-sm font-medium text-destructive">{offline.storageError}</p>}
       <form onSubmit={(event) => void submit(event)} className="grid gap-3">
         <FormField id="credit-card-name" label="Apelido do cartão"><Input required maxLength={80} autoComplete="off" placeholder="Ex.: Cartão principal" value={name} onChange={(event) => setName(event.target.value)} /></FormField>
         <div className="grid gap-3 sm:grid-cols-2">

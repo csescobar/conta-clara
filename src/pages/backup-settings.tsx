@@ -53,7 +53,7 @@ export function BackupSettings() {
       <CardDescription>Google Drive · todos os dias às 03:00, horário de Brasília · retenção de 7 diários, 4 semanais e 6 mensais.</CardDescription>
     </CardHeader>
     <CardContent className="grid gap-3">
-      {error && <p role="alert" className="rounded-xl bg-[#fdecec] px-4 py-3 text-sm font-medium text-destructive">{error}</p>}
+      {error && <p role="alert" className="rounded-xl bg-destructive-soft px-4 py-3 text-sm font-medium text-destructive">{error}</p>}
       {loading && !status && <p role="status" className="text-sm text-muted-foreground">Carregando status do backup…</p>}
       {status && <div aria-busy={loading}>
         <p className="text-sm font-medium">{status.lastSuccessAt
@@ -62,7 +62,7 @@ export function BackupSettings() {
         {status.runState === 'running' && <p role="status" className="mt-1 text-sm text-muted-foreground">Backup em andamento.</p>}
         {status.lastFailureAt && status.lastFailureMessage && <p className="mt-1 text-sm text-destructive">Última falha (${displayDate(status.lastFailureAt) ?? 'data indisponível'}): {status.lastFailureMessage}</p>}
         {!status.lastSuccessAt && !status.lastFailureAt && <p className="mt-1 text-sm text-muted-foreground">A primeira execução acontece após configurar a conexão criptografada no servidor.</p>}
-        {status.runState === 'warning' && <p role="status" className="mt-1 text-sm text-amber-800">O backup foi salvo e verificado; uma etapa de retenção será repetida automaticamente.</p>}
+        {status.runState === 'warning' && <p role="status" className="mt-1 text-sm text-warning">O backup foi salvo e verificado; uma etapa de retenção será repetida automaticamente.</p>}
       </div>}
       <div><Button type="button" size="sm" variant="outline" disabled={loading} onClick={() => void load()}><RefreshCw aria-hidden="true" className="size-4" />Atualizar status</Button></div>
     </CardContent>

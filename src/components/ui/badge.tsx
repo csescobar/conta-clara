@@ -3,9 +3,9 @@ import type { HTMLAttributes } from 'react';
 import { cn } from '../../lib/utils';
 
 const statusOptions = {
-  paid: { label: 'Pago', className: 'bg-[#e8f5ed] text-success', Icon: CheckCircle2 },
-  pending: { label: 'Pendente', className: 'bg-[#fbf1d6] text-warning', Icon: Clock3 },
-  late: { label: 'Atrasado', className: 'bg-[#fdecec] text-destructive', Icon: AlertCircle },
+  paid: { label: 'Pago', className: 'bg-success-soft text-success', Icon: CheckCircle2 },
+  pending: { label: 'Pendente', className: 'bg-warning-soft text-warning', Icon: Clock3 },
+  late: { label: 'Atrasado', className: 'bg-destructive-soft text-destructive', Icon: AlertCircle },
 } as const;
 
 export type FinancialStatus = keyof typeof statusOptions;

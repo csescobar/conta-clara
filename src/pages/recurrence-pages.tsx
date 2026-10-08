@@ -86,7 +86,7 @@ export function RecurrencesPage() {
   const activeCount = rules.filter((rule) => !rule.archived_at).length;
   return <>
     <PageHeader eyebrow="Planejamento" title="Recorrências" description="Gere lançamentos mensais automaticamente e ajuste cada ocorrência quando precisar." action={<Button asChild><Link to="/recorrencias/novo"><Plus aria-hidden="true" className="size-4" />Nova regra</Link></Button>} />
-    {error && <p role="alert" className="mb-4 rounded-xl bg-[#fdecec] px-4 py-3 text-sm font-medium text-destructive">{error}</p>}
+    {error && <p role="alert" className="mb-4 rounded-xl bg-destructive-soft px-4 py-3 text-sm font-medium text-destructive">{error}</p>}
     <Card>
       <CardHeader><CardTitle>Regras mensais</CardTitle><CardDescription>{activeCount} {activeCount === 1 ? 'regra ativa' : 'regras ativas'} · os lançamentos gerados aparecem em Lançamentos.</CardDescription></CardHeader>
       <CardContent>
@@ -206,7 +206,7 @@ export function RecurrenceFormPage() {
   return <>
     <PageHeader eyebrow="Recorrências" title={editing ? 'Editar regra mensal' : 'Nova regra mensal'} description="Defina a despesa, receita ou aporte que deve se repetir a cada mês." />
     <Card className="max-w-3xl"><CardContent className="grid gap-5 p-5 sm:p-7">
-      {error && <p role="alert" className="rounded-xl bg-[#fdecec] px-4 py-3 text-sm font-medium text-destructive">{error}</p>}
+      {error && <p role="alert" className="rounded-xl bg-destructive-soft px-4 py-3 text-sm font-medium text-destructive">{error}</p>}
       <form onSubmit={submit} className="grid gap-5">
         <fieldset className="grid gap-2"><legend className="text-sm font-medium">Tipo</legend><div className="flex flex-wrap gap-2">{([['income', 'Receita'], ['expense', 'Despesa'], ['investment', 'Aporte']] as const).map(([value, label]) => <label key={value} className="cursor-pointer"><input className="peer sr-only" type="radio" name="recurrence-kind" value={value} checked={kind === value} onChange={() => { setKind(value); if (categories.find((category) => category.id === categoryId)?.kind !== value) setCategoryId(''); }} /><span className="inline-flex min-h-10 items-center rounded-xl border border-border bg-card px-4 text-sm font-medium text-muted-foreground peer-checked:border-primary peer-checked:bg-accent peer-checked:text-accent-foreground peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ring">{label}</span></label>)}</div></fieldset>
         <FormField id="recurrence-description" label="Descrição"><Input id="recurrence-description" required maxLength={200} autoComplete="off" placeholder="Ex.: conta de internet" value={description} onChange={(event) => setDescription(event.target.value)} /></FormField>

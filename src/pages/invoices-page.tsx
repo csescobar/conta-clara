@@ -26,9 +26,9 @@ function invoiceStatusLabel(invoice: OfflineInvoice) {
 }
 
 function statusStyle(status: OfflineInvoice['status']) {
-  return status === 'paid' ? 'bg-emerald-50 text-emerald-800'
-    : status === 'needs_review' ? 'bg-amber-50 text-amber-900'
-      : status === 'late' ? 'bg-red-50 text-red-800' : 'bg-muted text-muted-foreground';
+  return status === 'paid' ? 'bg-success-soft text-success'
+    : status === 'needs_review' ? 'bg-warning-soft text-warning'
+      : status === 'late' ? 'bg-destructive-soft text-destructive' : 'bg-muted text-muted-foreground';
 }
 
 export function InvoicesPage() {
@@ -220,8 +220,8 @@ export function InvoicesPage() {
   const heading = formatBrazilianMonth(`${month}-01`);
   return <>
     <PageHeader eyebrow="Cartões" title="Faturas" description="Confira as parcelas previstas e registre a quitação integral de cada fatura." action={<div className="flex items-center gap-2"><Button type="button" size="icon" variant="outline" aria-label="Mês anterior" onClick={() => setMonth((value) => moveMonth(value, -1))}><ChevronLeft aria-hidden="true" className="size-4" /></Button><Input aria-label="Mês de vencimento" type="month" className="w-[10.5rem]" value={month} onChange={(event) => { if (/^\d{4}-(0[1-9]|1[0-2])$/.test(event.target.value)) setMonth(event.target.value); }} /><Button type="button" size="icon" variant="outline" aria-label="Próximo mês" onClick={() => setMonth((value) => moveMonth(value, 1))}><ChevronRight aria-hidden="true" className="size-4" /></Button></div>} />
-    {notice && <p role="status" className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">{notice}</p>}
-    {error && <p role="alert" className="mb-4 rounded-xl bg-[#fdecec] px-4 py-3 text-sm font-medium text-destructive">{error}</p>}
+    {notice && <p role="status" className="mb-4 rounded-xl border border-success-border bg-success-surface px-4 py-3 text-sm text-success">{notice}</p>}
+    {error && <p role="alert" className="mb-4 rounded-xl bg-destructive-soft px-4 py-3 text-sm font-medium text-destructive">{error}</p>}
     {loading ? <LoadingState label="Carregando faturas" /> : grouped.length === 0 ? <Card><CardContent><EmptyState title={`Nenhuma fatura em ${heading}`} description="As faturas aparecem aqui quando houver parcelas de compras de cartão com vencimento neste mês." /></CardContent></Card> : <div className="grid gap-5">
       {grouped.map(({ cardId, cardName, invoices: cardInvoices }) => <section key={cardId} aria-labelledby={`invoice-card-${cardId}`} className="grid gap-3">
         <h2 id={`invoice-card-${cardId}`} className="flex items-center gap-2 text-lg font-semibold"><CreditCard aria-hidden="true" className="size-5 text-primary" />{cardName}</h2>
@@ -245,7 +245,7 @@ export function InvoicesPage() {
                 <div className="flex flex-wrap gap-2">
                   {canPay && <Button type="button" disabled={saving || Boolean(pendingOperation)} onClick={(event) => { triggerFocusRef.current = event.currentTarget; openPayment(invoice); }}><CircleCheck aria-hidden="true" className="size-4" />{invoice.status === 'needs_review' ? 'Confirmar novamente' : 'Quitar fatura'}</Button>}
                   {invoice.status === 'paid' && <Button type="button" variant="outline" disabled={saving || Boolean(pendingOperation)} onClick={(event) => { triggerFocusRef.current = event.currentTarget; setReversalInvoice(invoice); }}><RotateCcw aria-hidden="true" className="size-4" />Desfazer quitação</Button>}
-                  {pendingOperation && <span className="self-center text-xs font-medium text-amber-800">{pendingOperation.conflict ? 'Conflito de sincronização' : 'Pendente neste aparelho'}</span>}
+                  {pendingOperation && <span className="self-center text-xs font-medium text-warning">{pendingOperation.conflict ? 'Conflito de sincronização' : 'Pendente neste aparelho'}</span>}
                 </div>
               </div>
             </CardContent>

@@ -23,7 +23,7 @@ export function LoadingState({ label = 'Carregando dados' }: { label?: string })
 
 export function ErrorState({ title, description }: { title: string; description: string }) {
   return (
-    <section role="alert" aria-label={title} className="flex items-start gap-3 rounded-2xl border border-destructive/25 bg-[#fff8f8] p-5">
+    <section role="alert" aria-label={title} className="flex items-start gap-3 rounded-2xl border border-destructive-border bg-destructive-surface p-5">
       <AlertTriangle aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-destructive" />
       <div className="grid gap-1">
         <h3 className="font-semibold text-destructive">{title}</h3>

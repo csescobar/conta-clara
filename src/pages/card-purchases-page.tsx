@@ -313,9 +313,9 @@ export function CardPurchasesPage() {
   const editingInstallment = Boolean(editingInstallmentId);
   return <>
     <PageHeader eyebrow="Cartões" title="Compras parceladas" description="Planeje as parcelas nas faturas e acompanhe as despesas no espaço compartilhado." action={!editingPurchaseId ? <Button type="button" onClick={() => { setEditingPurchaseId('new'); setNotice(''); setError(''); }}><Plus aria-hidden="true" className="size-4" />Nova compra</Button> : undefined} />
-    {error && <p role="alert" className="mb-4 rounded-xl bg-[#fdecec] px-4 py-3 text-sm font-medium text-destructive">{error}</p>}
+    {error && <p role="alert" className="mb-4 rounded-xl bg-destructive-soft px-4 py-3 text-sm font-medium text-destructive">{error}</p>}
     {notice && <p role="status" className="mb-4 rounded-xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground">{notice}</p>}
-    {offline?.storageError && !offline.supported && <p role="alert" className="mb-4 rounded-xl bg-[#fdecec] px-4 py-3 text-sm font-medium text-destructive">{offline.storageError}</p>}
+    {offline?.storageError && !offline.supported && <p role="alert" className="mb-4 rounded-xl bg-destructive-soft px-4 py-3 text-sm font-medium text-destructive">{offline.storageError}</p>}
 
     {editingPurchaseId && <Card className="mb-5">
       <CardHeader><CardTitle>{editingInstallment ? `Editar parcela ${installmentBeingEdited?.installment_number ?? ''}` : purchaseBeingEdited ? 'Editar série da compra' : 'Nova compra'}</CardTitle><CardDescription>{editingInstallment ? 'Altere o valor ou a fatura desta parcela futura.' : 'As parcelas são criadas como despesas; o valor total será dividido exatamente em centavos.'}</CardDescription></CardHeader>

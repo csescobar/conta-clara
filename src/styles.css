@@ -15,12 +15,26 @@
   --accent: #d8ede7;
   --accent-foreground: #1a4e46;
   --destructive: #9b2c2c;
+  --destructive-foreground: #ffffff;
+  --destructive-soft: #fdecec;
+  --destructive-surface: #fff8f8;
+  --destructive-border: #efc4c4;
   --warning: #76530e;
+  --warning-soft: #fbf1d6;
+  --warning-surface: #fdf8ec;
+  --warning-border: #e8d29b;
+  --info: #1f5a80;
+  --info-soft: #e3eef6;
+  --info-surface: #f4f8fb;
+  --info-border: #bcd4e5;
   --chart-realized: #a85635;
   --border: #dce8e5;
   --input: #b9cbc6;
   --ring: #24776c;
   --success: #1f6a46;
+  --success-soft: #e8f5ed;
+  --success-surface: #f3faf6;
+  --success-border: #b7dcc5;
   --radius: 0.875rem;
 }
 
@@ -38,13 +52,29 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-soft: var(--destructive-soft);
+  --color-destructive-surface: var(--destructive-surface);
+  --color-destructive-border: var(--destructive-border);
   --color-chart-realized: var(--chart-realized);
   --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-surface: var(--warning-surface);
+  --color-warning-border: var(--warning-border);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-info-surface: var(--info-surface);
+  --color-info-border: var(--info-border);
   --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-success-surface: var(--success-surface);
+  --color-success-border: var(--success-border);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --text-display: 1.75rem;
+  --text-display--line-height: 2.25rem;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 @layer base {

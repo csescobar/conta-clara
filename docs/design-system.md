@@ -16,13 +16,33 @@ Conta Clara usa uma aparência clara, calma e acolhedora, com verde petróleo co
 | Sucesso | `#1F6A46` | Situação paga, sempre com rótulo e ícone |
 | Atenção | `#76530E` | Situação pendente, sempre com rótulo e ícone |
 | Erro | `#9B2C2C` | Situação atrasada ou erro, sempre com rótulo e ícone |
+| Informação | `#1F5A80` | Orientação neutra que não indica problema |
 | Realizado em gráficos | `#A85635` | Série realizada, distinta do verde de ação da série prevista |
+
+### Estados
+
+Cada estado tem texto, fundo suave, superfície e borda. Use as classes Tailwind geradas pelos tokens, nunca hexadecimais arbitrários nem a paleta padrão (`amber`, `emerald`, `red`…).
+
+| Estado | Texto | Fundo suave (`-soft`) | Superfície (`-surface`) | Borda (`-border`) |
+|---|---|---|---|---|
+| `success` | `#1F6A46` | `#E8F5ED` | `#F3FAF6` | `#B7DCC5` |
+| `warning` | `#76530E` | `#FBF1D6` | `#FDF8EC` | `#E8D29B` |
+| `destructive` | `#9B2C2C` | `#FDECEC` | `#FFF8F8` | `#EFC4C4` |
+| `info` | `#1F5A80` | `#E3EEF6` | `#F4F8FB` | `#BCD4E5` |
+
+- Fundo suave: selos e ícones de situação (`bg-warning-soft text-warning`) e mensagens curtas de erro (`bg-destructive-soft text-destructive`).
+- Superfície com borda: avisos e painéis maiores, como conflitos de sincronização (`border-warning-border bg-warning-surface text-warning`).
+- `destructive-foreground` (`#FFFFFF`) é o texto sobre o botão destrutivo (7,53:1).
+
+Contraste do texto de cada estado: sucesso 5,83:1 no fundo suave e 6,18:1 na superfície; atenção 6,19:1 e 6,57:1; erro 6,59:1 e 7,18:1; informação 6,29:1 e 6,94:1. Texto secundário mantém pelo menos 5,47:1 sobre as superfícies.
 
 Os pares de texto mais usados têm contraste superior a 4,5:1: texto principal sobre o fundo (11,27:1), ação primária sobre branco (6,39:1), texto secundário sobre branco (5,79:1), sucesso sobre fundo de sucesso (5,83:1), atenção sobre fundo de atenção (6,19:1) e erro sobre fundo de erro (6,59:1). Foco usa contorno visível de 2 px, com separação do componente.
 
 ## Tipografia, forma e espaçamento
 
-- Usar fontes de sistema, corpo a partir de 14 px e altura de linha confortável; números financeiros usam algarismos tabulares.
+- Usar somente fontes de sistema (`ui-sans-serif`, `system-ui` e equivalentes); números financeiros usam algarismos tabulares.
+- Escala tipográfica: `text-xs` (12 px) para metadados, rótulos curtos e menu móvel; `text-sm` (14 px) para corpo e controles; `text-base` (16 px) para títulos de cartão; `text-lg` e `text-xl` para títulos de diálogo e seção; `text-2xl`/`text-3xl` para títulos de página; `text-display` (28 px) para indicadores do painel. Nenhum texto fica abaixo de 12 px nem usa tamanho arbitrário.
+- Quando um rótulo não couber no menu móvel, use hífen opcional (`\u00ad`) e mantenha o nome acessível completo em vez de reduzir a fonte.
 - Usar escala de espaçamento baseada em 4 px. Agrupar primeiro pelo conteúdo e preservar respiro entre seções.
 - Campos e botões têm altura mínima de 40 px; alvos de toque em ícones têm pelo menos 40 × 40 px.
 - Usar cantos de 12 a 16 px para controles e cartões, bordas discretas e sombra leve.

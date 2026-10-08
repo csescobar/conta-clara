@@ -77,7 +77,7 @@ export function OneTimeAccessPage({ purpose }: { purpose: Purpose }) {
             {purpose === 'invite' && <FormField id="invite-name" label="Seu nome"><Input autoComplete="name" required maxLength={160} value={name} onChange={(event) => setName(event.target.value)} /></FormField>}
             <FormField id="new-password" label="Nova senha" hint="Use pelo menos 12 caracteres."><Input type="password" autoComplete="new-password" required minLength={12} maxLength={1024} value={password} onChange={(event) => setPassword(event.target.value)} /></FormField>
             <FormField id="confirm-password" label="Confirme a senha"><Input type="password" autoComplete="new-password" required minLength={12} maxLength={1024} value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /></FormField>
-            {error && <p role="alert" className="rounded-xl bg-[#fdecec] px-3.5 py-3 text-sm font-medium text-destructive">{error}</p>}
+            {error && <p role="alert" className="rounded-xl bg-destructive-soft px-3.5 py-3 text-sm font-medium text-destructive">{error}</p>}
             <Button type="submit" disabled={busy || !csrfToken} className="w-full">{busy ? 'Aguarde…' : purpose === 'invite' ? 'Ativar acesso' : 'Salvar nova senha'}</Button>
           </form></CardContent>}
         </Card>
