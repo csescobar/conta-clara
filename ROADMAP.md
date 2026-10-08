@@ -78,3 +78,44 @@ Contas bancárias e saldos, integração bancária, importação de extratos, pa
 ## Melhorias após a V3
 
 - [x] [Ajustar tabelas dos gráficos para caber em telas mobile](https://github.com/csescobar/conta-clara/issues/37) — cabeçalhos e valores cabem em 320–430 px sem overflow horizontal; navegação por teclado e layouts desktop validados (`deeabba`).
+
+## 9. Fundação do design system (V4)
+
+Fases definidas a partir da auditoria de design system e engenharia de 2026-10-08. As fases 9 e 11 podem avançar em paralelo; a fase 10 depende do catálogo vivo (#43).
+
+- [ ] [Consolidar tokens semânticos de estado e superfície](https://github.com/csescobar/conta-clara/issues/38) — dependências: nenhuma.
+- [ ] [Unificar formatação de dinheiro e datas](https://github.com/csescobar/conta-clara/issues/39) — dependências: nenhuma.
+- [ ] [Criar primitivos de formulário](https://github.com/csescobar/conta-clara/issues/40) — dependências: #38.
+- [ ] [Criar primitivos de sobreposição e mensagem](https://github.com/csescobar/conta-clara/issues/41) — dependências: #38.
+- [ ] [Extrair componentes de composição financeira](https://github.com/csescobar/conta-clara/issues/42) — dependências: #39, #40, #41.
+- [ ] [Publicar catálogo vivo e validar acessibilidade automaticamente](https://github.com/csescobar/conta-clara/issues/43) — dependências: #38, #39, #40, #41, #42.
+
+## 10. Experiência e acessibilidade (V4)
+
+- [ ] [Adicionar tema escuro](https://github.com/csescobar/conta-clara/issues/44) — dependências: #43.
+- [ ] [Padronizar carregamento, vazio e retorno de ações](https://github.com/csescobar/conta-clara/issues/45) — dependências: #41, #43.
+- [ ] [Revisar hierarquia das telas principais](https://github.com/csescobar/conta-clara/issues/46) — dependências: #42.
+- [ ] [Cobrir regressão visual e teclado em todas as rotas](https://github.com/csescobar/conta-clara/issues/47) — dependências: #44, #45, #46.
+
+## 11. Qualidade de engenharia (V4)
+
+- [ ] [Adotar lint e formatação](https://github.com/csescobar/conta-clara/issues/48) — dependências: nenhuma.
+- [ ] [Simplificar a execução dos testes Postgres](https://github.com/csescobar/conta-clara/issues/49) — dependências: nenhuma.
+- [ ] [Verificar mudanças localmente antes de publicar](https://github.com/csescobar/conta-clara/issues/50) — dependências: #48, #49.
+- [ ] [Reduzir o bundle inicial](https://github.com/csescobar/conta-clara/issues/51) — dependências: nenhuma.
+- [ ] [Tipar o servidor gradualmente](https://github.com/csescobar/conta-clara/issues/52) — dependências: #48.
+
+Integração contínua remota fica fora desta etapa: a verificação acontece localmente antes do push (#50), sem consumo de serviços pagos.
+
+### Acompanhamento da V4
+
+[Issue central da V4](https://github.com/csescobar/conta-clara/issues/53). Atualizar ambos os checklists após cada história concluída.
+
+## 12. Evoluções de produto (candidatas)
+
+Candidatas a planejar após a V4; refinar escopo e critérios antes de abrir as issues.
+
+- [ ] Orçamentos mensais por categoria com acompanhamento e alerta visual de limite.
+- [ ] Busca textual e filtros salvos em lançamentos.
+- [ ] Relatório anual com comparação mês a mês e evolução dos aportes.
+- [ ] Lembretes locais de vencimento pela PWA, sem serviço externo.
