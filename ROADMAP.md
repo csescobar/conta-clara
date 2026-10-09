@@ -101,7 +101,7 @@ Fases definidas a partir da auditoria de design system e engenharia de 2026-10-0
 
 - [x] [Adotar lint e formatação](https://github.com/csescobar/conta-clara/issues/48) — dependências: nenhuma; ESLint com jsx-a11y e regra de cores por tokens, Prettier aplicado em commit isolado e ignorado no blame (`1361c98`).
 - [x] [Simplificar a execução dos testes Postgres](https://github.com/csescobar/conta-clara/issues/49) — dependências: nenhuma; execução única, sequencial e com descoberta automática; falha cedo sem base _test (`99f107d`).
-- [ ] [Verificar mudanças localmente antes de publicar](https://github.com/csescobar/conta-clara/issues/50) — dependências: #48, #49.
+- [x] [Verificar mudanças localmente antes de publicar](https://github.com/csescobar/conta-clara/issues/50) — dependências: #48, #49; hook pre-push opcional com lint, tipos, testes e build (~40 s), sem CI remoto (`151b166`).
 - [ ] [Reduzir o bundle inicial](https://github.com/csescobar/conta-clara/issues/51) — dependências: nenhuma.
 - [ ] [Tipar o servidor gradualmente](https://github.com/csescobar/conta-clara/issues/52) — dependências: #48.
 - [x] [Corrigir condições de corrida em listas filtradas e formulários](https://github.com/csescobar/conta-clara/issues/54) — dependências: nenhuma; respostas de filtros antigos descartadas, campos editados preservados ao reconectar e E2E estável em 5 execuções seguidas (`f5c02a2`).
