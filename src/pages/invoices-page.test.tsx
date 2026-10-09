@@ -129,7 +129,7 @@ describe('invoices page', () => {
 
     await waitFor(() => expect(screen.getByText('Quitada')).toBeInTheDocument());
     expect(screen.getByText(/Quitada por/)).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledWith('/api/sync/operations', expect.objectContaining({ method: 'POST' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/sync/operations', expect.objectContaining({ method: 'POST' })));
     const sent = JSON.parse(String(fetchMock.mock.calls.find(([input]) => input === '/api/sync/operations')?.[1]?.body));
     expect(sent.payload).toMatchObject({ actualCents: 301, paidOn: '2026-10-09', paymentMethodId: 'pix-method' });
   });

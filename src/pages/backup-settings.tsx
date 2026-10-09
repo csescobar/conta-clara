@@ -4,6 +4,7 @@ import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { formatBrazilianDateTime } from '../lib/finance';
 import { Alert } from '../components/ui/alert';
+import { TextSkeleton } from '../components/ui/skeleton';
 
 type BackupStatus = {
   runState: 'never' | 'running' | 'success' | 'warning' | 'failed';
@@ -58,11 +59,7 @@ export function BackupSettings() {
       </CardHeader>
       <CardContent className="grid gap-3">
         {error && <Alert>{error}</Alert>}
-        {loading && !status && (
-          <p role="status" className="text-sm text-muted-foreground">
-            Carregando status do backup…
-          </p>
-        )}
+        {loading && !status && <TextSkeleton label="Carregando status do backup" lines={2} />}
         {status && (
           <div aria-busy={loading}>
             <p className="text-sm font-medium">

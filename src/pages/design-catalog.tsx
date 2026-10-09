@@ -13,6 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { useConfirmDialog } from '../components/ui/confirm-dialog';
 import { Dialog, DialogContent, DialogFooter, DialogHeader } from '../components/ui/dialog';
 import { EmptyState, LoadingState } from '../components/ui/feedback';
+import { ChartsSkeleton, ListSkeleton, TextSkeleton } from '../components/ui/skeleton';
 import { Checkbox, DateField, MoneyInput, MonthField, RadioGroup, Select, Textarea } from '../components/ui/form-controls';
 import { FormField, Input } from '../components/ui/input';
 import { MoneyValue } from '../components/ui/money-value';
@@ -238,6 +239,16 @@ function MessagesSection() {
         <Button variant="outline" onClick={() => toast('Compra salva. Será sincronizada quando houver conexão.')}>
           Mostrar aviso
         </Button>
+        <Button
+          variant="outline"
+          onClick={() =>
+            toast('A categoria “Casa” foi arquivada.', {
+              action: { label: 'Desfazer', onClick: () => toast('A categoria foi restaurada.') },
+            })
+          }
+        >
+          Aviso com desfazer
+        </Button>
         {answer && (
           <span role="status" className="text-sm text-muted-foreground">
             Resposta: {answer}
@@ -432,11 +443,27 @@ function FinanceSection() {
 
 function StatesSection() {
   return (
-    <Section id="catalog-states" title="Estados" description="Vazio e carregamento, sempre com texto.">
+    <Section
+      id="catalog-states"
+      title="Estados"
+      description="Esqueletos de carregamento com a mesma estrutura do conteúdo, estados vazios com orientação e ação."
+    >
       <div className="grid gap-3 sm:grid-cols-2">
-        <EmptyState title="Nenhum lançamento encontrado" description="Ajuste os filtros ou adicione a primeira movimentação." />
-        <LoadingState label="Carregando lançamentos" />
+        <EmptyState
+          title="Nenhum lançamento encontrado"
+          description="Ajuste os filtros ou adicione a primeira movimentação."
+          action={<Button>Adicionar lançamento</Button>}
+        />
+        <EmptyState compact title="Nenhuma categoria cadastrada" description="Use o formulário acima para criar a primeira categoria." />
+        <LoadingState label="Carregando (indicador simples)" />
+        <TextSkeleton label="Carregando categorias" />
       </div>
+      <Card>
+        <CardContent className="pt-5">
+          <ListSkeleton label="Carregando lançamentos" rows={3} />
+        </CardContent>
+      </Card>
+      <ChartsSkeleton />
     </Section>
   );
 }

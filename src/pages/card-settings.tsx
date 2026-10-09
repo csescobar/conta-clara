@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useState, type FormEvent, useRef } from 'react';
 import { Archive, CreditCard, Pencil, Plus, RotateCcw, X } from 'lucide-react';
 import { AuthContext } from '../auth/auth-gate';
 import { Button } from '../components/ui/button';
@@ -8,6 +8,9 @@ import { isNetworkFailure, useOfflineWorkspace } from '../offline/offline-contex
 import type { OfflineCard, OfflineCardMember } from '../offline/offline-store';
 import { Select } from '../components/ui/form-controls';
 import { Alert } from '../components/ui/alert';
+import { EmptyState } from '../components/ui/feedback';
+import { TextSkeleton } from '../components/ui/skeleton';
+import { toast } from '../components/ui/toast-store';
 
 type MemberResponse = { members?: Array<{ id: string; name: string; is_active: boolean }> };
 type CardResponse = { error?: string; cards?: OfflineCard[]; card?: OfflineCard; conflict?: boolean; serverCard?: OfflineCard };
@@ -29,6 +32,8 @@ export function CardSettings() {
   const setOfflineOnline = offline?.setOnline;
   const invalidateSession = offline?.invalidateSession;
   const [cards, setCards] = useState<OfflineCard[] | null>(null);
+  const cardsRef = useRef(cards);
+  cardsRef.current = cards;
   const [members, setMembers] = useState<OfflineCardMember[]>([]);
   const [name, setName] = useState('');
   const [holderUserId, setHolderUserId] = useState('');
@@ -151,6 +156,7 @@ export function CardSettings() {
     setBusy(true);
     try {
       const existing = (cards ?? []).find((card) => card.id === editingCardId);
+      const offlineSave = hasOfflineWorkspace && (!online || (typeof navigator !== 'undefined' && !navigator.onLine));
       const nextCard: OfflineCard = {
         id: existing?.id ?? crypto.randomUUID(),
         name: name.trim(),
@@ -191,6 +197,13 @@ export function CardSettings() {
         setCards((current) => [...(current ?? []).filter((card) => card.id !== created.id), created]);
       }
       clearForm();
+      toast(
+        offlineSave
+          ? 'Cartão salvo neste aparelho. Ele será sincronizado quando a conexão voltar.'
+          : existing
+            ? 'Cartão atualizado.'
+            : 'Cartão adicionado.',
+      );
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Não foi possível salvar o cartão.');
     } finally {
@@ -224,6 +237,15 @@ export function CardSettings() {
         await writeCard(`/api/cards/${card.id}/${action}`, 'POST', { baseVersion: card.version });
         await load();
       }
+      if (action === 'restore') toast('Cartão restaurado.');
+      else
+        // Arquivar é reversível sem perda: as compras e faturas do cartão permanecem.
+        toast('Cartão arquivado.', {
+          action: {
+            label: 'Desfazer',
+            onClick: () => void changeStatus(cardsRef.current?.find((item) => item.id === card.id) ?? card, 'restore'),
+          },
+        });
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : 'Não foi possível atualizar o cartão.');
     } finally {
@@ -311,7 +333,7 @@ export function CardSettings() {
         </form>
         <div className="grid gap-1" aria-label="Lista de cartões">
           {cards === null ? (
-            <p className="text-sm text-muted-foreground">Carregando cartões…</p>
+            <TextSkeleton label="Carregando cartões" />
           ) : cards.length ? (
             cards.map((card) => (
               <div
@@ -368,7 +390,11 @@ export function CardSettings() {
               </div>
             ))
           ) : (
-            <p className="text-sm text-muted-foreground">Nenhum cartão cadastrado.</p>
+            <EmptyState
+              compact
+              title="Nenhum cartão cadastrado"
+              description="Use o formulário acima para cadastrar o apelido, o titular e o ciclo da fatura do primeiro cartão."
+            />
           )}
         </div>
         {offline?.cardOperations.length ? (

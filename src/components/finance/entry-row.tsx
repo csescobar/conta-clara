@@ -4,8 +4,13 @@ import { cn } from '../../lib/utils';
 import { MoneyValue, type MoneyTone } from '../ui/money-value';
 import { StatusBadge, type FinancialStatus } from '../ui/badge';
 
-export function EntryList({ children, className }: { children: ReactNode; className?: string }) {
-  return <ul className={cn('divide-y divide-border', className)}>{children}</ul>;
+/** Lista de linhas. `busy` indica recarga em segundo plano: mantém o conteúdo, atenua e avisa leitores de tela. */
+export function EntryList({ children, className, busy = false }: { children: ReactNode; className?: string; busy?: boolean }) {
+  return (
+    <ul aria-busy={busy || undefined} className={cn('divide-y divide-border transition-opacity', busy && 'opacity-60', className)}>
+      {children}
+    </ul>
+  );
 }
 
 const iconTones = {

@@ -12,6 +12,9 @@ import { PageHeader } from './page-header';
 import { useConfirmDialog } from '../components/ui/confirm-dialog';
 import { Alert } from '../components/ui/alert';
 import { AppearanceSettings } from './appearance-settings';
+import { EmptyState } from '../components/ui/feedback';
+import { TextSkeleton } from '../components/ui/skeleton';
+import { toast } from '../components/ui/toast-store';
 
 export function SettingsPage() {
   const [confirm, confirmDialog] = useConfirmDialog();
@@ -68,6 +71,7 @@ export function SettingsPage() {
       setEmail('');
       setCopied(false);
       await load();
+      toast('Convite gerado. Copie o link e entregue manualmente.');
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : 'Não foi possível criar o convite.');
     } finally {
@@ -87,8 +91,11 @@ export function SettingsPage() {
           expires: 'Este link expira em 48 horas e pode ser usado uma única vez.',
         });
         setCopied(false);
+        toast('Novo convite gerado. O link anterior deixou de valer.');
       } else {
         await postAction(`/api/members/invitations/${id}/revoke`);
+        // Sem desfazer: um convite invalidado só pode ser substituído por outro, com novo link.
+        toast('Convite invalidado.');
       }
       await load();
     } catch (actionError) {
@@ -109,6 +116,7 @@ export function SettingsPage() {
         expires: 'Este link expira em 1 hora e pode ser usado uma única vez.',
       });
       setCopied(false);
+      toast('Link de redefinição gerado. Copie e entregue manualmente.');
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : 'Não foi possível gerar o link.');
     } finally {
@@ -132,6 +140,8 @@ export function SettingsPage() {
       await postAction(`/api/members/${member.id}/deactivate`);
       setLink(null);
       await load();
+      // Sem desfazer: as sessões encerradas não voltam e reativar é uma decisão separada.
+      toast('O acesso da pessoa foi desativado.');
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : 'Não foi possível desativar o acesso.');
     } finally {
@@ -139,12 +149,13 @@ export function SettingsPage() {
     }
   }
 
-  async function reactivateMember(member: { id: string }) {
+  async function reactivateMember(member: { id: string; name: string }) {
     setError('');
     setBusy(true);
     try {
       await postAction(`/api/members/${member.id}/reactivate`);
       await load();
+      toast('O acesso da pessoa foi reativado.');
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : 'Não foi possível reativar o acesso.');
     } finally {
@@ -185,7 +196,7 @@ export function SettingsPage() {
           </CardHeader>
           <CardContent className="grid gap-4">
             {members === null ? (
-              <p className="text-sm text-muted-foreground">Carregando pessoas…</p>
+              <TextSkeleton label="Carregando pessoas" />
             ) : members.length ? (
               <ul className="divide-y divide-border">
                 {members.map((member) => (
@@ -234,7 +245,11 @@ export function SettingsPage() {
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-muted-foreground">Nenhum membro encontrado.</p>
+              <EmptyState
+                compact
+                title="Nenhuma pessoa encontrada"
+                description="Gere um convite para incluir a primeira pessoa neste espaço."
+              />
             )}
           </CardContent>
         </Card>
@@ -286,7 +301,7 @@ export function SettingsPage() {
               )}
               <div className="grid gap-2">
                 {invitations === null ? (
-                  <p className="text-sm text-muted-foreground">Carregando convites…</p>
+                  <TextSkeleton label="Carregando convites" lines={2} />
                 ) : invitations.length ? (
                   invitations.map((invitation) => (
                     <div key={invitation.id} className="flex flex-wrap items-center gap-3 border-t border-border pt-3">
@@ -324,7 +339,11 @@ export function SettingsPage() {
                     </div>
                   ))
                 ) : (
-                  <p className="text-sm text-muted-foreground">Nenhum convite emitido.</p>
+                  <EmptyState
+                    compact
+                    title="Nenhum convite emitido"
+                    description="Informe o e-mail da pessoa no campo acima para gerar um link de convite."
+                  />
                 )}
               </div>
             </CardContent>

@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react';
 import { History } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { EmptyState, LoadingState } from '../components/ui/feedback';
+import { EmptyState } from '../components/ui/feedback';
+import { Link } from 'react-router-dom';
 import { formatBrazilianDate, formatBrazilianDateTime, formatBrazilianMonth, formatBrazilianMoney } from '../lib/finance';
 import { PageHeader } from './page-header';
 import { Alert } from '../components/ui/alert';
+import { ListSkeleton } from '../components/ui/skeleton';
 
 type EntryKind = 'income' | 'expense' | 'investment';
 type Snapshot = {
@@ -143,8 +145,8 @@ export function ActivityPage() {
           <CardDescription>Histórico somente para consulta, com as alterações mais recentes primeiro.</CardDescription>
         </CardHeader>
         <CardContent>
-          {loading ? (
-            <LoadingState label="Carregando histórico" />
+          {loading && events.length === 0 ? (
+            <ListSkeleton label="Carregando histórico" rows={4} icon={false} />
           ) : events.length ? (
             <>
               <ol className="divide-y divide-border">
@@ -176,6 +178,11 @@ export function ActivityPage() {
             <EmptyState
               title="Nenhuma alteração registrada"
               description="Quando alguém cadastrar ou atualizar um lançamento, a atividade aparecerá aqui."
+              action={
+                <Button asChild>
+                  <Link to="/lancamentos/novo">Adicionar lançamento</Link>
+                </Button>
+              }
             />
           )}
         </CardContent>

@@ -3,7 +3,8 @@ import { CircleCheck, CreditCard, RotateCcw } from 'lucide-react';
 import { AuthContext } from '../auth/auth-gate';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { EmptyState, LoadingState } from '../components/ui/feedback';
+import { EmptyState } from '../components/ui/feedback';
+import { Link } from 'react-router-dom';
 import { FormField } from '../components/ui/input';
 import {
   currentBrazilianDate,
@@ -25,6 +26,7 @@ import { toast } from '../components/ui/toast-store';
 import { ActionToolbar } from '../components/finance/action-toolbar';
 import { EntryAmount, EntryList, EntryRow } from '../components/finance/entry-row';
 import { MonthNavigator } from '../components/finance/month-navigator';
+import { ListSkeleton } from '../components/ui/skeleton';
 
 type ApiResponse = { error?: string; invoices?: OfflineInvoice[]; paymentMethods?: OfflinePaymentMethod[] };
 type InvoiceResponse = { error?: string; invoices?: OfflineInvoice[] };
@@ -53,6 +55,8 @@ export function InvoicesPage() {
   offlineRef.current = offline;
   const [month, setMonth] = useState(currentMonthInputValue());
   const [invoices, setInvoices] = useState<OfflineInvoice[]>([]);
+  const invoicesRef = useRef(invoices);
+  invoicesRef.current = invoices;
   const [paymentMethods, setPaymentMethods] = useState<OfflinePaymentMethod[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -183,6 +187,19 @@ export function InvoicesPage() {
         await offline.sync(auth.csrfToken);
         await loadInvoices();
         if (offline.syncError) setError(offline.syncError);
+        else {
+          const paidKey = `${selectedInvoice.card_id}:${selectedInvoice.invoice_month.slice(0, 7)}`;
+          toast('Fatura quitada.', {
+            action: {
+              label: 'Desfazer',
+              // Estornar devolve as parcelas ao estado anterior; usa a fatura mais recente, com a versão atual.
+              onClick: () => {
+                const latest = invoicesRef.current.find((item) => `${item.card_id}:${item.invoice_month.slice(0, 7)}` === paidKey);
+                if (latest && latest.status === 'paid') void reversePayment(latest);
+              },
+            },
+          });
+        }
       } else toast('Quitação salva neste aparelho. Ela será sincronizada quando a conexão voltar.');
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Não foi possível salvar a quitação.');
@@ -204,6 +221,7 @@ export function InvoicesPage() {
         await offline.sync(auth.csrfToken);
         await loadInvoices();
         if (offline.syncError) setError(offline.syncError);
+        else toast('Quitação desfeita. A fatura voltou a ficar em aberto.');
       } else toast('Estorno salvo neste aparelho. Ele será sincronizado quando a conexão voltar.');
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Não foi possível desfazer a quitação.');
@@ -222,15 +240,27 @@ export function InvoicesPage() {
         action={<MonthNavigator label="Mês de vencimento" value={month} onChange={setMonth} />}
       />
       {error && <Alert className="mb-4">{error}</Alert>}
-      {loading ? (
-        <LoadingState label="Carregando faturas" />
+      {loading && invoices.length === 0 ? (
+        <Card>
+          <CardContent className="pt-5">
+            <ListSkeleton label="Carregando faturas" rows={3} icon={false} />
+          </CardContent>
+        </Card>
       ) : grouped.length === 0 ? (
         <Card>
           <CardContent>
             <EmptyState
               as="h2"
               title={`Nenhuma fatura em ${heading}`}
-              description="As faturas aparecem aqui quando houver parcelas de compras de cartão com vencimento neste mês."
+              description="As faturas aparecem aqui quando houver parcelas de compras de cartão com vencimento neste mês. Registre uma compra parcelada para começar."
+              action={
+                <Button asChild>
+                  <Link to="/compras">
+                    <CreditCard aria-hidden="true" className="size-4" />
+                    Ir para compras
+                  </Link>
+                </Button>
+              }
             />
           </CardContent>
         </Card>

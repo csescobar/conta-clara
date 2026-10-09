@@ -12,6 +12,8 @@ import { Select, Textarea, RadioGroup, MonthField, MoneyInput } from '../compone
 import { useConfirmDialog } from '../components/ui/confirm-dialog';
 import { Alert } from '../components/ui/alert';
 import { EntryAmount, EntryList, EntryRow } from '../components/finance/entry-row';
+import { ListSkeleton } from '../components/ui/skeleton';
+import { toast } from '../components/ui/toast-store';
 
 type EntryKind = 'income' | 'expense' | 'investment';
 type RecurrenceRule = {
@@ -99,6 +101,8 @@ export function RecurrencesPage() {
       const result = await readApi(response);
       if (!response.ok) throw new Error(result.error ?? 'Não foi possível arquivar a regra.');
       await loadRules();
+      // Sem desfazer: a API não restaura regras arquivadas e as projeções futuras já foram retiradas.
+      toast('Regra arquivada. Os lançamentos já gerados foram mantidos.');
     } catch (archiveError) {
       setError(archiveError instanceof Error ? archiveError.message : 'Não foi possível arquivar a regra.');
     } finally {
@@ -132,10 +136,10 @@ export function RecurrencesPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {loading ? (
-            <LoadingState label="Carregando regras de recorrência" />
+          {loading && rules.length === 0 ? (
+            <ListSkeleton label="Carregando regras de recorrência" rows={3} />
           ) : rules.length ? (
-            <EntryList>
+            <EntryList busy={loading}>
               {rules.map((rule) => (
                 <EntryRow
                   key={rule.id}
@@ -319,6 +323,9 @@ export function RecurrenceFormPage() {
       const result = await readApi(response);
       if (!response.ok) throw new Error(result.error ?? 'Não foi possível salvar a regra.');
       // Quem já saiu do formulário durante o salvamento não deve ser levado de volta às regras.
+      toast(
+        editing ? 'Regra atualizada. As projeções futuras foram ajustadas.' : 'Regra criada. As próximas competências já foram projetadas.',
+      );
       if (mountedRef.current) navigate('/recorrencias');
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Não foi possível salvar a regra.');

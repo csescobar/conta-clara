@@ -6,6 +6,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { FormField, Input } from '../components/ui/input';
 import { Select } from '../components/ui/form-controls';
 import { Alert } from '../components/ui/alert';
+import { EmptyState } from '../components/ui/feedback';
+import { TextSkeleton } from '../components/ui/skeleton';
+import { toast } from '../components/ui/toast-store';
 
 type CategoryKind = 'income' | 'expense' | 'investment';
 type ExpenseClass = 'fixed' | 'variable';
@@ -80,11 +83,13 @@ export function CatalogSettings() {
           expenseClass: categoryKind === 'expense' ? expenseClass : null,
         },
       );
+      const editedCategory = editingCategoryId !== null;
       setCategoryName('');
       setCategoryKind('expense');
       setExpenseClass('fixed');
       setEditingCategoryId(null);
       await load();
+      toast(editedCategory ? 'Categoria atualizada.' : 'Categoria adicionada.');
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Não foi possível salvar a categoria.');
     } finally {
@@ -102,9 +107,11 @@ export function CatalogSettings() {
         editingPaymentId ? 'PUT' : 'POST',
         { name: paymentName },
       );
+      const editedMethod = editingPaymentId !== null;
       setPaymentName('');
       setEditingPaymentId(null);
       await load();
+      toast(editedMethod ? 'Forma de pagamento atualizada.' : 'Forma de pagamento adicionada.');
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Não foi possível salvar a forma de pagamento.');
     } finally {
@@ -124,12 +131,19 @@ export function CatalogSettings() {
     setPaymentName(method.name);
   }
 
-  async function changeStatus(type: 'categories' | 'payment-methods', id: string, action: 'archive' | 'restore') {
+  async function changeStatus(type: 'categories' | 'payment-methods', item: { id: string; name: string }, action: 'archive' | 'restore') {
     setError('');
     setBusy(true);
     try {
-      await save(`/api/catalog/${type}/${id}/${action}`, 'POST');
+      await save(`/api/catalog/${type}/${item.id}/${action}`, 'POST');
       await load();
+      const noun = type === 'categories' ? 'A categoria' : 'A forma de pagamento';
+      if (action === 'restore') toast(`${noun} foi restaurada.`);
+      else
+        // Arquivar é reversível sem perda: o cadastro e os lançamentos antigos permanecem.
+        toast(`${noun} foi arquivada.`, {
+          action: { label: 'Desfazer', onClick: () => void changeStatus(type, item, 'restore') },
+        });
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Não foi possível atualizar o cadastro.');
     } finally {
@@ -194,7 +208,7 @@ export function CatalogSettings() {
           </form>
           <div className="grid gap-1" aria-label="Lista de categorias">
             {categories === null ? (
-              <p className="text-sm text-muted-foreground">Carregando categorias…</p>
+              <TextSkeleton label="Carregando categorias" />
             ) : categories.length ? (
               categories.map((category) => (
                 <div
@@ -217,7 +231,7 @@ export function CatalogSettings() {
                         variant="outline"
                         disabled={busy}
                         aria-label={`Restaurar categoria ${category.name}`}
-                        onClick={() => void changeStatus('categories', category.id, 'restore')}
+                        onClick={() => void changeStatus('categories', category, 'restore')}
                       >
                         <RotateCcw aria-hidden="true" className="size-4" />
                         Restaurar
@@ -242,7 +256,7 @@ export function CatalogSettings() {
                         variant="outline"
                         disabled={busy}
                         aria-label={`Arquivar categoria ${category.name}`}
-                        onClick={() => void changeStatus('categories', category.id, 'archive')}
+                        onClick={() => void changeStatus('categories', category, 'archive')}
                       >
                         <Archive aria-hidden="true" className="size-4" />
                         Arquivar
@@ -252,7 +266,11 @@ export function CatalogSettings() {
                 </div>
               ))
             ) : (
-              <p className="text-sm text-muted-foreground">Nenhuma categoria cadastrada.</p>
+              <EmptyState
+                compact
+                title="Nenhuma categoria cadastrada"
+                description="Use o formulário acima para criar a primeira categoria de receita, despesa ou aporte."
+              />
             )}
           </div>
         </CardContent>
@@ -283,7 +301,7 @@ export function CatalogSettings() {
           </form>
           <div className="grid gap-1" aria-label="Lista de formas de pagamento">
             {paymentMethods === null ? (
-              <p className="text-sm text-muted-foreground">Carregando formas…</p>
+              <TextSkeleton label="Carregando formas de pagamento" />
             ) : paymentMethods.length ? (
               paymentMethods.map((method) => (
                 <div
@@ -300,7 +318,7 @@ export function CatalogSettings() {
                         variant="outline"
                         disabled={busy}
                         aria-label={`Restaurar forma de pagamento ${method.name}`}
-                        onClick={() => void changeStatus('payment-methods', method.id, 'restore')}
+                        onClick={() => void changeStatus('payment-methods', method, 'restore')}
                       >
                         <RotateCcw aria-hidden="true" className="size-4" />
                         Restaurar
@@ -325,7 +343,7 @@ export function CatalogSettings() {
                         variant="outline"
                         disabled={busy}
                         aria-label={`Arquivar forma de pagamento ${method.name}`}
-                        onClick={() => void changeStatus('payment-methods', method.id, 'archive')}
+                        onClick={() => void changeStatus('payment-methods', method, 'archive')}
                       >
                         <Archive aria-hidden="true" className="size-4" />
                         Arquivar
@@ -335,7 +353,11 @@ export function CatalogSettings() {
                 </div>
               ))
             ) : (
-              <p className="text-sm text-muted-foreground">Nenhuma forma de pagamento cadastrada.</p>
+              <EmptyState
+                compact
+                title="Nenhuma forma de pagamento cadastrada"
+                description="Use o formulário acima para cadastrar, por exemplo, Pix ou dinheiro."
+              />
             )}
           </div>
         </CardContent>

@@ -3,7 +3,7 @@ import { CalendarDays, Plus } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { EmptyState, LoadingState } from '../components/ui/feedback';
+import { EmptyState } from '../components/ui/feedback';
 import { currentMonthInputValue, shiftMonth, formatBrazilianDate, formatBrazilianMonthLong } from '../lib/finance';
 import type { ChartSummary, ExpenseCategoryChartEntry } from './dashboard-charts';
 import { PageHeader } from './page-header';
@@ -15,6 +15,7 @@ import { DataTable, type DataRow } from '../components/finance/data-table';
 import { EntryAmount, EntryList, EntryRow } from '../components/finance/entry-row';
 import { MonthNavigator } from '../components/finance/month-navigator';
 import { StatCard } from '../components/finance/stat-card';
+import { ChartsSkeleton, DashboardSkeleton, SkeletonRegion } from '../components/ui/skeleton';
 
 const DashboardCharts = lazy(() => import('./dashboard-charts').then(({ DashboardCharts: charts }) => ({ default: charts })));
 
@@ -147,7 +148,7 @@ export function DashboardPage() {
       />
       {error && <Alert className="mb-4">{error}</Alert>}
       {loading && !dashboard ? (
-        <LoadingState label="Carregando painel financeiro" />
+        <DashboardSkeleton label="Carregando painel financeiro" />
       ) : (
         dashboard && (
           <div aria-busy={loading}>
@@ -189,7 +190,13 @@ export function DashboardPage() {
                 />
               </CardContent>
             </Card>
-            <Suspense fallback={<LoadingState label="Carregando gráficos financeiros" />}>
+            <Suspense
+              fallback={
+                <SkeletonRegion label="Carregando gráficos financeiros">
+                  <ChartsSkeleton />
+                </SkeletonRegion>
+              }
+            >
               <DashboardCharts
                 monthLabel={heading}
                 planned={dashboard.planned}

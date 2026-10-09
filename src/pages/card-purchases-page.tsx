@@ -4,7 +4,7 @@ import { AuthContext } from '../auth/auth-gate';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { FormField, Input } from '../components/ui/input';
-import { LoadingState } from '../components/ui/feedback';
+import { EmptyState } from '../components/ui/feedback';
 import {
   currentBrazilianDate,
   currentSaoPauloDate,
@@ -25,6 +25,7 @@ import { useConfirmDialog } from '../components/ui/confirm-dialog';
 import { Alert } from '../components/ui/alert';
 import { toast } from '../components/ui/toast-store';
 import { EntryAmount, EntryList, EntryRow } from '../components/finance/entry-row';
+import { ListSkeleton } from '../components/ui/skeleton';
 
 type CategoriesResponse = { categories?: OfflineCategory[] };
 type CardsResponse = { cards?: OfflineCard[]; error?: string };
@@ -471,6 +472,7 @@ export function CardPurchasesPage() {
         await offline.sync(auth.csrfToken);
         await load();
       }
+      // Sem desfazer: as parcelas removidas não podem ser recriadas com a autoria e o histórico originais.
       toast('Compra cancelada; as parcelas pagas foram mantidas.');
     } catch (cancelError) {
       setError(cancelError instanceof Error ? cancelError.message : 'Não foi possível cancelar a compra.');
@@ -655,27 +657,26 @@ export function CardPurchasesPage() {
         </CardHeader>
         <CardContent>
           {loading && purchases.length === 0 ? (
-            <LoadingState label="Carregando compras de cartão" />
+            <ListSkeleton label="Carregando compras de cartão" rows={3} />
           ) : purchases.length === 0 ? (
-            <div className="grid justify-items-center gap-3 py-8 text-center">
-              <CreditCard aria-hidden="true" className="size-8 text-muted-foreground" />
-              <p className="font-medium">Nenhuma compra de cartão registrada</p>
-              <p className="max-w-md text-sm text-muted-foreground">
-                Cadastre uma compra à vista ou parcelada. Cada parcela será incluída uma única vez nos lançamentos.
-              </p>
-              <Button
-                type="button"
-                onClick={() => {
-                  setEditingPurchaseId('new');
-                  setNotice('');
-                }}
-              >
-                <Plus aria-hidden="true" className="size-4" />
-                Nova compra
-              </Button>
-            </div>
+            <EmptyState
+              title="Nenhuma compra de cartão registrada"
+              description="Cadastre uma compra à vista ou parcelada. Cada parcela será incluída uma única vez nos lançamentos."
+              action={
+                <Button
+                  type="button"
+                  onClick={() => {
+                    setEditingPurchaseId('new');
+                    setNotice('');
+                  }}
+                >
+                  <Plus aria-hidden="true" className="size-4" />
+                  Nova compra
+                </Button>
+              }
+            />
           ) : (
-            <EntryList>
+            <EntryList busy={loading}>
               {purchases.map((purchase) => {
                 const paidCount = purchase.installments.filter((item) => item.actual_cents !== null).length;
                 const pendingOperation = offline?.purchaseOperations.find((operation) => operation.purchaseId === purchase.id);

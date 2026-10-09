@@ -565,7 +565,7 @@ test('administra um espaço compartilhado, importa e sincroniza uma alteração 
   await member.getByRole('button', { name: 'Salvar cartão' }).click();
   await expect(member.getByText('Cartão da família atualizado offline')).toBeVisible();
   await member.getByRole('button', { name: 'Arquivar cartão Cartão da família atualizado offline' }).click();
-  await expect(member.getByText('Arquivado')).toBeVisible();
+  await expect(member.getByText('Arquivado', { exact: true })).toBeVisible();
   await expect(member.getByText(/3 alterações.*aguardam sincronização/)).toBeVisible();
 
   await memberContext.setOffline(false);

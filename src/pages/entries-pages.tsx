@@ -33,6 +33,8 @@ import { Alert } from '../components/ui/alert';
 import { ActionToolbar } from '../components/finance/action-toolbar';
 import { EntryAmount, EntryList, EntryRow } from '../components/finance/entry-row';
 import { FilterBar } from '../components/finance/filter-bar';
+import { ListSkeleton } from '../components/ui/skeleton';
+import { toast } from '../components/ui/toast-store';
 
 type EntryKind = 'income' | 'expense' | 'investment';
 type EntryStatus = 'pending' | 'late' | 'paid';
@@ -193,6 +195,8 @@ export function TransactionsPage() {
   const [status, setStatus] = useState('');
   const [categories, setCategories] = useState<Category[]>([]);
   const [entries, setEntries] = useState<Entry[]>([]);
+  const entriesRef = useRef(entries);
+  entriesRef.current = entries;
   const [loading, setLoading] = useState(true);
   const [busyEntryId, setBusyEntryId] = useState('');
   const [confirmingEntryId, setConfirmingEntryId] = useState('');
@@ -303,6 +307,7 @@ export function TransactionsPage() {
       if (!currentOffline?.supported) throw new Error('O armazenamento offline não está disponível neste navegador.');
       await currentOffline.queueDelete(entry);
       setEntries((current) => current.filter((item) => item.id !== entry.id));
+      toast('Exclusão salva neste aparelho. Ela será sincronizada quando a conexão voltar.');
     };
     try {
       if (currentOffline && (!currentOffline.online || currentOffline.pendingCount > 0)) {
@@ -326,6 +331,8 @@ export function TransactionsPage() {
       await currentOffline?.removeCachedEntry(entry.id);
       currentOffline?.setOnline(true);
       await loadEntries();
+      // Sem desfazer: recriar o lançamento geraria outro registro e perderia a autoria e o histórico do original.
+      toast('Lançamento excluído.');
     } catch (deleteError) {
       if (currentOffline && currentOffline.supported && isNetworkFailure(deleteError, currentOffline.online)) {
         currentOffline.setOnline(navigator.onLine && !(deleteError instanceof TypeError));
@@ -381,9 +388,38 @@ export function TransactionsPage() {
       }
       setConfirmingEntryId('');
       await loadEntries();
+      toast('Lançamento confirmado.', {
+        action: { label: 'Desfazer', onClick: () => void undoConfirmationRequest(entry, 'A confirmação foi desfeita.') },
+      });
     } catch (confirmationError) {
       if (offlineRef.current && confirmationError instanceof TypeError) offlineRef.current.setOnline(false);
       setError(confirmationError instanceof Error ? confirmationError.message : 'Não foi possível confirmar o lançamento.');
+    } finally {
+      setBusyEntryId('');
+    }
+  }
+
+  /** Desfaz a confirmação no servidor e recarrega a lista; usa a versão mais recente do lançamento. */
+  async function undoConfirmationRequest(entry: Entry, successMessage: string) {
+    const latest = entriesRef.current.find((item) => item.id === entry.id) ?? entry;
+    setBusyEntryId(entry.id);
+    setError('');
+    try {
+      const response = await fetch(`/api/entries/${entry.id}/confirm`, {
+        method: 'DELETE',
+        credentials: 'same-origin',
+        headers: { 'X-CSRF-Token': auth?.csrfToken ?? '', 'X-Entry-Version': String(latest.version ?? 1) },
+      });
+      const result = await readApi(response);
+      if (!response.ok) {
+        if (offlineRef.current && isAuthenticationFailure(response)) offlineRef.current.invalidateSession();
+        throw new Error(result.error ?? 'Não foi possível desfazer a confirmação.');
+      }
+      await loadEntries();
+      toast(successMessage);
+    } catch (undoError) {
+      if (offlineRef.current && undoError instanceof TypeError) offlineRef.current.setOnline(false);
+      setError(undoError instanceof Error ? undoError.message : 'Não foi possível desfazer a confirmação.');
     } finally {
       setBusyEntryId('');
     }
@@ -399,26 +435,7 @@ export function TransactionsPage() {
       }))
     )
       return;
-    setBusyEntryId(entry.id);
-    setError('');
-    try {
-      const response = await fetch(`/api/entries/${entry.id}/confirm`, {
-        method: 'DELETE',
-        credentials: 'same-origin',
-        headers: { 'X-CSRF-Token': auth?.csrfToken ?? '', 'X-Entry-Version': String(entry.version ?? 1) },
-      });
-      const result = await readApi(response);
-      if (!response.ok) {
-        if (offlineRef.current && isAuthenticationFailure(response)) offlineRef.current.invalidateSession();
-        throw new Error(result.error ?? 'Não foi possível desfazer a confirmação.');
-      }
-      await loadEntries();
-    } catch (undoError) {
-      if (offlineRef.current && undoError instanceof TypeError) offlineRef.current.setOnline(false);
-      setError(undoError instanceof Error ? undoError.message : 'Não foi possível desfazer a confirmação.');
-    } finally {
-      setBusyEntryId('');
-    }
+    await undoConfirmationRequest(entry, 'A confirmação foi desfeita.');
   }
 
   const confirmationBlocked = Boolean(offline && (!offline.online || offline.pendingCount > 0 || offline.syncing));
@@ -491,10 +508,10 @@ export function TransactionsPage() {
             <CalendarDays aria-hidden="true" className="mt-0.5 size-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            {loading ? (
-              <LoadingState label="Carregando lançamentos" />
+            {loading && entries.length === 0 ? (
+              <ListSkeleton label="Carregando lançamentos" rows={4} />
             ) : entries.length ? (
-              <EntryList>
+              <EntryList busy={loading}>
                 {entries.map((entry) => {
                   const pendingOperation = offline?.operations.find((operation) => operation.entryId === entry.id);
                   return (
@@ -732,6 +749,7 @@ export function NewTransactionPage() {
         previous,
       );
       await currentOffline.queueChange(localEntry, editing ? 'update' : 'create');
+      toast('Lançamento salvo neste aparelho. Ele será sincronizado quando a conexão voltar.');
       navigate('/lancamentos');
     }
 
@@ -760,6 +778,7 @@ export function NewTransactionPage() {
       }
       if (result.entry) await currentOffline?.cacheEntries([result.entry]);
       currentOffline?.setOnline(true);
+      toast(editing ? 'Alterações salvas.' : 'Lançamento salvo.');
       navigate('/lancamentos');
     } catch (saveError) {
       if (currentOffline && currentOffline.supported && isNetworkFailure(saveError, currentOffline.online)) {

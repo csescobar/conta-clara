@@ -1,4 +1,5 @@
-export type ToastItem = { id: number; message: string; variant: 'success' | 'info' };
+export type ToastAction = { label: string; onClick: () => void | Promise<void> };
+export type ToastItem = { id: number; message: string; variant: 'success' | 'info'; action?: ToastAction };
 
 let items: ToastItem[] = [];
 let nextId = 1;
@@ -7,9 +8,12 @@ const emit = () => {
   for (const listener of listeners) listener();
 };
 
-/** Anuncia o resultado de uma ação concluída sem deslocar o conteúdo. Exige um `ToastHost` montado. */
-export function toast(message: string, variant: ToastItem['variant'] = 'success') {
-  items = [...items, { id: nextId++, message, variant }];
+/**
+ * Anuncia o resultado de uma ação concluída sem deslocar o conteúdo nem tirar o foco. Exige um `ToastHost` montado.
+ * `action` oferece desfazer: use somente quando a operação puder ser revertida sem perda de dados ou autoria.
+ */
+export function toast(message: string, { variant = 'success', action }: { variant?: ToastItem['variant']; action?: ToastAction } = {}) {
+  items = [...items, { id: nextId++, message, variant, action }];
   emit();
 }
 
