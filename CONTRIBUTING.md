@@ -13,3 +13,8 @@ Commits devem explicar a mudança e referenciar a issue, por exemplo: `feat: cad
 ## Estilo e lint
 
 `npm run lint` executa ESLint (TypeScript, hooks do React, `jsx-a11y` e uma regra que rejeita cores da paleta padrão do Tailwind e hexadecimais fora dos tokens do design system). `npm run format` aplica o Prettier e `npm run format:check` apenas verifica. A formatação em massa ficou em commit próprio, listado em `.git-blame-ignore-revs`; para o `git blame` ignorá-lo, execute uma vez `git config blame.ignoreRevsFile .git-blame-ignore-revs`. Os avisos de `react-hooks/exhaustive-deps` que restam omitem `offline` de propósito, para não repetir carregamentos a cada mudança do estado offline.
+
+## Verificação local antes de publicar
+
+Não há CI remoto: a verificação acontece na sua máquina, sem consumir minutos de serviços externos. `npm run hooks:install` (uma vez por clone) ativa `.githooks/pre-push`, que executa `npm run lint`, `npm run typecheck`, `npm test` e `npm run build` antes de cada `git push`, informa a etapa que falhou e bloqueia o envio. Leva cerca de 40 s; pushes que alteram apenas arquivos `.md` ou `docs/` pulam a verificação. O hook não roda Postgres, Playwright nem Docker: use `npm run verify` antes de concluir uma issue. Em emergência, `git push --no-verify` ignora o hook. Nada o instala automaticamente (não há `postinstall`); para desativar, `git config --unset core.hooksPath`.
+
