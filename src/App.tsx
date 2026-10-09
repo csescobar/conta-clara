@@ -1,18 +1,31 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, type ComponentType, type ReactNode } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthGate } from './auth/auth-gate';
 import { OneTimeAccessPage } from './auth/one-time-access-page';
-import { DashboardPage, SettingsPage } from './pages/pages';
-import { NewTransactionPage, TransactionsPage } from './pages/entries-pages';
-import { CardPurchasesPage } from './pages/card-purchases-page';
-import { InvoicesPage } from './pages/invoices-page';
-import { ActivityPage } from './pages/activity-page';
-import { RecurrenceFormPage, RecurrencesPage } from './pages/recurrence-pages';
+import { DashboardPage } from './pages/dashboard-page';
 import { LoadingState } from './components/ui/feedback';
 
-const SpreadsheetImportPage = lazy(() =>
-  import('./pages/spreadsheet-import-page').then(({ SpreadsheetImportPage: page }) => ({ default: page })),
-);
+/**
+ * Telas carregadas sob demanda: só o painel entra no pacote inicial. Depois da primeira visita o service
+ * worker guarda todos os pacotes, então as telas também abrem sem conexão.
+ */
+function lazyPage<Module extends Record<string, unknown>>(load: () => Promise<Module>, name: keyof Module) {
+  return lazy(async () => ({ default: (await load())[name] as ComponentType }));
+}
+
+const TransactionsPage = lazyPage(() => import('./pages/entries-pages'), 'TransactionsPage');
+const NewTransactionPage = lazyPage(() => import('./pages/entries-pages'), 'NewTransactionPage');
+const CardPurchasesPage = lazyPage(() => import('./pages/card-purchases-page'), 'CardPurchasesPage');
+const InvoicesPage = lazyPage(() => import('./pages/invoices-page'), 'InvoicesPage');
+const ActivityPage = lazyPage(() => import('./pages/activity-page'), 'ActivityPage');
+const RecurrencesPage = lazyPage(() => import('./pages/recurrence-pages'), 'RecurrencesPage');
+const RecurrenceFormPage = lazyPage(() => import('./pages/recurrence-pages'), 'RecurrenceFormPage');
+const SettingsPage = lazyPage(() => import('./pages/settings-page'), 'SettingsPage');
+const SpreadsheetImportPage = lazyPage(() => import('./pages/spreadsheet-import-page'), 'SpreadsheetImportPage');
+
+function Page({ children }: { children: ReactNode }) {
+  return <Suspense fallback={<LoadingState label="Carregando tela" />}>{children}</Suspense>;
+}
 
 // O catálogo do design system só existe em desenvolvimento ou em builds com VITE_DESIGN_CATALOG=true
 // (testes de navegador). Em produção a condição é constante e o módulo não entra no pacote.
@@ -37,24 +50,94 @@ export default function App() {
         )}
         <Route element={<AuthGate />}>
           <Route index element={<DashboardPage />} />
-          <Route path="lancamentos" element={<TransactionsPage />} />
-          <Route path="compras" element={<CardPurchasesPage />} />
-          <Route path="faturas" element={<InvoicesPage />} />
-          <Route path="lancamentos/novo" element={<NewTransactionPage />} />
-          <Route path="lancamentos/:id/editar" element={<NewTransactionPage />} />
+          <Route
+            path="lancamentos"
+            element={
+              <Page>
+                <TransactionsPage />
+              </Page>
+            }
+          />
+          <Route
+            path="compras"
+            element={
+              <Page>
+                <CardPurchasesPage />
+              </Page>
+            }
+          />
+          <Route
+            path="faturas"
+            element={
+              <Page>
+                <InvoicesPage />
+              </Page>
+            }
+          />
+          <Route
+            path="lancamentos/novo"
+            element={
+              <Page>
+                <NewTransactionPage />
+              </Page>
+            }
+          />
+          <Route
+            path="lancamentos/:id/editar"
+            element={
+              <Page>
+                <NewTransactionPage />
+              </Page>
+            }
+          />
           <Route
             path="importar"
             element={
-              <Suspense fallback={<LoadingState label="Carregando importador de planilha" />}>
+              <Page>
                 <SpreadsheetImportPage />
-              </Suspense>
+              </Page>
             }
           />
-          <Route path="recorrencias" element={<RecurrencesPage />} />
-          <Route path="recorrencias/novo" element={<RecurrenceFormPage />} />
-          <Route path="recorrencias/:id/editar" element={<RecurrenceFormPage />} />
-          <Route path="historico" element={<ActivityPage />} />
-          <Route path="configuracoes" element={<SettingsPage />} />
+          <Route
+            path="recorrencias"
+            element={
+              <Page>
+                <RecurrencesPage />
+              </Page>
+            }
+          />
+          <Route
+            path="recorrencias/novo"
+            element={
+              <Page>
+                <RecurrenceFormPage />
+              </Page>
+            }
+          />
+          <Route
+            path="recorrencias/:id/editar"
+            element={
+              <Page>
+                <RecurrenceFormPage />
+              </Page>
+            }
+          />
+          <Route
+            path="historico"
+            element={
+              <Page>
+                <ActivityPage />
+              </Page>
+            }
+          />
+          <Route
+            path="configuracoes"
+            element={
+              <Page>
+                <SettingsPage />
+              </Page>
+            }
+          />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

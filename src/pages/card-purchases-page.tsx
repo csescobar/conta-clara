@@ -109,12 +109,17 @@ export function CardPurchasesPage() {
   const [installmentCount, setInstallmentCount] = useState('1');
   const [firstInvoiceMonth, setFirstInvoiceMonth] = useState('');
 
+  const loadSequence = useRef(0);
   const load = useCallback(async () => {
+    // Consultas se sobrepõem (efeitos e pós-sincronização): só a mais recente pode atualizar a tela.
+    const sequence = ++loadSequence.current;
+    const superseded = () => sequence !== loadSequence.current;
     setLoading(true);
     setError('');
     const current = offlineRef.current;
     if (current && (!current.online || (typeof navigator !== 'undefined' && !navigator.onLine))) {
       const snapshot = await current.refresh();
+      if (superseded()) return;
       setPurchases(snapshot.purchases);
       setCards(snapshot.cards);
       setCategories(snapshot.categories.filter((category) => category.kind === 'expense' && !category.archived_at));
@@ -136,6 +141,7 @@ export function CardPurchasesPage() {
       ]);
       if (!purchaseResponse.ok || !cardResponse.ok || !categoryResponse.ok)
         throw new Error(purchaseResult.error ?? cardResult.error ?? 'Não foi possível carregar as compras de cartão.');
+      if (superseded()) return;
       const loadedPurchases = purchaseResult.purchases ?? [];
       const loadedCards = cardResult.cards ?? [];
       const loadedCategories = categoryResult.categories ?? [];
@@ -151,6 +157,7 @@ export function CardPurchasesPage() {
       if (current?.supported && isNetworkFailure(loadError, current.online)) {
         current.setOnline(false);
         const snapshot = await current.refresh();
+        if (superseded()) return;
         setPurchases(snapshot.purchases);
         setCards(snapshot.cards);
         setCategories(snapshot.categories.filter((category) => category.kind === 'expense' && !category.archived_at));
@@ -158,7 +165,7 @@ export function CardPurchasesPage() {
           setNotice('Ainda não há compras salvas neste aparelho. Conecte-se para carregá-las.');
       } else setError(loadError instanceof Error ? loadError.message : 'Não foi possível carregar as compras de cartão.');
     } finally {
-      setLoading(false);
+      if (!superseded()) setLoading(false);
     }
   }, []);
 
@@ -647,7 +654,7 @@ export function CardPurchasesPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {loading ? (
+          {loading && purchases.length === 0 ? (
             <LoadingState label="Carregando compras de cartão" />
           ) : purchases.length === 0 ? (
             <div className="grid justify-items-center gap-3 py-8 text-center">

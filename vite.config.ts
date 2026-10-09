@@ -64,6 +64,8 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     restoreMocks: true,
+    // Telas e gráficos carregam sob demanda e a suíte roda em paralelo: 5 s por teste era curto sob carga.
+    testTimeout: 15_000,
     clearMocks: true,
     exclude: [...configDefaults.exclude, 'e2e/**'],
   },

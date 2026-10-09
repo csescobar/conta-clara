@@ -67,7 +67,7 @@ describe('application navigation and preview screens', () => {
 
     const mainNav = screen.getByRole('navigation', { name: /^Navegação principal$/ });
     await user.click(within(mainNav).getByRole('link', { name: 'Lançamentos' }));
-    expect(screen.getByRole('heading', { name: 'Lançamentos' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Lançamentos' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Filtrar lançamentos' })).toBeInTheDocument();
   });
 
@@ -78,7 +78,7 @@ describe('application navigation and preview screens', () => {
     const mainNav = screen.getByRole('navigation', { name: /^Navegação principal$/ });
     await user.click(within(mainNav).getByRole('link', { name: 'Histórico' }));
     expect(await screen.findByRole('heading', { name: 'Histórico' })).toBeInTheDocument();
-    expect(screen.getByRole('status', { name: 'Nenhuma alteração registrada' })).toBeInTheDocument();
+    expect(await screen.findByRole('status', { name: 'Nenhuma alteração registrada' })).toBeInTheDocument();
   });
 
   it('keeps the mobile navigation compact and exposes the remaining pages through Mais', async () => {
@@ -104,7 +104,7 @@ describe('application navigation and preview screens', () => {
     expect(moreButton).toHaveAttribute('aria-expanded', 'false');
     await user.click(moreButton);
     await user.click(within(screen.getByRole('navigation', { name: 'Mais páginas' })).getByRole('link', { name: 'Recorrências' }));
-    expect(screen.getByRole('heading', { name: 'Recorrências' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Recorrências' })).toBeInTheDocument();
     expect(moreButton).toHaveFocus();
     expect(moreButton).toHaveAttribute('aria-expanded', 'false');
     expect(moreButton).toHaveAttribute('aria-current', 'page');
@@ -112,10 +112,10 @@ describe('application navigation and preview screens', () => {
 
     await user.click(within(mobileNav).getByRole('link', { name: 'Visão geral' }));
     await user.click(screen.getByRole('link', { name: 'Adicionar lançamento' }));
-    expect(screen.getByRole('heading', { name: 'Adicionar lançamento' })).toBeInTheDocument();
-    expect(screen.getByRole('textbox', { name: 'Vencimento' })).toHaveAttribute('placeholder', 'DD/MM/AAAA');
-    expect(screen.getByRole('button', { name: 'Salvar lançamento' })).toBeEnabled();
-    expect(screen.getByRole('combobox', { name: 'Categoria' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Adicionar lançamento' })).toBeInTheDocument();
+    expect(await screen.findByRole('textbox', { name: 'Vencimento' })).toHaveAttribute('placeholder', 'DD/MM/AAAA');
+    expect(await screen.findByRole('button', { name: 'Salvar lançamento' })).toBeEnabled();
+    expect(await screen.findByRole('combobox', { name: 'Categoria' })).toBeInTheDocument();
   });
 
   it('opens member settings with admin controls and the current household roster', async () => {
@@ -124,7 +124,7 @@ describe('application navigation and preview screens', () => {
     const mainNav = screen.getByRole('navigation', { name: /^Navegação principal$/ });
 
     await user.click(within(mainNav).getByRole('link', { name: 'Configurações' }));
-    expect(screen.getByRole('heading', { name: 'Configurações' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Configurações' })).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: 'Pessoas' })).toBeInTheDocument();
     expect(within(within(screen.getByRole('main')).getByRole('list')).getAllByText('Pessoa de exemplo')).toHaveLength(1);
     expect(screen.getByRole('button', { name: 'Gerar convite' })).toBeInTheDocument();

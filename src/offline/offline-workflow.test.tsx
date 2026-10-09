@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { AuthContext, AuthGate } from '../auth/auth-gate';
 import { NewTransactionPage, TransactionsPage } from '../pages/entries-pages';
-import { DashboardPage } from '../pages/pages';
+import { DashboardPage } from '../pages/dashboard-page';
 import { currentMonthInputValue } from '../lib/finance';
 import { OfflineWorkspaceProvider } from './offline-context';
 import {
@@ -382,7 +382,7 @@ describe('offline transaction workflow', () => {
         expect.objectContaining({ kind: 'delete', entryId: 'offline-entry' }),
       ]),
     );
-    expect(screen.queryByText('Conta ajustada offline')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('Conta ajustada offline')).not.toBeInTheDocument());
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

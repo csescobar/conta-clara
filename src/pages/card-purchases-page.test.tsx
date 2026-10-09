@@ -109,6 +109,9 @@ describe('card purchases page', () => {
     renderPage();
 
     await userEventInstance.click(await screen.findByRole('button', { name: 'Nova compra' }));
+    // Cartões e categorias chegam por requisições separadas; só então as opções existem.
+    await screen.findByRole('option', { name: /vence dia/ });
+    await screen.findByRole('option', { name: 'Casa' });
     await userEventInstance.selectOptions(screen.getByRole('combobox', { name: 'Cartão' }), 'card-primary');
     await userEventInstance.selectOptions(screen.getByRole('combobox', { name: 'Categoria de despesa' }), 'expense-home');
     await userEventInstance.type(screen.getByRole('textbox', { name: 'Descrição' }), 'Compra fictícia');
@@ -121,7 +124,7 @@ describe('card purchases page', () => {
     await waitFor(() => expect(saveButton).toBeEnabled());
     await userEventInstance.click(saveButton);
 
-    expect(await screen.findByText(/3 parcelas · 0 pagas/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/3 parcelas · 0 pagas/)).toBeInTheDocument());
     await waitFor(() => expect(fetchMock.mock.calls.map(([input]) => input)).toContain('/api/sync/operations'));
     const savedPurchase = saved as OfflinePurchase | null;
     expect(savedPurchase).toMatchObject({ first_invoice_on: '2026-11-01', total_cents: '1001', installment_count: 3 });

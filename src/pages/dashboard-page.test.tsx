@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { currentMonthInputValue } from '../lib/finance';
-import { DashboardPage } from './pages';
+import { DashboardPage } from './dashboard-page';
 
 function response(body: unknown, status = 200) {
   return { ok: status < 400, status, json: async () => body };

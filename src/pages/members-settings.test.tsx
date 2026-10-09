@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AuthContext } from '../auth/auth-gate';
-import { SettingsPage } from './pages';
+import { SettingsPage } from './settings-page';
 
 const csrfToken = 'csrf-members-test';
 const members = [{ id: 'admin-id', name: 'Administradora', email: 'admin@example.test', role: 'admin', is_active: true }];
