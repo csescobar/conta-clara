@@ -93,7 +93,7 @@ Fases definidas a partir da auditoria de design system e engenharia de 2026-10-0
 ## 10. Experiência e acessibilidade (V4)
 
 - [x] [Adicionar tema escuro](https://github.com/csescobar/conta-clara/issues/44) — dependências: #43; tokens escuros validados por contraste, escolha em Configurações (sistema, claro ou escuro) salva neste aparelho e theme-color por tema (`fed3529`).
-- [ ] [Padronizar carregamento, vazio e retorno de ações](https://github.com/csescobar/conta-clara/issues/45) — dependências: #41, #43.
+- [x] [Padronizar carregamento, vazio e retorno de ações](https://github.com/csescobar/conta-clara/issues/45) — dependências: #41, #43; esqueletos estáveis e acessíveis, estados vazios com orientação e ação em todas as listas, avisos após ações e desfazer apenas onde a reversão é segura (`eaa0e3e`).
 - [ ] [Revisar hierarquia das telas principais](https://github.com/csescobar/conta-clara/issues/46) — dependências: #42.
 - [ ] [Cobrir regressão visual e teclado em todas as rotas](https://github.com/csescobar/conta-clara/issues/47) — dependências: #44, #45, #46.
 
