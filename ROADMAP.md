@@ -103,7 +103,7 @@ Fases definidas a partir da auditoria de design system e engenharia de 2026-10-0
 - [x] [Simplificar a execução dos testes Postgres](https://github.com/csescobar/conta-clara/issues/49) — dependências: nenhuma; execução única, sequencial e com descoberta automática; falha cedo sem base _test (`99f107d`).
 - [x] [Verificar mudanças localmente antes de publicar](https://github.com/csescobar/conta-clara/issues/50) — dependências: #48, #49; hook pre-push opcional com lint, tipos, testes e build (~40 s), sem CI remoto (`151b166`).
 - [ ] [Reduzir o bundle inicial](https://github.com/csescobar/conta-clara/issues/51) — dependências: nenhuma.
-- [ ] [Tipar o servidor gradualmente](https://github.com/csescobar/conta-clara/issues/52) — dependências: #48.
+- [x] [Tipar o servidor gradualmente](https://github.com/csescobar/conta-clara/issues/52) — dependências: #48; verificação estrita de tipos nos serviços de cartões, faturas e recorrências e na rota de sincronização, incluída no typecheck (`21dffd9`).
 - [x] [Corrigir condições de corrida em listas filtradas e formulários](https://github.com/csescobar/conta-clara/issues/54) — dependências: nenhuma; respostas de filtros antigos descartadas, campos editados preservados ao reconectar e E2E estável em 5 execuções seguidas (`f5c02a2`).
 
 Integração contínua remota fica fora desta etapa: a verificação acontece localmente antes do push (#50), sem consumo de serviços pagos.
