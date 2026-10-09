@@ -132,7 +132,9 @@ describe('financial entry pages', () => {
     const description = await screen.findByText('Internet mensal projetada');
     const row = description.closest('li');
     expect(row).not.toBeNull();
-    expect(row).toHaveTextContent(`Competência ${futureMonth.slice(5, 7)}/${futureMonth.slice(0, 4)}`);
+    // O vencimento aparece no cabeçalho do grupo, não repetido em cada linha.
+    const group = screen.getByRole('region', { name: new RegExp(`10/${futureMonth.slice(5, 7)}/${futureMonth.slice(0, 4)}`) });
+    expect(within(group).getByText('Internet mensal projetada')).toBeInTheDocument();
     expect(row).toHaveTextContent(/89,90/);
     expect(fetchMock).toHaveBeenCalledWith(`/api/entries?month=${futureMonth}`, { credentials: 'same-origin' });
   });
@@ -358,7 +360,7 @@ describe('financial entry pages', () => {
     await user.click(screen.getByRole('button', { name: 'Salvar realização' }));
 
     await waitFor(() => expect(row).toHaveTextContent('Realizado 02/11/2026'));
-    expect(row).toHaveTextContent('Competência 10/2026');
+    expect(row?.closest('section')).toHaveAccessibleName('Segunda-feira, 05/10/2026');
     expect(row).toHaveTextContent(formatBrazilianMoney('9700').replace(/\u00a0/g, ' '));
     expect(row).toHaveTextContent(`Previsto ${formatBrazilianMoney('123456').replace(/\u00a0/g, ' ')}`);
     expect(within(row as HTMLElement).getByLabelText('Situação: Pago')).toBeInTheDocument();

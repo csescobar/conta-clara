@@ -38,9 +38,13 @@ export function EntryRow({
   meta,
   aside,
   actions,
+  primaryAction,
+  secondaryActions,
+  menu,
   children,
   density = 'default',
   wrapTitle = false,
+  compactMeta = false,
   className,
 }: {
   icon?: LucideIcon;
@@ -48,26 +52,57 @@ export function EntryRow({
   title: ReactNode;
   meta?: ReactNode;
   aside?: ReactNode;
+  /** Ações sempre visíveis, em largura total abaixo do conteúdo. */
   actions?: ReactNode;
+  /** Ação principal: fica visível em qualquer largura (no celular, em linha própria). */
+  primaryAction?: ReactNode;
+  /** Ações secundárias: botões em linha a partir de `sm`; no celular entram no `menu`. */
+  secondaryActions?: ReactNode;
+  /** Menu com as ações secundárias, exibido somente no celular. */
+  menu?: ReactNode;
   children?: ReactNode;
   density?: keyof typeof densities;
   /** Permite que títulos longos quebrem em vez de serem cortados. */
   wrapTitle?: boolean;
+  /** No celular, mostra o detalhe em uma única linha (cortada; o texto completo segue no DOM e aparece em `sm`). */
+  compactMeta?: boolean;
   className?: string;
 }) {
   return (
-    <li className={cn('flex min-w-0 flex-wrap items-center gap-3 first:pt-0 last:pb-0 sm:gap-4', densities[density], className)}>
+    <li
+      className={cn(
+        'flex min-w-0 flex-wrap items-start gap-3 first:pt-0 last:pb-0 sm:items-center sm:gap-4',
+        densities[density],
+        className,
+      )}
+    >
       {Icon && (
-        <span className={cn('grid size-10 shrink-0 place-items-center rounded-xl', iconTones[iconTone])}>
+        <span className={cn('hidden size-10 shrink-0 place-items-center rounded-xl sm:grid', iconTones[iconTone])}>
           <Icon aria-hidden="true" className="size-[18px]" />
         </span>
       )}
       <div className="min-w-0 flex-1">
         <p className={cn('text-sm font-semibold', !wrapTitle && 'truncate')}>{title}</p>
-        {meta && <p className="mt-0.5 text-xs leading-5 text-muted-foreground">{meta}</p>}
+        {meta && (
+          <p
+            className={cn(
+              'mt-0.5 text-xs leading-5 text-muted-foreground',
+              compactMeta && 'truncate sm:overflow-visible sm:whitespace-normal',
+            )}
+          >
+            {meta}
+          </p>
+        )}
       </div>
       {aside}
+      {menu && <div className="shrink-0 sm:hidden">{menu}</div>}
       {actions && <div className="flex w-full flex-wrap justify-end gap-1 sm:w-auto">{actions}</div>}
+      {(primaryAction || secondaryActions) && (
+        <div className={cn('flex w-full flex-wrap justify-end gap-1 sm:w-auto', !primaryAction && menu && 'max-sm:hidden')}>
+          {primaryAction}
+          <div className={cn('flex-wrap justify-end gap-1', menu ? 'hidden sm:flex' : 'flex')}>{secondaryActions}</div>
+        </div>
+      )}
       {children}
     </li>
   );

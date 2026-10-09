@@ -7,8 +7,9 @@ const tags = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-prac
  * Executa o axe (incluindo contraste de cores, que só funciona num navegador de verdade) e falha com a
  * lista de violações. `serious` e `critical` sempre falham; as demais também, para manter a regra simples.
  */
-export async function expectAccessible(page, name, { exclude = [] } = {}) {
+export async function expectAccessible(page, name, { exclude = [], include = [] } = {}) {
   let builder = new AxeBuilder({ page }).withTags(tags);
+  for (const selector of include) builder = builder.include(selector);
   for (const selector of exclude) builder = builder.exclude(selector);
   const { violations } = await builder.analyze();
   const summary = violations.map(

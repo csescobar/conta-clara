@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   brazilianMonthName,
+  brazilianWeekday,
+  formatDueDateGroup,
+  groupByDueDate,
   currentBrazilianDate,
   currentMonthInputValue,
   currentSaoPauloDate,
@@ -90,5 +93,30 @@ describe('single Brazilian formatting source', () => {
     expect(currentSaoPauloDate(lateEveningInBrazil)).toBe('2026-10-31');
     expect(currentBrazilianDate(lateEveningInBrazil)).toBe('31/10/2026');
     expect(currentMonthInputValue(lateEveningInBrazil)).toBe('2026-10');
+  });
+});
+
+describe('grouping by due date', () => {
+  it('names the weekday of a calendar date regardless of the time zone', () => {
+    expect(brazilianWeekday('2026-10-09')).toBe('sexta-feira');
+    expect(brazilianWeekday('2026-10-10T00:00:00.000Z')).toBe('sábado');
+    expect(formatDueDateGroup('2026-11-15')).toBe('Domingo, 15/11/2026');
+    expect(formatDueDateGroup(null)).toBe('Sem vencimento');
+  });
+
+  it('orders groups by date, keeps entries without a due date last and preserves the order inside a group', () => {
+    const entries = [
+      { id: 'a', due_on: '2026-10-20' },
+      { id: 'b', due_on: null },
+      { id: 'c', due_on: '2026-10-05' },
+      { id: 'd', due_on: '2026-10-20' },
+      { id: 'e', due_on: '2026-10-05T00:00:00.000Z' },
+    ];
+
+    const groups = groupByDueDate(entries);
+
+    expect(groups.map((group) => group.dueOn)).toEqual(['2026-10-05', '2026-10-20', null]);
+    expect(groups.map((group) => group.items.map((item) => item.id))).toEqual([['c', 'e'], ['a', 'd'], ['b']]);
+    expect(groupByDueDate([])).toEqual([]);
   });
 });

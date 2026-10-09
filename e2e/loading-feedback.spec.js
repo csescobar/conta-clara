@@ -1,15 +1,9 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures.js';
 import { expectAccessible } from './accessibility.js';
 
 // Este arquivo roda depois de first-release.spec.js (ordem alfabética), que já criou a conta e os dados fictícios.
-const email = 'admin@example.test';
-const password = 'senha-ficticia-admin-2026';
-
-async function signIn(page) {
+async function waitForDashboard(page) {
   await page.goto('/');
-  await page.getByLabel('E-mail').fill(email);
-  await page.getByLabel('Senha').fill(password);
-  await page.getByRole('button', { name: 'Entrar' }).click();
   await expect(page.getByRole('heading', { name: 'Visão geral', level: 1 })).toBeVisible();
   await expect(page.getByRole('status', { name: /^Carregando/ })).toHaveCount(0);
 }
@@ -36,9 +30,9 @@ for (const [name, viewport] of [
     ['lançamentos', 'Lançamentos', '**/api/entries?*', 'Carregando lançamentos'],
     ['painel', 'Visão geral', '**/api/dashboard?*', 'Carregando painel financeiro'],
   ]) {
-    test(`${route} troca o esqueleto pelo conteúdo sem saltar o layout em ${name}`, async ({ page }) => {
+    test(`${route} troca o esqueleto pelo conteúdo sem saltar o layout em ${name}`, async ({ signedInPage: page }) => {
       await page.setViewportSize(viewport);
-      await signIn(page);
+      await waitForDashboard(page);
       // Atrasa só a API da tela para que o esqueleto fique visível e o conteúdo chegue depois.
       await page.route(delayedApi, async (request) => {
         await new Promise((resolve) => setTimeout(resolve, 900));
@@ -61,9 +55,9 @@ for (const [name, viewport] of [
   }
 }
 
-test('o esqueleto de carregamento é acessível e a lista vazia orienta o que fazer', async ({ page }) => {
+test('o esqueleto de carregamento é acessível e a lista vazia orienta o que fazer', async ({ signedInPage: page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await signIn(page);
+  await waitForDashboard(page);
   let delayMs = 1500;
   await page.route('**/api/entries?*', async (route) => {
     await new Promise((resolve) => setTimeout(resolve, delayMs));
@@ -85,16 +79,16 @@ test('o esqueleto de carregamento é acessível e a lista vazia orienta o que fa
   await expectAccessible(page, 'lançamentos vazio');
 });
 
-test('o aviso após salvar não rouba o foco e fica disponível para leitores de tela', async ({ page }) => {
+test('o aviso após salvar não rouba o foco e fica disponível para leitores de tela', async ({ signedInPage: page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
-  await signIn(page);
+  await waitForDashboard(page);
   await page.getByRole('link', { name: 'Lançamentos' }).first().click();
   await page.getByRole('link', { name: 'Adicionar lançamento' }).first().click();
   await page.getByLabel('Descrição').fill('Conta para aviso fictícia');
   await page.getByLabel('Valor previsto (R$)').fill('12,34');
   await page.getByRole('button', { name: 'Salvar lançamento' }).click();
 
-  const notice = page.getByText('Lançamento salvo.');
+  const notice = page.getByText('Lançamento salvo.', { exact: true });
   await expect(notice).toBeVisible();
   await expect(page.getByRole('status').filter({ hasText: 'Lançamento salvo.' })).toHaveCount(1);
   // O foco permanece na página, não vai para o aviso.

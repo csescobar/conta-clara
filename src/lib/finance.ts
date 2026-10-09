@@ -76,6 +76,33 @@ export function shiftMonth(value: string, offset: number): string {
   return new Date(Date.UTC(year, month - 1 + offset, 1)).toISOString().slice(0, 7);
 }
 
+const weekdayNames = new Intl.DateTimeFormat('pt-BR', { weekday: 'long', timeZone: 'UTC' });
+
+/** Dia da semana de uma data civil AAAA-MM-DD, em minúsculas (ex.: "sábado"). */
+export function brazilianWeekday(value: string): string {
+  const [year, month, day] = value.slice(0, 10).split('-').map(Number);
+  return weekdayNames.format(new Date(Date.UTC(year, month - 1, day)));
+}
+
+/** Rótulo de um grupo por vencimento: "Sábado, 15/11/2026" ou "Sem vencimento". */
+export function formatDueDateGroup(value: string | null): string {
+  if (!value) return 'Sem vencimento';
+  const weekday = brazilianWeekday(value);
+  return `${weekday.slice(0, 1).toLocaleUpperCase('pt-BR')}${weekday.slice(1)}, ${formatBrazilianDate(value)}`;
+}
+
+/** Agrupa por data de vencimento em ordem crescente, deixando "sem vencimento" por último; mantém a ordem dentro de cada grupo. */
+export function groupByDueDate<Item extends { due_on: string | null }>(items: Item[]): Array<{ dueOn: string | null; items: Item[] }> {
+  const groups = new Map<string | null, Item[]>();
+  for (const item of items) {
+    const key = item.due_on ? item.due_on.slice(0, 10) : null;
+    groups.set(key, [...(groups.get(key) ?? []), item]);
+  }
+  return [...groups.entries()]
+    .sort(([left], [right]) => (left === right ? 0 : left === null ? 1 : right === null ? -1 : left.localeCompare(right)))
+    .map(([dueOn, grouped]) => ({ dueOn, items: grouped }));
+}
+
 const monthNames = new Intl.DateTimeFormat('pt-BR', { month: 'long', timeZone: 'UTC' });
 const monthYearNames = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 

@@ -1,5 +1,17 @@
 import { useCallback, useContext, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { ArrowDownLeft, ArrowUpRight, CalendarDays, Download, Pencil, Plus, RefreshCw, Trash2, Upload } from 'lucide-react';
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  CalendarDays,
+  CreditCard,
+  Download,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Trash2,
+  Undo2,
+  Upload,
+} from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AuthContext } from '../auth/auth-gate';
 import { Button } from '../components/ui/button';
@@ -11,7 +23,8 @@ import {
   currentMonthInputValue,
   formatBrazilianAmount,
   formatBrazilianDate,
-  formatBrazilianMonth,
+  formatDueDateGroup,
+  groupByDueDate,
   parseBrazilianCents,
   parseBrazilianDate,
 } from '../lib/finance';
@@ -35,6 +48,7 @@ import { EntryAmount, EntryList, EntryRow } from '../components/finance/entry-ro
 import { FilterBar } from '../components/finance/filter-bar';
 import { ListSkeleton } from '../components/ui/skeleton';
 import { toast } from '../components/ui/toast-store';
+import { ActionMenu, type MenuAction } from '../components/ui/action-menu';
 
 type EntryKind = 'income' | 'expense' | 'investment';
 type EntryStatus = 'pending' | 'late' | 'paid';
@@ -101,7 +115,11 @@ const kindOptions = [
   ['investment', 'Aporte'],
 ] as const;
 
-function EntryActions({
+/**
+ * Ações de uma linha de lançamento. A principal (Confirmar) fica sempre visível; as secundárias aparecem em linha
+ * a partir de `sm` e, no celular, ficam no menu de reticências, o que reduz a densidade de botões por linha.
+ */
+function buildEntryActions({
   entry,
   busy,
   confirmationBlocked,
@@ -120,23 +138,24 @@ function EntryActions({
   onUndo: () => void;
   onDelete: () => void;
 }) {
-  return (
+  const undoable = entry.actual_cents !== null && !entry.card_purchase_id;
+  const primary =
+    entry.actual_cents === null ? (
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        disabled={busy || confirmationBlocked}
+        aria-label={`Confirmar ${entry.description}`}
+        onClick={onConfirm}
+      >
+        <CalendarDays aria-hidden="true" className="size-4" />
+        Confirmar
+      </Button>
+    ) : null;
+  const secondary = (
     <>
-      {entry.actual_cents === null ? (
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled={busy || confirmationBlocked}
-          aria-label={`Confirmar ${entry.description}`}
-          onClick={onConfirm}
-        >
-          <CalendarDays aria-hidden="true" className="size-4" />
-          Confirmar
-        </Button>
-      ) : entry.card_purchase_id ? (
-        <span className="self-center px-2 text-xs text-muted-foreground">Parcela paga</span>
-      ) : (
+      {undoable && (
         <Button
           type="button"
           size="sm"
@@ -180,6 +199,19 @@ function EntryActions({
       )}
     </>
   );
+  const menuItems: MenuAction[] = [
+    ...(undoable
+      ? [{ id: 'undo', label: 'Desfazer confirmação', icon: Undo2, onSelect: onUndo, disabled: busy || confirmationBlocked }]
+      : []),
+    entry.card_purchase_id
+      ? { id: 'manage', label: 'Gerenciar compra', icon: CreditCard, to: '/compras' }
+      : { id: 'edit', label: 'Editar', icon: Pencil, to: conflict ? undefined : `/lancamentos/${entry.id}/editar`, disabled: conflict },
+    ...(!entry.card_purchase_id
+      ? [{ id: 'delete', label: 'Excluir', icon: Trash2, onSelect: onDelete, destructive: true, disabled: busy || syncing || conflict }]
+      : []),
+  ];
+  const menu = <ActionMenu label={`Mais ações para ${entry.description}`} items={menuItems} />;
+  return { primary, secondary, menu };
 }
 
 export function TransactionsPage() {
@@ -440,6 +472,76 @@ export function TransactionsPage() {
 
   const confirmationBlocked = Boolean(offline && (!offline.online || offline.pendingCount > 0 || offline.syncing));
 
+  const renderEntry = (entry: Entry) => {
+    const pendingOperation = offline?.operations.find((operation) => operation.entryId === entry.id);
+    const parts = buildEntryActions({
+      entry,
+      busy: busyEntryId === entry.id,
+      confirmationBlocked,
+      syncing: Boolean(offline?.syncing),
+      conflict: Boolean(pendingOperation?.conflict),
+      onConfirm: () => startConfirmation(entry),
+      onUndo: () => void undoConfirmation(entry),
+      onDelete: () => void deleteEntry(entry),
+    });
+    return (
+      <EntryRow
+        key={entry.id}
+        icon={entry.kind === 'income' ? ArrowDownLeft : entry.kind === 'investment' ? RefreshCw : ArrowUpRight}
+        iconTone={entry.kind === 'income' ? 'income' : entry.kind === 'investment' ? 'accent' : 'neutral'}
+        title={entry.description}
+        compactMeta
+        meta={
+          <>
+            {entry.realized_on ? `Realizado ${formatBrazilianDate(entry.realized_on)} · ` : ''}
+            {kindLabels[entry.kind]} · {entry.category_name ?? 'Sem categoria'}
+            {entry.card_purchase_id && entry.actual_cents !== null ? ' · Parcela paga' : ''}
+            {pendingOperation && <span className="ml-1 font-semibold text-warning">· Pendente neste aparelho</span>}
+          </>
+        }
+        aside={
+          <EntryAmount
+            cents={entry.actual_cents ?? entry.planned_cents}
+            tone={entry.kind === 'income' ? 'income' : 'expense'}
+            caption={
+              entry.actual_cents !== null && (
+                <>
+                  Previsto <MoneyValue cents={entry.planned_cents} />
+                </>
+              )
+            }
+            status={entry.status}
+            statusLabel={`Situação: ${statusLabels[entry.status]}`}
+          />
+        }
+        primaryAction={parts.primary}
+        secondaryActions={parts.secondary}
+        menu={parts.menu}
+      >
+        {confirmingEntryId === entry.id && (
+          <form
+            aria-label={`Confirmar lançamento ${entry.description}`}
+            onSubmit={(event) => void confirmEntry(event, entry)}
+            className="grid w-full gap-3 rounded-xl border border-border bg-muted/40 p-3 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-end"
+          >
+            <FormField id={`actual-amount-${entry.id}`} label="Valor realizado (R$)">
+              <MoneyInput required allowZero value={actualAmount} onChange={setActualAmount} />
+            </FormField>
+            <FormField id={`actual-date-${entry.id}`} label="Data de realização" hint="DD/MM/AAAA">
+              <DateField required value={actualDate} onChange={setActualDate} />
+            </FormField>
+            <Button type="submit" size="sm" disabled={busyEntryId === entry.id || confirmationBlocked}>
+              {busyEntryId === entry.id ? 'Salvando…' : 'Salvar realização'}
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={() => setConfirmingEntryId('')}>
+              Cancelar
+            </Button>
+          </form>
+        )}
+      </EntryRow>
+    );
+  };
+
   return (
     <>
       {confirmDialog}
@@ -474,7 +576,7 @@ export function TransactionsPage() {
         }
       />
       {error && <Alert className="mb-4">{error}</Alert>}
-      <section className="grid gap-4">
+      <section className="grid grid-cols-[minmax(0,1fr)] gap-4">
         <FilterBar title="Filtrar lançamentos" description="Escolha competência, categoria ou situação.">
           <FormField id="entries-month" label="Competência">
             <MonthField value={month} onChange={setMonth} />
@@ -511,75 +613,19 @@ export function TransactionsPage() {
             {loading && entries.length === 0 ? (
               <ListSkeleton label="Carregando lançamentos" rows={4} />
             ) : entries.length ? (
-              <EntryList busy={loading}>
-                {entries.map((entry) => {
-                  const pendingOperation = offline?.operations.find((operation) => operation.entryId === entry.id);
+              <div className="grid grid-cols-[minmax(0,1fr)] gap-5">
+                {groupByDueDate(entries).map((group) => {
+                  const headingId = `entries-due-${group.dueOn ?? 'none'}`;
                   return (
-                    <EntryRow
-                      key={entry.id}
-                      icon={entry.kind === 'income' ? ArrowDownLeft : entry.kind === 'investment' ? RefreshCw : ArrowUpRight}
-                      iconTone={entry.kind === 'income' ? 'income' : entry.kind === 'investment' ? 'accent' : 'neutral'}
-                      title={entry.description}
-                      meta={
-                        <>
-                          {kindLabels[entry.kind]} · {entry.category_name ?? 'Sem categoria'} · Competência{' '}
-                          {formatBrazilianMonth(entry.competence_on)} · Vencimento {formatBrazilianDate(entry.due_on)}
-                          {entry.realized_on ? ` · Realizado ${formatBrazilianDate(entry.realized_on)}` : ''}
-                          {pendingOperation && <span className="ml-1 font-semibold text-warning">· Pendente neste aparelho</span>}
-                        </>
-                      }
-                      aside={
-                        <EntryAmount
-                          cents={entry.actual_cents ?? entry.planned_cents}
-                          tone={entry.kind === 'income' ? 'income' : 'expense'}
-                          caption={
-                            entry.actual_cents !== null && (
-                              <>
-                                Previsto <MoneyValue cents={entry.planned_cents} />
-                              </>
-                            )
-                          }
-                          status={entry.status}
-                          statusLabel={`Situação: ${statusLabels[entry.status]}`}
-                        />
-                      }
-                      actions={
-                        <EntryActions
-                          entry={entry}
-                          busy={busyEntryId === entry.id}
-                          confirmationBlocked={confirmationBlocked}
-                          syncing={Boolean(offline?.syncing)}
-                          conflict={Boolean(pendingOperation?.conflict)}
-                          onConfirm={() => startConfirmation(entry)}
-                          onUndo={() => void undoConfirmation(entry)}
-                          onDelete={() => void deleteEntry(entry)}
-                        />
-                      }
-                    >
-                      {confirmingEntryId === entry.id && (
-                        <form
-                          aria-label={`Confirmar lançamento ${entry.description}`}
-                          onSubmit={(event) => void confirmEntry(event, entry)}
-                          className="grid w-full gap-3 rounded-xl border border-border bg-muted/40 p-3 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-end"
-                        >
-                          <FormField id={`actual-amount-${entry.id}`} label="Valor realizado (R$)">
-                            <MoneyInput required allowZero value={actualAmount} onChange={setActualAmount} />
-                          </FormField>
-                          <FormField id={`actual-date-${entry.id}`} label="Data de realização" hint="DD/MM/AAAA">
-                            <DateField required value={actualDate} onChange={setActualDate} />
-                          </FormField>
-                          <Button type="submit" size="sm" disabled={busyEntryId === entry.id || confirmationBlocked}>
-                            {busyEntryId === entry.id ? 'Salvando…' : 'Salvar realização'}
-                          </Button>
-                          <Button type="button" size="sm" variant="outline" onClick={() => setConfirmingEntryId('')}>
-                            Cancelar
-                          </Button>
-                        </form>
-                      )}
-                    </EntryRow>
+                    <section key={headingId} aria-labelledby={headingId}>
+                      <h3 id={headingId} className="mb-1 border-b border-border pb-2 text-sm font-semibold text-muted-foreground">
+                        {formatDueDateGroup(group.dueOn)}
+                      </h3>
+                      <EntryList busy={loading}>{group.items.map(renderEntry)}</EntryList>
+                    </section>
                   );
                 })}
-              </EntryList>
+              </div>
             ) : (
               <EmptyState
                 title="Nenhum lançamento encontrado"
