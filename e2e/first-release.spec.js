@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { expectAccessible } from './accessibility.js';
 import * as XLSX from 'xlsx';
 
 function currentMonth() {
@@ -368,6 +369,12 @@ test('administra um espaço compartilhado, importa e sincroniza uma alteração 
   });
   await admin.getByRole('button', { name: 'Gerar prévia' }).click();
   await expect(admin.getByRole('heading', { name: '2. Revise o que será importado' })).toBeVisible();
+  await expectAccessible(admin, 'prévia da importação');
+  await admin.setViewportSize({ width: 390, height: 844 });
+  await expect(admin.getByRole('region', { name: 'Prévia dos lançamentos importáveis' })).toBeVisible();
+  expect(await admin.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await expectAccessible(admin, 'prévia da importação (390 px)');
+  await admin.setViewportSize({ width: 1280, height: 900 });
   await admin.getByRole('button', { name: /Revisar e confirmar 1 lançamentos/ }).click();
   await admin.getByRole('button', { name: 'Confirmar e importar' }).click();
   await expect(admin.locator('p[role="status"]')).toContainText('1 lançamentos foram importados');
@@ -385,6 +392,29 @@ test('administra um espaço compartilhado, importa e sincroniza uma alteração 
   const expenses = admin.getByRole('table').getByRole('row', { name: /Despesas/ });
   await expect(expenses.locator('td').nth(0)).toContainText('70,00');
   await expect(expenses.locator('td').nth(1)).toContainText('70,00');
+
+  // Acessibilidade (axe, com contraste real) em todas as telas, já com lançamentos, cartões e faturas criados.
+  for (const width of [390, 1280]) {
+    await admin.setViewportSize({ width, height: 900 });
+    for (const route of [
+      '/',
+      '/lancamentos',
+      '/lancamentos/novo',
+      '/compras',
+      '/faturas',
+      '/recorrencias',
+      '/recorrencias/novo',
+      '/historico',
+      '/configuracoes',
+      '/importar',
+    ]) {
+      await admin.goto(route);
+      await expect(admin.getByRole('heading', { level: 1 })).toBeVisible();
+      await expect(admin.getByRole('status', { name: /^Carregando/ })).toHaveCount(0);
+      await expectAccessible(admin, `${route} (${width} px)`);
+    }
+  }
+  await admin.setViewportSize({ width: 1280, height: 900 });
 
   await admin.getByRole('link', { name: 'Configurações' }).click();
   await admin.getByLabel('E-mail da pessoa').fill('membro@example.test');

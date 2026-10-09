@@ -1,7 +1,18 @@
 import { Inbox, LoaderCircle } from 'lucide-react';
 import type { ReactNode } from 'react';
 
-export function EmptyState({ title, description, action }: { title: string; description: string; action?: ReactNode }) {
+/** O título é `h3` por padrão (dentro de um cartão com título `h2`); use `as="h2"` logo abaixo do título da página. */
+export function EmptyState({
+  title,
+  description,
+  action,
+  as: Heading = 'h3',
+}: {
+  title: string;
+  description: string;
+  action?: ReactNode;
+  as?: 'h2' | 'h3';
+}) {
   return (
     <section
       role="status"
@@ -9,7 +20,7 @@ export function EmptyState({ title, description, action }: { title: string; desc
       className="grid justify-items-center gap-2 rounded-2xl border border-dashed border-border bg-card px-6 py-9 text-center"
     >
       <Inbox aria-hidden="true" className="mb-1 size-7 text-muted-foreground" />
-      <h3 className="font-semibold">{title}</h3>
+      <Heading className="font-semibold">{title}</Heading>
       <p className="max-w-sm text-sm leading-6 text-muted-foreground">{description}</p>
       {action}
     </section>

@@ -18,6 +18,7 @@ import { MoneyValue } from '../components/ui/money-value';
 import { Select, Checkbox } from '../components/ui/form-controls';
 import { Alert } from '../components/ui/alert';
 import { AlertDialog, AlertDialogContent } from '../components/ui/dialog';
+import { DataTable } from '../components/finance/data-table';
 
 type Category = { id: string; name: string; kind: ImportKind; archived_at: string | null };
 type PaymentMethod = { id: string; name: string; archived_at: string | null };
@@ -462,57 +463,39 @@ export function SpreadsheetImportPage() {
                   </section>
                 )}
 
-                <div className="overflow-x-auto rounded-xl border border-border">
-                  <table className="w-full min-w-[760px] text-left text-sm">
-                    <caption className="sr-only">Prévia dos lançamentos importáveis</caption>
-                    <thead className="bg-muted/50 text-xs text-muted-foreground">
-                      <tr>
-                        <th scope="col" className="px-3 py-2.5">
-                          Descrição
-                        </th>
-                        <th scope="col" className="px-3 py-2.5">
-                          Tipo
-                        </th>
-                        <th scope="col" className="px-3 py-2.5">
-                          Competência
-                        </th>
-                        <th scope="col" className="px-3 py-2.5">
-                          Vencimento
-                        </th>
-                        <th scope="col" className="px-3 py-2.5 text-right">
-                          Previsto
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {preview.entries.map((entry) => (
-                        <tr key={entry.id} className="border-t border-border align-top">
-                          <th scope="row" className="px-3 py-3 font-medium">
+                <div className="min-w-0 rounded-xl border border-border px-3">
+                  <DataTable
+                    caption="Prévia dos lançamentos importáveis"
+                    minWidth="min-w-[44rem]"
+                    columns={[
+                      { id: 'description', header: 'Descrição' },
+                      { id: 'kind', header: 'Tipo' },
+                      { id: 'competence', header: 'Competência' },
+                      { id: 'due', header: 'Vencimento' },
+                      { id: 'planned', header: 'Previsto', align: 'right' },
+                    ]}
+                    rows={preview.entries.map((entry) => ({
+                      id: entry.id,
+                      cells: {
+                        description: (
+                          <>
                             {entry.description}
                             {entry.warning && (
                               <span className="mt-1 block max-w-xs text-xs font-normal text-warning" role="note">
                                 {entry.warning}
                               </span>
                             )}
-                          </th>
-                          <td className="whitespace-nowrap px-3 py-3">
-                            {
-                              kindLabels[
-                                entry.sourceCategory
-                                  ? effectiveMapping(entry.sourceCategory, categoryMappings, categories).kind
-                                  : entry.kind
-                              ]
-                            }
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-3">{formatBrazilianDate(entry.competenceOn)}</td>
-                          <td className="whitespace-nowrap px-3 py-3">{formatBrazilianDate(entry.dueOn)}</td>
-                          <td className="whitespace-nowrap px-3 py-3 text-right tabular-nums">
-                            <MoneyValue cents={entry.plannedCents} />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                          </>
+                        ),
+                        kind: kindLabels[
+                          entry.sourceCategory ? effectiveMapping(entry.sourceCategory, categoryMappings, categories).kind : entry.kind
+                        ],
+                        competence: formatBrazilianDate(entry.competenceOn),
+                        due: formatBrazilianDate(entry.dueOn),
+                        planned: <MoneyValue cents={entry.plannedCents} />,
+                      },
+                    }))}
+                  />
                 </div>
 
                 {preview.skipped.length > 0 && (

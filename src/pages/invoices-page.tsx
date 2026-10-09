@@ -228,6 +228,7 @@ export function InvoicesPage() {
         <Card>
           <CardContent>
             <EmptyState
+              as="h2"
               title={`Nenhuma fatura em ${heading}`}
               description="As faturas aparecem aqui quando houver parcelas de compras de cartão com vencimento neste mês."
             />
@@ -250,7 +251,7 @@ export function InvoicesPage() {
                   <Card key={invoice.id}>
                     <CardHeader className="flex-row flex-wrap items-start justify-between gap-3">
                       <div>
-                        <CardTitle>Fatura de {formatBrazilianMonth(invoice.invoice_month)}</CardTitle>
+                        <CardTitle as="h3">Fatura de {formatBrazilianMonth(invoice.invoice_month)}</CardTitle>
                         <CardDescription>
                           Fecha dia {invoice.closing_day} · vence em {formatBrazilianDate(invoice.due_on)} · {invoice.installment_count}{' '}
                           {invoice.installment_count === 1 ? 'parcela' : 'parcelas'}

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { cn } from '../../lib/utils';
 
 export type DataColumn = {
@@ -30,6 +30,20 @@ export function DataTable({
   /** Largura mínima (classe Tailwind) da tabela não compacta, ex.: `min-w-[28rem]`. */
   minWidth?: string;
 }) {
+  // Uma região que rola na horizontal precisa ser alcançável pelo teclado; só vira parada de Tab quando transborda.
+  const container = useRef<HTMLDivElement>(null);
+  const [scrollable, setScrollable] = useState(false);
+  useEffect(() => {
+    const element = container.current;
+    if (!element || typeof ResizeObserver === 'undefined') return;
+    const measure = () => setScrollable(element.scrollWidth > element.clientWidth + 1);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    if (element.firstElementChild) observer.observe(element.firstElementChild);
+    return () => observer.disconnect();
+  }, []);
+
   const last = columns.length - 1;
   const padding = (index: number) =>
     compact
@@ -52,7 +66,15 @@ export function DataTable({
     );
 
   return (
-    <div className={cn('overflow-x-auto', compact && 'mt-3 min-w-0')}>
+    <div
+      ref={container}
+      className={cn(
+        'overflow-x-auto',
+        compact && 'mt-3 min-w-0',
+        scrollable && 'rounded-lg focus-visible:outline-2 focus-visible:outline-ring',
+      )}
+      {...(scrollable ? { role: 'region', 'aria-label': caption, tabIndex: 0 } : {})}
+    >
       <table className={cn('w-full', compact ? 'table-fixed text-xs sm:text-sm' : cn('border-collapse text-sm', minWidth))}>
         <caption className="sr-only">{caption}</caption>
         {compact && columns.some((column) => column.width) && (

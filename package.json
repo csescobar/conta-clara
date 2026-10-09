@@ -20,7 +20,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "build": "vite build",
+    "build": "vite build && node scripts/check-production-bundle.js",
     "db:migrate": "node --env-file-if-exists=.env scripts/migrate.js",
     "db:status": "node --env-file-if-exists=.env scripts/migrate.js --status",
     "start": "node --env-file-if-exists=.env server/index.js"
@@ -48,6 +48,7 @@
     "shell-quote": "^1.12.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@eslint/js": "^9.39.5",
     "@playwright/test": "^1.63.0",
     "@tailwindcss/vite": "^4.3.3",
@@ -60,6 +61,7 @@
     "@types/react-dom": "^19.2.0",
     "@types/supertest": "^6.0.3",
     "@vitejs/plugin-react": "^5.0.4",
+    "axe-core": "^4.13.0",
     "concurrently": "^9.2.1",
     "eslint": "^9.39.5",
     "eslint-config-prettier": "^9.1.2",

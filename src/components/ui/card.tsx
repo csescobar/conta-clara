@@ -9,11 +9,20 @@ export function CardHeader({ className, ...props }: HTMLAttributes<HTMLDivElemen
   return <div className={cn('flex flex-col gap-1.5 p-5 pb-0', className)} {...props} />;
 }
 
-export function CardTitle({ className, children, ...props }: HTMLAttributes<HTMLHeadingElement>) {
+/**
+ * Título de cartão. O padrão é `h2`, para cartões logo abaixo do título da página (`h1`); use `as="h3"`
+ * quando o cartão estiver sob outro `h2`, para manter a ordem dos níveis.
+ */
+export function CardTitle({
+  className,
+  children,
+  as: Heading = 'h2',
+  ...props
+}: HTMLAttributes<HTMLHeadingElement> & { as?: 'h2' | 'h3' }) {
   return (
-    <h3 className={cn('text-base font-semibold tracking-tight', className)} {...props}>
+    <Heading className={cn('text-base font-semibold tracking-tight', className)} {...props}>
       {children}
-    </h3>
+    </Heading>
   );
 }
 

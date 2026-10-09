@@ -21,8 +21,11 @@ export default defineConfig({
       timeout: 120_000,
     },
     {
+      // O build de testes inclui o catálogo do design system (VITE_DESIGN_CATALOG) em dist/e2e; o build de produção não.
       command:
-        'node node_modules/vite/bin/vite.js build && node node_modules/vite/bin/vite.js preview --host 127.0.0.1 --port 5173 --strictPort',
+        'node node_modules/vite/bin/vite.js build --outDir dist/e2e && ' +
+        'node node_modules/vite/bin/vite.js preview --outDir dist/e2e --host 127.0.0.1 --port 5173 --strictPort',
+      env: { VITE_DESIGN_CATALOG: 'true' },
       url: 'http://127.0.0.1:5173',
       reuseExistingServer: false,
       timeout: 60_000,

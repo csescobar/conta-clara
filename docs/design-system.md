@@ -13,6 +13,7 @@ Conta Clara usa uma aparência clara, calma e acolhedora, com verde petróleo co
 | Ação primária | `#1D6A61` | Botão principal e foco |
 | Seleção suave | `#D8EDE7` | Contexto ativo, com texto `#1A4E46` |
 | Borda | `#DCE8E5` | Divisão de superfícies |
+| Borda de campo | `#72918A` | Contorno de campos, seletores e caixas de seleção (3,42:1 sobre o cartão e 3,20:1 sobre o fundo, como pede a WCAG 1.4.11) |
 | Sucesso | `#1F6A46` | Situação paga, sempre com rótulo e ícone |
 | Atenção | `#76530E` | Situação pendente, sempre com rótulo e ícone |
 | Erro | `#9B2C2C` | Situação atrasada ou erro, sempre com rótulo e ícone |
@@ -79,6 +80,16 @@ Os componentes reutilizáveis ficam em `src/components/ui`. Seguem a composiçã
 
 O estado vazio explica como começar quando existe uma ação disponível. Carregamento mantém o layout estável e respeita movimento reduzido. Erro descreve a situação em texto e, quando a tela oferecer recuperação, orienta uma ação. Valores, legenda ou resumo acompanham os gráficos; não comunicar resultado somente pela cor. Use os filtros do mesmo período do painel e mantenha valores exatos disponíveis fora dos eixos arredondados.
 
-## Prévia e verificação
+## Catálogo e verificação
 
-A tela inicial e o teste de `src/App.test.tsx` demonstram componentes com valores fictícios. Testar nomes acessíveis, descrição de campos, rótulos de estados, formatação de centavos e foco visível. Revisar a prévia em largura móvel e desktop ao alterar os tokens.
+O catálogo vivo (`src/pages/design-catalog.tsx`) mostra tokens com valor e razão de contraste lidos do CSS, a escala tipográfica e todos os componentes e estados com dados fictícios. Abra `http://localhost:5173/catalogo` com `npm run dev`. A rota só existe em desenvolvimento ou em builds com `VITE_DESIGN_CATALOG=true` (usado pelo Playwright, em `dist/e2e`); `npm run build` falha se o catálogo aparecer no pacote de produção (`scripts/check-production-bundle.js`) e, em produção, `/catalogo` redireciona para o início.
+
+Verificações automáticas:
+
+- `src/lib/design-tokens.test.ts` calcula o contraste de cada par declarado em `src/lib/design-tokens.ts` (texto: 4,5:1; contorno de campo, foco e gráficos: 3:1) e confere se as tabelas deste documento coincidem com `src/styles.css`. Ao alterar um token, atualize o documento.
+- `src/pages/accessibility.test.tsx` executa o axe (jsdom, sem contraste) no catálogo, na confirmação aberta e na lista e no formulário de lançamentos.
+- `e2e/design-catalog.spec.js` executa o axe no catálogo em 320, 768 e 1280 px e no diálogo de confirmação; `e2e/first-release.spec.js` o executa em todas as rotas autenticadas, em celular e desktop, e na prévia da importação. O contraste só é avaliado nos testes de navegador.
+
+Regras que o axe já exigiu: `CardTitle` usa `h2` por padrão (`as="h3"` sob outro `h2`) e `EmptyState` aceita `as="h2"` logo abaixo do título da página, para manter a ordem dos níveis; tabelas que rolam na horizontal (`DataTable`) viram região rolável focável pelo teclado.
+
+Ao adicionar um componente ou estado, inclua-o no catálogo e revise em largura móvel (320 px), desktop e teclado.
