@@ -394,7 +394,13 @@ test('administra um espaço compartilhado, importa e sincroniza uma alteração 
   await expect(expenses.locator('td').nth(1)).toContainText('70,00');
 
   // Acessibilidade (axe, com contraste real) em todas as telas, já com lançamentos, cartões e faturas criados.
-  for (const width of [390, 1280]) {
+  for (const [colorScheme, width] of [
+    ['light', 390],
+    ['light', 1280],
+    ['dark', 390],
+    ['dark', 1280],
+  ]) {
+    await admin.emulateMedia({ colorScheme });
     await admin.setViewportSize({ width, height: 900 });
     for (const route of [
       '/',
@@ -411,9 +417,10 @@ test('administra um espaço compartilhado, importa e sincroniza uma alteração 
       await admin.goto(route);
       await expect(admin.getByRole('heading', { level: 1 })).toBeVisible();
       await expect(admin.getByRole('status', { name: /^Carregando/ })).toHaveCount(0);
-      await expectAccessible(admin, `${route} (${width} px)`);
+      await expectAccessible(admin, `${route} (${colorScheme}, ${width} px)`);
     }
   }
+  await admin.emulateMedia({ colorScheme: 'light' });
   await admin.setViewportSize({ width: 1280, height: 900 });
 
   await admin.getByRole('link', { name: 'Configurações' }).click();

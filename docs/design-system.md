@@ -39,6 +39,49 @@ Contraste do texto de cada estado: sucesso 5,83:1 no fundo suave e 6,18:1 na sup
 
 Os pares de texto mais usados têm contraste superior a 4,5:1: texto principal sobre o fundo (11,27:1), ação primária sobre branco (6,39:1), texto secundário sobre branco (5,79:1), sucesso sobre fundo de sucesso (5,83:1), atenção sobre fundo de atenção (6,19:1) e erro sobre fundo de erro (6,59:1). Foco usa contorno visível de 2 px, com separação do componente.
 
+## Tema escuro
+
+O tema segue a preferência do sistema (`prefers-color-scheme`) e pode ser escolhido em Configurações → Aparência (Seguir o sistema, Claro ou Escuro). A escolha fica no `localStorage` deste aparelho (`conta-clara-theme`) e nunca é enviada ao servidor. `index.html` aplica a escolha antes da primeira renderização, para a tela não piscar, e `src/lib/theme.ts` mantém `data-theme` e as cores de `<meta name="theme-color">` (claro `#1D6A61`, escuro `#0E1918`). O manifesto da PWA mantém a cor clara, porque o manifesto não muda com o tema.
+
+Os tokens escuros ficam em dois blocos idênticos de `src/styles.css`: dentro de `@media (prefers-color-scheme: dark)` para `:root:not([data-theme='light'])` e em `:root[data-theme='dark']`. Os dois valem para os mesmos pares de contraste da tabela de tokens; `src/lib/design-tokens.test.ts` calcula todos nos três conjuntos de valores e confere esta tabela com o CSS.
+
+| Token | Claro | Escuro | Uso |
+|---|---|---|---|
+| `--background` | `#F5F8F7` | `#0E1918` | Fundo geral |
+| `--foreground` | `#173C3A` | `#E4EFED` | Texto principal |
+| `--card` | `#FFFFFF` | `#152322` | Superfície de cartões e campos |
+| `--card-foreground` | `#173C3A` | `#E4EFED` | Texto sobre cartões |
+| `--primary` | `#1D6A61` | `#4FB3A3` | Ação primária, foco e links |
+| `--primary-foreground` | `#FFFFFF` | `#04201C` | Texto sobre a ação primária |
+| `--secondary` | `#EAF3F1` | `#1C3230` | Superfície secundária |
+| `--secondary-foreground` | `#214E49` | `#D3E8E4` | Texto sobre a superfície secundária |
+| `--muted` | `#EDF2F1` | `#1B2D2B` | Superfície discreta |
+| `--muted-foreground` | `#536A67` | `#9DB6B2` | Texto secundário |
+| `--accent` | `#D8EDE7` | `#1F4741` | Seleção suave |
+| `--accent-foreground` | `#1A4E46` | `#D6F0EA` | Texto sobre a seleção |
+| `--border` | `#DCE8E5` | `#2B403D` | Divisão de superfícies |
+| `--input` | `#72918A` | `#6F8F89` | Contorno de campos (3:1) |
+| `--ring` | `#24776C` | `#5FC4B3` | Anel de foco |
+| `--chart-realized` | `#A85635` | `#E5915F` | Série realizada nos gráficos |
+| `--destructive-foreground` | `#FFFFFF` | `#2A0A0A` | Texto sobre o botão destrutivo |
+| `--scrim` | `#173C3A` | `#000000` | Fundo escurecido atrás de diálogos (a 40%) |
+| `--success` | `#1F6A46` | `#72D39C` | Estado success: texto e ícone |
+| `--success-soft` | `#E8F5ED` | `#153A27` | Estado success: fundo suave |
+| `--success-surface` | `#F3FAF6` | `#102B1E` | Estado success: superfície |
+| `--success-border` | `#B7DCC5` | `#2B6A47` | Estado success: borda |
+| `--warning` | `#76530E` | `#EBBD62` | Estado warning: texto e ícone |
+| `--warning-soft` | `#FBF1D6` | `#3C2E0D` | Estado warning: fundo suave |
+| `--warning-surface` | `#FDF8EC` | `#2B2209` | Estado warning: superfície |
+| `--warning-border` | `#E8D29B` | `#755A1B` | Estado warning: borda |
+| `--destructive` | `#9B2C2C` | `#F29A9A` | Estado destructive: texto e ícone |
+| `--destructive-soft` | `#FDECEC` | `#431818` | Estado destructive: fundo suave |
+| `--destructive-surface` | `#FFF8F8` | `#2E1313` | Estado destructive: superfície |
+| `--destructive-border` | `#EFC4C4` | `#85353A` | Estado destructive: borda |
+| `--info` | `#1F5A80` | `#82BDE8` | Estado info: texto e ícone |
+| `--info-soft` | `#E3EEF6` | `#133345` | Estado info: fundo suave |
+| `--info-surface` | `#F4F8FB` | `#102534` | Estado info: superfície |
+| `--info-border` | `#BCD4E5` | `#2F607B` | Estado info: borda |
+
 ## Tipografia, forma e espaçamento
 
 - Usar somente fontes de sistema (`ui-sans-serif`, `system-ui` e equivalentes); números financeiros usam algarismos tabulares.

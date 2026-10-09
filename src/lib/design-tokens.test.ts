@@ -7,26 +7,41 @@ import { baseTokens, contrastPairs, stateNames, stateParts } from './design-toke
 const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
 const docs = readFileSync(new URL('../../docs/design-system.md', import.meta.url), 'utf8');
 
-/** Tokens declarados no primeiro bloco `:root` (tema claro). */
-function lightTokens(): Record<string, string> {
-  const block = /:root\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
+function parseBlock(source: string, selector: RegExp): Record<string, string> {
+  const block = selector.exec(source)?.[1] ?? '';
   return Object.fromEntries([...block.matchAll(/--([a-z-]+):\s*(#[0-9a-fA-F]{6});/g)].map((match) => [match[1], match[2].toUpperCase()]));
 }
 
-const tokens = lightTokens();
+/** Tema claro (primeiro bloco `:root`), tema escuro pelo sistema e tema escuro escolhido pela pessoa. */
+const palettes = {
+  claro: parseBlock(css, /:root\s*\{([^}]*)\}/),
+  'escuro (sistema)': parseBlock(css, /:root:not\(\[data-theme='light'\]\)\s*\{([^}]*)\}/),
+  'escuro (escolhido)': parseBlock(css, /:root\[data-theme='dark'\]\s*\{([^}]*)\}/),
+};
+const tokens = palettes.claro;
+const darkTokens = palettes['escuro (escolhido)'];
+const allTokenNames = [
+  ...baseTokens,
+  'destructive-foreground',
+  'scrim',
+  ...stateNames.flatMap((state) => stateParts.map((part) => `${state}${part}`)),
+];
 
 describe('color tokens', () => {
-  it('declares every base and state token as a hex color', () => {
-    const expected = [
-      ...baseTokens,
-      'destructive-foreground',
-      ...stateNames.flatMap((state) => stateParts.map((part) => `${state}${part}`)),
-    ];
-    expect(expected.filter((name) => !tokens[name])).toEqual([]);
+  it.each(Object.entries(palettes))('declares every base and state token in the %s theme', (_name, palette) => {
+    expect(allTokenNames.filter((name) => !palette[name])).toEqual([]);
   });
 
-  it.each(contrastPairs)('keeps $label at $minimum:1 or more ($kind)', ({ foreground, background, minimum }) => {
-    expect(contrastRatio(tokens[foreground], tokens[background])).toBeGreaterThanOrEqual(minimum);
+  it('keeps the system dark palette identical to the explicitly chosen one', () => {
+    expect(palettes['escuro (sistema)']).toEqual(palettes['escuro (escolhido)']);
+  });
+
+  it.each(Object.entries(palettes))('keeps every pair above its minimum contrast in the %s theme', (_name, palette) => {
+    const failing = contrastPairs
+      .map((pair) => ({ ...pair, ratio: contrastRatio(palette[pair.foreground], palette[pair.background]) }))
+      .filter((pair) => pair.ratio < pair.minimum)
+      .map((pair) => `${pair.label}: ${pair.ratio.toFixed(2)}:1 < ${pair.minimum}:1 (${pair.kind})`);
+    expect(failing).toEqual([]);
   });
 
   it('accepts the short hex form the minified build produces', () => {
@@ -68,5 +83,14 @@ describe('design system documentation', () => {
     const row = docs.split('\n').find((line) => line.startsWith(`| \`${state}\` |`));
     expect(row, `linha do estado ${state} ausente`).toBeDefined();
     for (const part of stateParts) expect(row).toContain(`\`${tokens[`${state}${part}`]}\``);
+  });
+});
+
+describe('dark theme documentation', () => {
+  it.each(allTokenNames)('lists --%s with its light and dark values', (token) => {
+    const row = docs.split('\n').find((line) => line.startsWith(`| \`--${token}\` |`));
+    expect(row, `linha de --${token} ausente na tabela do tema escuro`).toBeDefined();
+    expect(row).toContain(`\`${tokens[token]}\``);
+    expect(row).toContain(`\`${darkTokens[token]}\``);
   });
 });

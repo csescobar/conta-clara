@@ -3,7 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#1d6a61" />
+    <meta name="theme-color" content="#1d6a61" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0e1918" media="(prefers-color-scheme: dark)" />
+    <script>
+      // Aplica a escolha de tema antes da primeira renderização, para a tela não piscar. Mantenha em sincronia com src/lib/theme.ts.
+      try {
+        var saved = localStorage.getItem('conta-clara-theme');
+        if (saved === 'light' || saved === 'dark') {
+          document.documentElement.setAttribute('data-theme', saved);
+          var colors = { light: '#1d6a61', dark: '#0e1918' };
+          document.querySelectorAll('meta[name="theme-color"]').forEach(function (meta) {
+            meta.setAttribute('content', colors[saved]);
+          });
+        }
+      } catch (error) {}
+    </script>
     <meta name="description" content="Controle financeiro familiar local." />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />

@@ -11,6 +11,7 @@ import { BackupSettings } from './backup-settings';
 import { PageHeader } from './page-header';
 import { useConfirmDialog } from '../components/ui/confirm-dialog';
 import { Alert } from '../components/ui/alert';
+import { AppearanceSettings } from './appearance-settings';
 
 export function SettingsPage() {
   const [confirm, confirmDialog] = useConfirmDialog();
@@ -168,6 +169,9 @@ export function SettingsPage() {
       {confirmDialog}
       <PageHeader eyebrow="Seu espaço" title="Configurações" description="Pessoas e acessos ao espaço financeiro compartilhado." />
       {error && <Alert className="mb-5">{error}</Alert>}
+      <section aria-labelledby="appearance-heading" className="mb-4 grid gap-4">
+        <AppearanceSettings />
+      </section>
       <section aria-labelledby="members-heading" className="grid gap-4">
         <Card>
           <CardHeader>

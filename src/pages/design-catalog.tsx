@@ -21,6 +21,7 @@ import { toast } from '../components/ui/toast-store';
 import { contrastRatio } from '../lib/contrast';
 import { cn } from '../lib/utils';
 import { baseTokens, contrastPairs, stateNames, stateParts } from '../lib/design-tokens';
+import { AppearanceSettings } from './appearance-settings';
 import { PageHeader } from './page-header';
 
 function Section({ id, title, description, children }: { id: string; title: string; description: string; children: React.ReactNode }) {
@@ -449,6 +450,7 @@ export default function DesignCatalogPage() {
         title="Catálogo do design system"
         description="Tokens, componentes e estados com dados fictícios. Esta página não existe no build de produção."
       />
+      <AppearanceSettings />
       <ColorSection />
       <TypographySection />
       <ButtonsSection />

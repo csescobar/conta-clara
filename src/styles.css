@@ -35,7 +35,87 @@
   --success-soft: #e8f5ed;
   --success-surface: #f3faf6;
   --success-border: #b7dcc5;
+  --scrim: #173c3a;
   --radius: 0.875rem;
+}
+
+/* Tema escuro: segue o sistema, a menos que a pessoa tenha escolhido o claro; a escolha explícita sempre vence. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --background: #0e1918;
+    --foreground: #e4efed;
+    --card: #152322;
+    --card-foreground: #e4efed;
+    --primary: #4fb3a3;
+    --primary-foreground: #04201c;
+    --secondary: #1c3230;
+    --secondary-foreground: #d3e8e4;
+    --muted: #1b2d2b;
+    --muted-foreground: #9db6b2;
+    --accent: #1f4741;
+    --accent-foreground: #d6f0ea;
+    --destructive: #f29a9a;
+    --destructive-foreground: #2a0a0a;
+    --destructive-soft: #431818;
+    --destructive-surface: #2e1313;
+    --destructive-border: #85353a;
+    --warning: #ebbd62;
+    --warning-soft: #3c2e0d;
+    --warning-surface: #2b2209;
+    --warning-border: #755a1b;
+    --info: #82bde8;
+    --info-soft: #133345;
+    --info-surface: #102534;
+    --info-border: #2f607b;
+    --chart-realized: #e5915f;
+    --border: #2b403d;
+    --input: #6f8f89;
+    --ring: #5fc4b3;
+    --success: #72d39c;
+    --success-soft: #153a27;
+    --success-surface: #102b1e;
+    --success-border: #2b6a47;
+    --scrim: #000000;
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --background: #0e1918;
+  --foreground: #e4efed;
+  --card: #152322;
+  --card-foreground: #e4efed;
+  --primary: #4fb3a3;
+  --primary-foreground: #04201c;
+  --secondary: #1c3230;
+  --secondary-foreground: #d3e8e4;
+  --muted: #1b2d2b;
+  --muted-foreground: #9db6b2;
+  --accent: #1f4741;
+  --accent-foreground: #d6f0ea;
+  --destructive: #f29a9a;
+  --destructive-foreground: #2a0a0a;
+  --destructive-soft: #431818;
+  --destructive-surface: #2e1313;
+  --destructive-border: #85353a;
+  --warning: #ebbd62;
+  --warning-soft: #3c2e0d;
+  --warning-surface: #2b2209;
+  --warning-border: #755a1b;
+  --info: #82bde8;
+  --info-soft: #133345;
+  --info-surface: #102534;
+  --info-border: #2f607b;
+  --chart-realized: #e5915f;
+  --border: #2b403d;
+  --input: #6f8f89;
+  --ring: #5fc4b3;
+  --success: #72d39c;
+  --success-soft: #153a27;
+  --success-surface: #102b1e;
+  --success-border: #2b6a47;
+  --scrim: #000000;
 }
 
 @theme inline {
@@ -69,6 +149,7 @@
   --color-success-soft: var(--success-soft);
   --color-success-surface: var(--success-surface);
   --color-success-border: var(--success-border);
+  --color-scrim: var(--scrim);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
