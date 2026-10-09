@@ -44,16 +44,22 @@ const actionWords: Record<Action, string> = {
 function snapshotSummary(event: ActivityEvent): string {
   const { before, after } = event.details;
   if (event.action === 'created' && after) {
-    return `Previsto ${formatBrazilianMoney(after.plannedCents ?? '0')} · Competência ${formatBrazilianMonth(after.competenceOn)} · Vencimento ${formatBrazilianDate(after.dueOn)}`;
+    const planned = formatBrazilianMoney(after.plannedCents ?? '0');
+    return `Previsto ${planned} · Competência ${formatBrazilianMonth(after.competenceOn)} · Vencimento ${formatBrazilianDate(after.dueOn)}`;
   }
   if (event.action === 'confirmed' && after) {
-    return `Realizado ${formatBrazilianMoney(after.actualCents ?? '0')} em ${formatBrazilianDate(after.realizedOn)} · Previsto ${formatBrazilianMoney(after.plannedCents ?? '0')}`;
+    const actual = formatBrazilianMoney(after.actualCents ?? '0');
+    const planned = formatBrazilianMoney(after.plannedCents ?? '0');
+    return `Realizado ${actual} em ${formatBrazilianDate(after.realizedOn)} · Previsto ${planned}`;
   }
   if (event.action === 'unconfirmed' && before) {
-    return `Confirmação desfeita · O valor realizado era ${formatBrazilianMoney(before.actualCents ?? '0')} em ${formatBrazilianDate(before.realizedOn)}`;
+    const actual = formatBrazilianMoney(before.actualCents ?? '0');
+    return `Confirmação desfeita · O valor realizado era ${actual} em ${formatBrazilianDate(before.realizedOn)}`;
   }
   if (event.action === 'deleted' && before) {
-    return `Exclusão registrada · Último valor previsto ${formatBrazilianMoney(before.plannedCents ?? '0')}${before.actualCents !== null ? ` · Realizado ${formatBrazilianMoney(before.actualCents)}` : ''}`;
+    const planned = formatBrazilianMoney(before.plannedCents ?? '0');
+    const actual = before.actualCents !== null ? ` · Realizado ${formatBrazilianMoney(before.actualCents)}` : '';
+    return `Exclusão registrada · Último valor previsto ${planned}${actual}`;
   }
   if (event.action === 'updated' && before && after) {
     const changes: string[] = [];

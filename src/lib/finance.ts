@@ -70,6 +70,12 @@ export function formatBrazilianMonth(value: string): string {
   return `${month}/${year}`;
 }
 
+/** Soma `offset` meses a uma competência AAAA-MM (aceita negativos). */
+export function shiftMonth(value: string, offset: number): string {
+  const [year, month] = value.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1 + offset, 1)).toISOString().slice(0, 7);
+}
+
 const monthNames = new Intl.DateTimeFormat('pt-BR', { month: 'long', timeZone: 'UTC' });
 const monthYearNames = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 

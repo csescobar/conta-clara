@@ -64,6 +64,13 @@ Os componentes reutilizáveis ficam em `src/components/ui`. Seguem a composiçã
 - Formatação: `src/lib/finance.ts` é a única fonte para dinheiro (`formatBrazilianMoney`, `formatCompactBrazilianMoney`), datas (`formatBrazilianDate`, `formatBrazilianMonth`, `formatBrazilianMonthLong`, `formatBrazilianDateTime`, `brazilianMonthName`) e a data atual em America/Sao_Paulo (`currentSaoPauloDate`, `currentBrazilianDate`, `currentMonthInputValue`). Não criar `Intl.NumberFormat` ou `Intl.DateTimeFormat` nas telas. A exportação CSV mantém seu formato próprio.
 - `StatusBadge`: sempre exibe texto e ícone além da cor.
 - `DashboardCharts`: gráficos responsivos de previsto versus realizado e despesas por categoria, com aportes separados do consumo. Cada gráfico inclui resumo textual, tooltip com valor exato e tabela expansível; a navegação por teclado e leitores de tela permanecem habilitados.
+- Composição financeira (`src/components/finance`): use estes blocos antes de montar markup de lista, indicador ou tabela nas páginas.
+  - `EntryList` e `EntryRow`: linha com ícone opcional, título (cortado por padrão; `wrapTitle` permite quebrar), detalhes, bloco de valores (`aside`), ações e conteúdo em largura total (`children`, para formulários e detalhes). Renderiza `<li>`; `density` ajusta o respiro. `EntryAmount` monta o bloco de valores com tom, legenda e `StatusBadge`.
+  - `StatCard`: indicador com rótulo, valor em destaque (`text-display` a partir de `sm`) e explicação.
+  - `FilterBar`: cartão de filtros em grade (uma coluna no celular).
+  - `MonthNavigator`: competência com mês anterior e próximo; usa `MonthField` e `shiftMonth`.
+  - `ActionToolbar`: conjunto de ações que quebra de linha em tela estreita.
+  - `DataTable`: tabela com legenda, cabeçalhos de coluna e de linha e linha de total (`emphasis`). `compact` usa colunas fixas e quebra de rótulo para caber em 320 px sem rolagem horizontal (tabelas dos gráficos).
 - `EmptyState` e `LoadingState`: mensagens explícitas; carregamento usa anúncio educado.
 - `Alert`: mensagem inline com ícone e texto nas variantes `destructive`, `warning`, `success` e `info`. Erro e atenção usam `role="alert"`; sucesso e informação usam `role="status"`. Substitui parágrafos de erro montados à mão.
 - `Dialog` (`DialogContent`, `DialogHeader`, `DialogFooter`): modal Radix que prende o foco e fecha com Esc. Ao abrir por código, devolva o foco ao gatilho com `onCloseAutoFocus`.

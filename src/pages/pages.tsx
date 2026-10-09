@@ -1,13 +1,12 @@
 import { lazy, Suspense, useCallback, useContext, useEffect, useRef, useState, type FormEvent } from 'react';
-import { CalendarDays, ChevronLeft, ChevronRight, Copy, Mail, Plus, RefreshCw, ShieldCheck, UsersRound } from 'lucide-react';
+import { CalendarDays, Copy, Mail, Plus, RefreshCw, ShieldCheck, UsersRound } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AuthContext } from '../auth/auth-gate';
-import { StatusBadge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { EmptyState, LoadingState } from '../components/ui/feedback';
 import { FormField, Input } from '../components/ui/input';
-import { currentMonthInputValue, formatBrazilianDate, formatBrazilianDateTime, formatBrazilianMonthLong } from '../lib/finance';
+import { currentMonthInputValue, shiftMonth, formatBrazilianDate, formatBrazilianDateTime, formatBrazilianMonthLong } from '../lib/finance';
 import type { ChartSummary, ExpenseCategoryChartEntry } from './dashboard-charts';
 import { CatalogSettings } from './catalog-settings';
 import { CardSettings } from './card-settings';
@@ -15,9 +14,13 @@ import { BackupSettings } from './backup-settings';
 import { PageHeader } from './page-header';
 import { isAuthenticationFailure, isNetworkFailure, useOfflineWorkspace } from '../offline/offline-context';
 import { MoneyValue } from '../components/ui/money-value';
-import { MonthField } from '../components/ui/form-controls';
 import { useConfirmDialog } from '../components/ui/dialog';
 import { Alert } from '../components/ui/alert';
+import { ActionToolbar } from '../components/finance/action-toolbar';
+import { DataTable, type DataRow } from '../components/finance/data-table';
+import { EntryAmount, EntryList, EntryRow } from '../components/finance/entry-row';
+import { MonthNavigator } from '../components/finance/month-navigator';
+import { StatCard } from '../components/finance/stat-card';
 
 const DashboardCharts = lazy(() => import('./dashboard-charts').then(({ DashboardCharts: charts }) => ({ default: charts })));
 
@@ -32,45 +35,37 @@ type DashboardData = {
 };
 type DashboardApiResponse = DashboardData & { error?: string };
 
-function moveMonth(value: string, offset: number) {
-  const [year, month] = value.split('-').map(Number);
-  return new Date(Date.UTC(year, month - 1 + offset, 1)).toISOString().slice(0, 7);
+function comparisonRows(dashboard: DashboardData): DataRow[] {
+  const line = (id: string, label: string, planned: string, realized: string, emphasis = false): DataRow => ({
+    id,
+    emphasis,
+    cells: { label, planned: <MoneyValue cents={planned} />, realized: <MoneyValue cents={realized} /> },
+  });
+  return [
+    line('income', 'Receitas', dashboard.planned.incomeCents, dashboard.realized.incomeCents),
+    line('expense', 'Despesas', dashboard.planned.expenseCents, dashboard.realized.expenseCents),
+    line('investment', 'Aportes', dashboard.planned.investmentCents, dashboard.realized.investmentCents),
+    line('result', 'Resultado do período', dashboard.planned.resultCents, dashboard.realized.resultCents, true),
+  ];
 }
 
 function DashboardMetric({ title, cents, description }: { title: string; cents: string; description: string }) {
-  return (
-    <Card>
-      <CardContent className="grid gap-3 p-4 sm:p-5">
-        <p className="text-sm font-medium text-muted-foreground">{title}</p>
-        <p className="text-2xl font-semibold tracking-tight sm:text-display">
-          <MoneyValue cents={cents} tone="balance" />
-        </p>
-        <p className="text-xs leading-5 text-muted-foreground">{description}</p>
-      </CardContent>
-    </Card>
-  );
+  return <StatCard title={title} value={<MoneyValue cents={cents} tone="balance" />} description={description} />;
 }
 
 function DashboardEntryList({ entries, overdue = false }: { entries: DashboardEntry[]; overdue?: boolean }) {
   return (
-    <ul className="divide-y divide-border">
+    <EntryList>
       {entries.map((entry) => (
-        <li key={entry.id} className="flex min-w-0 items-center gap-3 py-3 first:pt-0 last:pb-0 sm:gap-4">
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold">{entry.description}</p>
-            <p className={`mt-0.5 text-xs ${overdue ? 'text-destructive' : 'text-muted-foreground'}`}>
-              Vence em {formatBrazilianDate(entry.due_on)}
-            </p>
-          </div>
-          <div className="grid shrink-0 justify-items-end gap-1">
-            <p className="text-sm font-semibold tabular-nums">
-              <MoneyValue cents={entry.planned_cents} />
-            </p>
-            {overdue && <StatusBadge status="late" />}
-          </div>
-        </li>
+        <EntryRow
+          key={entry.id}
+          density="compact"
+          title={entry.description}
+          meta={<span className={overdue ? 'text-destructive' : undefined}>Vence em {formatBrazilianDate(entry.due_on)}</span>}
+          aside={<EntryAmount cents={entry.planned_cents} status={overdue ? 'late' : undefined} />}
+        />
       ))}
-    </ul>
+    </EntryList>
   );
 }
 
@@ -145,43 +140,15 @@ export function DashboardPage() {
         title="Visão geral"
         description="Compare o previsto por competência com os valores efetivamente realizados."
         action={
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                size="icon"
-                variant="outline"
-                aria-label="Mês anterior"
-                onClick={() => setMonth((value) => moveMonth(value, -1))}
-              >
-                <ChevronLeft aria-hidden="true" className="size-4" />
-              </Button>
-              <MonthField
-                aria-label="Mês do painel"
-                required
-                className="w-[7.5rem] text-center"
-                value={month}
-                onChange={(value) => {
-                  if (value) setMonth(value);
-                }}
-              />
-              <Button
-                type="button"
-                size="icon"
-                variant="outline"
-                aria-label="Próximo mês"
-                onClick={() => setMonth((value) => moveMonth(value, 1))}
-              >
-                <ChevronRight aria-hidden="true" className="size-4" />
-              </Button>
-            </div>
+          <ActionToolbar>
+            <MonthNavigator label="Mês do painel" value={month} onChange={setMonth} />
             <Button asChild>
               <Link to="/lancamentos/novo">
                 <Plus aria-hidden="true" className="size-4" />
                 Adicionar lançamento
               </Link>
             </Button>
-          </div>
+          </ActionToolbar>
         }
       />
       {error && <Alert className="mb-4">{error}</Alert>}
@@ -215,55 +182,17 @@ export function DashboardPage() {
                   O previsto usa a competência do lançamento; o realizado usa o mês em que o pagamento ou recebimento ocorreu.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="overflow-x-auto">
-                <table className="w-full min-w-[28rem] border-collapse text-sm">
-                  <caption className="sr-only">Valores previstos e realizados em {heading}</caption>
-                  <thead>
-                    <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                      <th scope="col" className="py-3 pr-4 font-medium">
-                        Movimentação
-                      </th>
-                      <th scope="col" className="px-4 py-3 text-right font-medium">
-                        Previsto
-                      </th>
-                      <th scope="col" className="py-3 pl-4 text-right font-medium">
-                        Realizado
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(
-                      [
-                        ['Receitas', dashboard.planned.incomeCents, dashboard.realized.incomeCents],
-                        ['Despesas', dashboard.planned.expenseCents, dashboard.realized.expenseCents],
-                        ['Aportes', dashboard.planned.investmentCents, dashboard.realized.investmentCents],
-                      ] as const
-                    ).map(([label, planned, realized]) => (
-                      <tr key={label} className="border-b border-border last:border-0">
-                        <th scope="row" className="py-3 pr-4 text-left font-medium">
-                          {label}
-                        </th>
-                        <td className="px-4 py-3 text-right tabular-nums">
-                          <MoneyValue cents={planned} />
-                        </td>
-                        <td className="py-3 pl-4 text-right tabular-nums">
-                          <MoneyValue cents={realized} />
-                        </td>
-                      </tr>
-                    ))}
-                    <tr className="bg-muted/40">
-                      <th scope="row" className="py-3 pr-4 text-left font-semibold">
-                        Resultado do período
-                      </th>
-                      <td className="px-4 py-3 text-right font-semibold tabular-nums">
-                        <MoneyValue cents={dashboard.planned.resultCents} />
-                      </td>
-                      <td className="py-3 pl-4 text-right font-semibold tabular-nums">
-                        <MoneyValue cents={dashboard.realized.resultCents} />
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+              <CardContent>
+                <DataTable
+                  caption={`Valores previstos e realizados em ${heading}`}
+                  minWidth="min-w-[28rem]"
+                  columns={[
+                    { id: 'label', header: 'Movimentação' },
+                    { id: 'planned', header: 'Previsto', align: 'right' },
+                    { id: 'realized', header: 'Realizado', align: 'right' },
+                  ]}
+                  rows={comparisonRows(dashboard)}
+                />
               </CardContent>
             </Card>
             <Suspense fallback={<LoadingState label="Carregando gráficos financeiros" />}>
@@ -330,7 +259,7 @@ export function DashboardPage() {
             </p>
             <p className="mt-2 rounded-xl border border-border bg-card px-4 py-3 text-xs leading-5 text-muted-foreground">
               Regras recorrentes projetam o mês atual e os próximos 12 meses.{' '}
-              {month > moveMonth(currentMonthInputValue(), 12)
+              {month > shiftMonth(currentMonthInputValue(), 12)
                 ? 'O mês selecionado está além desse horizonte: lançamentos manuais continuam consultáveis, mas novas projeções recorrentes não são garantidas.'
                 : 'Cada mês do painel é salvo no aparelho quando aberto online; os demais meses precisam de conexão para serem carregados.'}
             </p>

@@ -5,6 +5,7 @@ import { EmptyState } from '../components/ui/feedback';
 import { MoneyValue } from '../components/ui/money-value';
 import { formatBrazilianMoney, formatCompactBrazilianMoney } from '../lib/finance';
 import { Select } from '../components/ui/form-controls';
+import { DataTable, type DataColumn, type DataRow } from '../components/finance/data-table';
 
 export type ChartSummary = { incomeCents: string; expenseCents: string; investmentCents: string; resultCents: string };
 export type ExpenseCategoryChartEntry = { categoryId: string | null; categoryName: string; plannedCents: string; realizedCents: string };
@@ -54,58 +55,35 @@ function ChartTooltip({ active, payload, label, mode = 'both' }: TooltipContentP
   );
 }
 
-function DataTable({ title, data, mode = 'both' }: { title: string; data: ChartPoint[]; mode?: CategoryFilter }) {
+function ChartDataTable({ title, data, mode = 'both' }: { title: string; data: ChartPoint[]; mode?: CategoryFilter }) {
+  const columns: DataColumn[] = [
+    { id: 'label', header: 'Grupo', width: mode === 'both' ? 'w-[34%]' : 'w-[40%]' },
+    ...(mode !== 'realized'
+      ? [{ id: 'planned', header: 'Previsto', align: 'right' as const, width: mode === 'both' ? 'w-[33%]' : 'w-[60%]' }]
+      : []),
+    ...(mode !== 'planned'
+      ? [{ id: 'realized', header: 'Realizado', align: 'right' as const, width: mode === 'both' ? 'w-[33%]' : 'w-[60%]' }]
+      : []),
+  ];
+  const rows: DataRow[] = data.map((point) => ({
+    id: point.label,
+    cells: {
+      label: point.label,
+      planned: <MoneyValue cents={point.plannedCents} />,
+      realized: <MoneyValue cents={point.realizedCents} />,
+    },
+  }));
   return (
     <details className="min-w-0 rounded-xl border border-border px-3 py-2 text-sm">
-      <summary className="cursor-pointer font-medium text-primary focus-visible:rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+      <summary
+        className={
+          'cursor-pointer font-medium text-primary focus-visible:rounded focus-visible:outline-2 ' +
+          'focus-visible:outline-offset-2 focus-visible:outline-ring'
+        }
+      >
         Ver dados em tabela
       </summary>
-      <div className="mt-3 min-w-0 overflow-x-auto">
-        <table className="w-full table-fixed text-xs sm:text-sm">
-          <caption className="sr-only">{title}</caption>
-          <colgroup>
-            <col className={mode === 'both' ? 'w-[34%]' : 'w-[40%]'} />
-            {mode !== 'realized' && <col className={mode === 'both' ? 'w-[33%]' : 'w-[60%]'} />}
-            {mode !== 'planned' && <col className={mode === 'both' ? 'w-[33%]' : 'w-[60%]'} />}
-          </colgroup>
-          <thead>
-            <tr className="border-b border-border text-left text-xs text-muted-foreground">
-              <th scope="col" className="break-words py-2 pr-1.5 font-medium sm:pr-3">
-                Grupo
-              </th>
-              {mode !== 'realized' && (
-                <th scope="col" className="whitespace-nowrap px-1.5 py-2 text-right font-medium sm:px-3">
-                  Previsto
-                </th>
-              )}
-              {mode !== 'planned' && (
-                <th scope="col" className="whitespace-nowrap py-2 pl-1.5 text-right font-medium sm:pl-3">
-                  Realizado
-                </th>
-              )}
-            </tr>
-          </thead>
-          <tbody>
-            {data.map((point) => (
-              <tr key={point.label} className="border-b border-border last:border-0">
-                <th scope="row" className="break-words py-2 pr-1.5 text-left font-medium sm:pr-3">
-                  {point.label}
-                </th>
-                {mode !== 'realized' && (
-                  <td className="whitespace-nowrap px-1.5 py-2 text-right tabular-nums sm:px-3">
-                    <MoneyValue cents={point.plannedCents} />
-                  </td>
-                )}
-                {mode !== 'planned' && (
-                  <td className="whitespace-nowrap py-2 pl-1.5 text-right tabular-nums sm:pl-3">
-                    <MoneyValue cents={point.realizedCents} />
-                  </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataTable caption={title} columns={columns} rows={rows} compact />
     </details>
   );
 }
@@ -254,7 +232,7 @@ export function DashboardCharts({
                 Receitas, despesas e aportes lado a lado, conforme a tabela do painel acima.
               </p>
               <ResponsiveFinanceBarChart data={comparisonData} title={`Gráfico previsto versus realizado em ${monthLabel}`} />
-              <DataTable title={`Resumo do gráfico previsto e realizado em ${monthLabel}`} data={comparisonData} />
+              <ChartDataTable title={`Resumo do gráfico previsto e realizado em ${monthLabel}`} data={comparisonData} />
             </>
           ) : (
             <EmptyState
@@ -321,7 +299,7 @@ export function DashboardCharts({
                 mode={categoryMode}
                 truncateLabels
               />
-              <DataTable title={`Despesas por categoria em ${monthLabel}`} data={categoryData} mode={categoryMode} />
+              <ChartDataTable title={`Despesas por categoria em ${monthLabel}`} data={categoryData} mode={categoryMode} />
               {expensesByCategory.length > 6 && (
                 <p className="text-xs text-muted-foreground">
                   O gráfico agrupa as categorias menores em “Outras categorias”; a tabela mostra os grupos do gráfico.

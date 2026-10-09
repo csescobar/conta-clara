@@ -1,5 +1,5 @@
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { ChevronLeft, ChevronRight, CircleCheck, CreditCard, RotateCcw } from 'lucide-react';
+import { CircleCheck, CreditCard, RotateCcw } from 'lucide-react';
 import { AuthContext } from '../auth/auth-gate';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
@@ -18,18 +18,16 @@ import { isAuthenticationFailure, isNetworkFailure, useOfflineWorkspace } from '
 import type { OfflineInvoice, OfflinePaymentMethod } from '../offline/offline-store';
 import { PageHeader } from './page-header';
 import { MoneyValue } from '../components/ui/money-value';
-import { Select, DateField, MonthField, MoneyInput } from '../components/ui/form-controls';
+import { Select, DateField, MoneyInput } from '../components/ui/form-controls';
 import { AlertDialog, AlertDialogContent, Dialog, DialogContent, DialogFooter, DialogHeader } from '../components/ui/dialog';
 import { Alert } from '../components/ui/alert';
 import { toast } from '../components/ui/toast';
+import { ActionToolbar } from '../components/finance/action-toolbar';
+import { EntryAmount, EntryList, EntryRow } from '../components/finance/entry-row';
+import { MonthNavigator } from '../components/finance/month-navigator';
 
 type ApiResponse = { error?: string; invoices?: OfflineInvoice[]; paymentMethods?: OfflinePaymentMethod[] };
 type InvoiceResponse = { error?: string; invoices?: OfflineInvoice[] };
-
-function moveMonth(value: string, delta: number) {
-  const [year, month] = value.split('-').map(Number);
-  return new Date(Date.UTC(year, month - 1 + delta, 1)).toISOString().slice(0, 7);
-}
 
 function invoiceStatusLabel(invoice: OfflineInvoice) {
   if (invoice.status === 'paid') return 'Quitada';
@@ -221,36 +219,7 @@ export function InvoicesPage() {
         eyebrow="Cartões"
         title="Faturas"
         description="Confira as parcelas previstas e registre a quitação integral de cada fatura."
-        action={
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              size="icon"
-              variant="outline"
-              aria-label="Mês anterior"
-              onClick={() => setMonth((value) => moveMonth(value, -1))}
-            >
-              <ChevronLeft aria-hidden="true" className="size-4" />
-            </Button>
-            <MonthField
-              aria-label="Mês de vencimento"
-              className="w-[7.5rem] text-center"
-              value={month}
-              onChange={(value) => {
-                if (value) setMonth(value);
-              }}
-            />
-            <Button
-              type="button"
-              size="icon"
-              variant="outline"
-              aria-label="Próximo mês"
-              onClick={() => setMonth((value) => moveMonth(value, 1))}
-            >
-              <ChevronRight aria-hidden="true" className="size-4" />
-            </Button>
-          </div>
-        }
+        action={<MonthNavigator label="Mês de vencimento" value={month} onChange={setMonth} />}
       />
       {error && <Alert className="mb-4">{error}</Alert>}
       {loading ? (
@@ -292,21 +261,19 @@ export function InvoicesPage() {
                       </span>
                     </CardHeader>
                     <CardContent className="grid gap-4">
-                      <ul className="divide-y divide-border rounded-xl border border-border px-3.5">
+                      <EntryList className="rounded-xl border border-border px-3.5">
                         {invoice.entries.map((entry) => (
-                          <li key={entry.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-3 first:pt-3 last:pb-3">
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-medium">{entry.purchase_description}</p>
-                              <p className="text-xs text-muted-foreground">
-                                Parcela {entry.installment_number}/{entry.installment_count} · {entry.category_name ?? 'Sem categoria'}
-                              </p>
-                            </div>
-                            <span className="text-sm font-semibold tabular-nums">
-                              <MoneyValue cents={entry.planned_cents} />
-                            </span>
-                          </li>
+                          <EntryRow
+                            key={entry.id}
+                            density="compact"
+                            wrapTitle
+                            className="first:pt-3 last:pb-3"
+                            title={entry.purchase_description}
+                            meta={`Parcela ${entry.installment_number}/${entry.installment_count} · ${entry.category_name ?? 'Sem categoria'}`}
+                            aside={<EntryAmount cents={entry.planned_cents} />}
+                          />
                         ))}
-                      </ul>
+                      </EntryList>
                       <div className="flex flex-wrap items-end justify-between gap-3 border-t border-border pt-4">
                         <div>
                           <p className="text-xs text-muted-foreground">Total previsto</p>
@@ -319,7 +286,7 @@ export function InvoicesPage() {
                             </p>
                           )}
                         </div>
-                        <div className="flex flex-wrap gap-2">
+                        <ActionToolbar>
                           {canPay && (
                             <Button
                               type="button"
@@ -352,7 +319,7 @@ export function InvoicesPage() {
                               {pendingOperation.conflict ? 'Conflito de sincronização' : 'Pendente neste aparelho'}
                             </span>
                           )}
-                        </div>
+                        </ActionToolbar>
                       </div>
                     </CardContent>
                   </Card>
@@ -425,7 +392,10 @@ export function InvoicesPage() {
         {reversalInvoice && (
           <AlertDialogContent
             title="Desfazer quitação?"
-            description={`A fatura de ${reversalInvoice.card_name} de ${formatBrazilianMonth(reversalInvoice.invoice_month)} voltará a ficar em aberto. Você poderá quitar novamente depois.`}
+            description={
+              `A fatura de ${reversalInvoice.card_name} de ${formatBrazilianMonth(reversalInvoice.invoice_month)} ` +
+              'voltará a ficar em aberto. Você poderá quitar novamente depois.'
+            }
             cancelLabel="Manter quitação"
             confirmLabel={saving ? 'Salvando…' : 'Confirmar estorno'}
             destructive

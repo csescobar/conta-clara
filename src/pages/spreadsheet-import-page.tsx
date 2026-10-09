@@ -579,7 +579,10 @@ export function SpreadsheetImportPage() {
           {confirming && preview && (
             <AlertDialogContent
               title="Confirmar importação"
-              description={`Serão criados ${preview.entries.length} lançamentos neste espaço. O banco verifica referências e registra o lote em uma única transação. Um lote idêntico não pode ser importado duas vezes.`}
+              description={
+                `Serão criados ${preview.entries.length} lançamentos neste espaço. O banco verifica referências e registra o lote ` +
+                'em uma única transação. Um lote idêntico não pode ser importado duas vezes.'
+              }
               cancelLabel="Voltar à revisão"
               confirmLabel={busy ? 'Importando…' : 'Confirmar e importar'}
               busy={busy}

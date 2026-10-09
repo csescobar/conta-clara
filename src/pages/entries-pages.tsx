@@ -2,7 +2,6 @@ import { useCallback, useContext, useEffect, useRef, useState, type FormEvent, t
 import { ArrowDownLeft, ArrowUpRight, CalendarDays, Download, Pencil, Plus, RefreshCw, Trash2, Upload } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AuthContext } from '../auth/auth-gate';
-import { StatusBadge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { EmptyState, LoadingState } from '../components/ui/feedback';
@@ -31,6 +30,9 @@ import { MoneyValue } from '../components/ui/money-value';
 import { Select, Textarea, RadioGroup, DateField, MonthField, MoneyInput } from '../components/ui/form-controls';
 import { useConfirmDialog } from '../components/ui/dialog';
 import { Alert } from '../components/ui/alert';
+import { ActionToolbar } from '../components/finance/action-toolbar';
+import { EntryAmount, EntryList, EntryRow } from '../components/finance/entry-row';
+import { FilterBar } from '../components/finance/filter-bar';
 
 type EntryKind = 'income' | 'expense' | 'investment';
 type EntryStatus = 'pending' | 'late' | 'paid';
@@ -96,6 +98,87 @@ const kindOptions = [
   ['expense', 'Despesa'],
   ['investment', 'Aporte'],
 ] as const;
+
+function EntryActions({
+  entry,
+  busy,
+  confirmationBlocked,
+  syncing,
+  conflict,
+  onConfirm,
+  onUndo,
+  onDelete,
+}: {
+  entry: Entry;
+  busy: boolean;
+  confirmationBlocked: boolean;
+  syncing: boolean;
+  conflict: boolean;
+  onConfirm: () => void;
+  onUndo: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <>
+      {entry.actual_cents === null ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={busy || confirmationBlocked}
+          aria-label={`Confirmar ${entry.description}`}
+          onClick={onConfirm}
+        >
+          <CalendarDays aria-hidden="true" className="size-4" />
+          Confirmar
+        </Button>
+      ) : entry.card_purchase_id ? (
+        <span className="self-center px-2 text-xs text-muted-foreground">Parcela paga</span>
+      ) : (
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          disabled={busy || confirmationBlocked}
+          aria-label={`Desfazer confirmação ${entry.description}`}
+          onClick={onUndo}
+        >
+          Desfazer confirmação
+        </Button>
+      )}
+      {entry.card_purchase_id ? (
+        <Button asChild size="sm" variant="ghost">
+          <Link to="/compras">Gerenciar compra</Link>
+        </Button>
+      ) : conflict ? (
+        <Button type="button" size="sm" variant="ghost" disabled aria-label={`Editar ${entry.description}`}>
+          <Pencil aria-hidden="true" className="size-4" />
+          Editar
+        </Button>
+      ) : (
+        <Button asChild size="sm" variant="ghost">
+          <Link aria-label={`Editar ${entry.description}`} to={`/lancamentos/${entry.id}/editar`}>
+            <Pencil aria-hidden="true" className="size-4" />
+            Editar
+          </Link>
+        </Button>
+      )}
+      {!entry.card_purchase_id && (
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          disabled={busy || syncing || conflict}
+          aria-label={`Excluir ${entry.description}`}
+          onClick={onDelete}
+        >
+          <Trash2 aria-hidden="true" className="size-4" />
+          Excluir
+        </Button>
+      )}
+    </>
+  );
+}
 
 export function TransactionsPage() {
   const [confirm, confirmDialog] = useConfirmDialog();
@@ -348,7 +431,7 @@ export function TransactionsPage() {
         title="Lançamentos"
         description="Acompanhe receitas, despesas e aportes do espaço compartilhado."
         action={
-          <div className="flex flex-wrap gap-2">
+          <ActionToolbar>
             <Button
               type="button"
               variant="outline"
@@ -370,37 +453,31 @@ export function TransactionsPage() {
                 Adicionar lançamento
               </Link>
             </Button>
-          </div>
+          </ActionToolbar>
         }
       />
       {error && <Alert className="mb-4">{error}</Alert>}
       <section className="grid gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>Filtrar lançamentos</CardTitle>
-            <CardDescription>Escolha competência, categoria ou situação.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-3">
-            <FormField id="entries-month" label="Competência">
-              <MonthField value={month} onChange={setMonth} />
-            </FormField>
-            <SelectField id="entries-category" label="Categoria" value={categoryId} onChange={setCategoryId}>
-              <option value="">Todas as categorias</option>
-              {categories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
-                  {category.archived_at ? ' (arquivada)' : ''}
-                </option>
-              ))}
-            </SelectField>
-            <SelectField id="entries-status" label="Situação" value={status} onChange={setStatus}>
-              <option value="">Todas as situações</option>
-              <option value="pending">Em aberto</option>
-              <option value="late">Atrasado</option>
-              <option value="paid">Pago</option>
-            </SelectField>
-          </CardContent>
-        </Card>
+        <FilterBar title="Filtrar lançamentos" description="Escolha competência, categoria ou situação.">
+          <FormField id="entries-month" label="Competência">
+            <MonthField value={month} onChange={setMonth} />
+          </FormField>
+          <SelectField id="entries-category" label="Categoria" value={categoryId} onChange={setCategoryId}>
+            <option value="">Todas as categorias</option>
+            {categories.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.name}
+                {category.archived_at ? ' (arquivada)' : ''}
+              </option>
+            ))}
+          </SelectField>
+          <SelectField id="entries-status" label="Situação" value={status} onChange={setStatus}>
+            <option value="">Todas as situações</option>
+            <option value="pending">Em aberto</option>
+            <option value="late">Atrasado</option>
+            <option value="paid">Pago</option>
+          </SelectField>
+        </FilterBar>
         <Card>
           <CardHeader className="flex-row items-start justify-between gap-3">
             <div>
@@ -417,98 +494,51 @@ export function TransactionsPage() {
             {loading ? (
               <LoadingState label="Carregando lançamentos" />
             ) : entries.length ? (
-              <ul className="divide-y divide-border">
+              <EntryList>
                 {entries.map((entry) => {
-                  const Icon = entry.kind === 'income' ? ArrowDownLeft : entry.kind === 'investment' ? RefreshCw : ArrowUpRight;
                   const pendingOperation = offline?.operations.find((operation) => operation.entryId === entry.id);
                   return (
-                    <li key={entry.id} className="flex min-w-0 flex-wrap items-center gap-3 py-3.5 first:pt-0 last:pb-0 sm:gap-4">
-                      <span
-                        className={`grid size-10 shrink-0 place-items-center rounded-xl ${entry.kind === 'income' ? 'bg-success-soft text-success' : entry.kind === 'investment' ? 'bg-accent text-accent-foreground' : 'bg-muted text-muted-foreground'}`}
-                      >
-                        <Icon aria-hidden="true" className="size-[18px]" />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold">{entry.description}</p>
-                        <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                    <EntryRow
+                      key={entry.id}
+                      icon={entry.kind === 'income' ? ArrowDownLeft : entry.kind === 'investment' ? RefreshCw : ArrowUpRight}
+                      iconTone={entry.kind === 'income' ? 'income' : entry.kind === 'investment' ? 'accent' : 'neutral'}
+                      title={entry.description}
+                      meta={
+                        <>
                           {kindLabels[entry.kind]} · {entry.category_name ?? 'Sem categoria'} · Competência{' '}
                           {formatBrazilianMonth(entry.competence_on)} · Vencimento {formatBrazilianDate(entry.due_on)}
                           {entry.realized_on ? ` · Realizado ${formatBrazilianDate(entry.realized_on)}` : ''}
                           {pendingOperation && <span className="ml-1 font-semibold text-warning">· Pendente neste aparelho</span>}
-                        </p>
-                      </div>
-                      <div className="grid shrink-0 justify-items-end gap-1">
-                        <p className="text-sm font-semibold">
-                          <MoneyValue
-                            cents={entry.actual_cents ?? entry.planned_cents}
-                            tone={entry.kind === 'income' ? 'income' : 'expense'}
-                          />
-                        </p>
-                        {entry.actual_cents !== null && (
-                          <p className="text-xs text-muted-foreground">
-                            Previsto <MoneyValue cents={entry.planned_cents} />
-                          </p>
-                        )}
-                        <StatusBadge status={entry.status} aria-label={`Situação: ${statusLabels[entry.status]}`} />
-                      </div>
-                      <div className="flex w-full flex-wrap justify-end gap-1 sm:w-auto">
-                        {entry.actual_cents === null ? (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            disabled={busyEntryId === entry.id || confirmationBlocked}
-                            aria-label={`Confirmar ${entry.description}`}
-                            onClick={() => startConfirmation(entry)}
-                          >
-                            <CalendarDays aria-hidden="true" className="size-4" />
-                            Confirmar
-                          </Button>
-                        ) : entry.card_purchase_id ? (
-                          <span className="self-center px-2 text-xs text-muted-foreground">Parcela paga</span>
-                        ) : (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            disabled={busyEntryId === entry.id || confirmationBlocked}
-                            aria-label={`Desfazer confirmação ${entry.description}`}
-                            onClick={() => void undoConfirmation(entry)}
-                          >
-                            Desfazer confirmação
-                          </Button>
-                        )}
-                        {entry.card_purchase_id ? (
-                          <Button asChild size="sm" variant="ghost">
-                            <Link to="/compras">Gerenciar compra</Link>
-                          </Button>
-                        ) : pendingOperation?.conflict ? (
-                          <Button type="button" size="sm" variant="ghost" disabled aria-label={`Editar ${entry.description}`}>
-                            <Pencil aria-hidden="true" className="size-4" />
-                            Editar
-                          </Button>
-                        ) : (
-                          <Button asChild size="sm" variant="ghost">
-                            <Link aria-label={`Editar ${entry.description}`} to={`/lancamentos/${entry.id}/editar`}>
-                              <Pencil aria-hidden="true" className="size-4" />
-                              Editar
-                            </Link>
-                          </Button>
-                        )}
-                        {!entry.card_purchase_id && (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            disabled={busyEntryId === entry.id || offline?.syncing || Boolean(pendingOperation?.conflict)}
-                            aria-label={`Excluir ${entry.description}`}
-                            onClick={() => void deleteEntry(entry)}
-                          >
-                            <Trash2 aria-hidden="true" className="size-4" />
-                            Excluir
-                          </Button>
-                        )}
-                      </div>
+                        </>
+                      }
+                      aside={
+                        <EntryAmount
+                          cents={entry.actual_cents ?? entry.planned_cents}
+                          tone={entry.kind === 'income' ? 'income' : 'expense'}
+                          caption={
+                            entry.actual_cents !== null && (
+                              <>
+                                Previsto <MoneyValue cents={entry.planned_cents} />
+                              </>
+                            )
+                          }
+                          status={entry.status}
+                          statusLabel={`Situação: ${statusLabels[entry.status]}`}
+                        />
+                      }
+                      actions={
+                        <EntryActions
+                          entry={entry}
+                          busy={busyEntryId === entry.id}
+                          confirmationBlocked={confirmationBlocked}
+                          syncing={Boolean(offline?.syncing)}
+                          conflict={Boolean(pendingOperation?.conflict)}
+                          onConfirm={() => startConfirmation(entry)}
+                          onUndo={() => void undoConfirmation(entry)}
+                          onDelete={() => void deleteEntry(entry)}
+                        />
+                      }
+                    >
                       {confirmingEntryId === entry.id && (
                         <form
                           aria-label={`Confirmar lançamento ${entry.description}`}
@@ -529,10 +559,10 @@ export function TransactionsPage() {
                           </Button>
                         </form>
                       )}
-                    </li>
+                    </EntryRow>
                   );
                 })}
-              </ul>
+              </EntryList>
             ) : (
               <EmptyState
                 title="Nenhum lançamento encontrado"

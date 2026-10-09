@@ -24,6 +24,7 @@ import { Select, DateField, MonthField, MoneyInput } from '../components/ui/form
 import { useConfirmDialog } from '../components/ui/dialog';
 import { Alert } from '../components/ui/alert';
 import { toast } from '../components/ui/toast';
+import { EntryAmount, EntryList, EntryRow } from '../components/finance/entry-row';
 
 type CategoriesResponse = { categories?: OfflineCategory[] };
 type CardsResponse = { cards?: OfflineCard[]; error?: string };
@@ -667,41 +668,40 @@ export function CardPurchasesPage() {
               </Button>
             </div>
           ) : (
-            <ul className="divide-y divide-border">
+            <EntryList>
               {purchases.map((purchase) => {
                 const paidCount = purchase.installments.filter((item) => item.actual_cents !== null).length;
                 const pendingOperation = offline?.purchaseOperations.find((operation) => operation.purchaseId === purchase.id);
                 return (
-                  <li key={purchase.id} className="py-4 first:pt-0 last:pb-0">
-                    <div className="flex flex-wrap items-start gap-3">
-                      <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-accent text-accent-foreground">
-                        <CreditCard aria-hidden="true" className="size-5" />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="font-semibold">
-                          {purchase.description}
-                          {purchase.canceled_at ? (
-                            <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                              Cancelada
-                            </span>
-                          ) : null}
-                        </p>
-                        <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                          {purchase.card_name} · {purchase.category_name} · Compra em {formatBrazilianDate(purchase.purchase_on)}
-                          {pendingOperation ? ' · Pendente neste aparelho' : ''}
-                        </p>
-                      </div>
-                      <div className="grid justify-items-end gap-1">
-                        <p className="font-semibold tabular-nums">
-                          <MoneyValue cents={purchase.total_cents} />
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {purchase.installment_count} {purchase.installment_count === 1 ? 'parcela' : 'parcelas'} · {paidCount} pagas
-                        </p>
-                      </div>
-                    </div>
-                    <div className="mt-3 flex flex-wrap justify-end gap-1">
-                      {!purchase.canceled_at && (
+                  <EntryRow
+                    key={purchase.id}
+                    density="roomy"
+                    icon={CreditCard}
+                    title={
+                      <>
+                        {purchase.description}
+                        {purchase.canceled_at ? (
+                          <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                            Cancelada
+                          </span>
+                        ) : null}
+                      </>
+                    }
+                    wrapTitle
+                    meta={
+                      <>
+                        {purchase.card_name} · {purchase.category_name} · Compra em {formatBrazilianDate(purchase.purchase_on)}
+                        {pendingOperation ? ' · Pendente neste aparelho' : ''}
+                      </>
+                    }
+                    aside={
+                      <EntryAmount
+                        cents={purchase.total_cents}
+                        caption={`${purchase.installment_count} ${purchase.installment_count === 1 ? 'parcela' : 'parcelas'} · ${paidCount} pagas`}
+                      />
+                    }
+                    actions={
+                      !purchase.canceled_at && (
                         <>
                           <Button
                             type="button"
@@ -726,9 +726,10 @@ export function CardPurchasesPage() {
                             </Button>
                           )}
                         </>
-                      )}
-                    </div>
-                    <details className="mt-2 rounded-xl bg-muted/40 px-3.5 py-2.5">
+                      )
+                    }
+                  >
+                    <details className="w-full rounded-xl bg-muted/40 px-3.5 py-2.5">
                       <summary className="cursor-pointer text-sm font-medium focus-visible:outline-2 focus-visible:outline-ring">
                         Ver parcelas
                       </summary>
@@ -763,10 +764,10 @@ export function CardPurchasesPage() {
                         ))}
                       </ul>
                     </details>
-                  </li>
+                  </EntryRow>
                 );
               })}
-            </ul>
+            </EntryList>
           )}
         </CardContent>
       </Card>
