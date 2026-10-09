@@ -87,7 +87,7 @@ Fases definidas a partir da auditoria de design system e engenharia de 2026-10-0
 - [x] [Unificar formatação de dinheiro e datas](https://github.com/csescobar/conta-clara/issues/39) — dependências: nenhuma; formatação única e segura para BigInt em `finance.ts`, `MoneyValue` com tom, sinal e variante compacta em todas as telas (`7293ff9`).
 - [x] [Criar primitivos de formulário](https://github.com/csescobar/conta-clara/issues/40) — dependências: #38; seletor, texto longo, opções, data, competência e valor em reais compartilhados; datas e competências no formato brasileiro em qualquer navegador (`de4356b`).
 - [x] [Criar primitivos de sobreposição e mensagem](https://github.com/csescobar/conta-clara/issues/41) — dependências: #38; confirmações, quitação e estorno em diálogos Radix acessíveis, alertas inline e toasts para ações concluídas (`049b045`).
-- [ ] [Extrair componentes de composição financeira](https://github.com/csescobar/conta-clara/issues/42) — dependências: #39, #40, #41.
+- [x] [Extrair componentes de composição financeira](https://github.com/csescobar/conta-clara/issues/42) — dependências: #39, #40, #41; EntryRow, StatCard, FilterBar, MonthNavigator, ActionToolbar e DataTable nas cinco telas, sem linhas acima de 160 caracteres (`d672ed0`).
 - [ ] [Publicar catálogo vivo e validar acessibilidade automaticamente](https://github.com/csescobar/conta-clara/issues/43) — dependências: #38, #39, #40, #41, #42.
 
 ## 10. Experiência e acessibilidade (V4)
