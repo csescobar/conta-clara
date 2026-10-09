@@ -10,12 +10,14 @@ import { Alert } from '../components/ui/alert';
 import { StatusBadge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, useConfirmDialog } from '../components/ui/dialog';
+import { useConfirmDialog } from '../components/ui/confirm-dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader } from '../components/ui/dialog';
 import { EmptyState, LoadingState } from '../components/ui/feedback';
 import { Checkbox, DateField, MoneyInput, MonthField, RadioGroup, Select, Textarea } from '../components/ui/form-controls';
 import { FormField, Input } from '../components/ui/input';
 import { MoneyValue } from '../components/ui/money-value';
-import { toast } from '../components/ui/toast';
+import { ToastHost } from '../components/ui/toast-host';
+import { toast } from '../components/ui/toast-store';
 import { contrastRatio } from '../lib/contrast';
 import { cn } from '../lib/utils';
 import { baseTokens, contrastPairs, stateNames, stateParts } from '../lib/design-tokens';
@@ -454,6 +456,7 @@ export default function DesignCatalogPage() {
       <FieldsSection />
       <FinanceSection />
       <StatesSection />
+      <ToastHost />
     </main>
   );
 }

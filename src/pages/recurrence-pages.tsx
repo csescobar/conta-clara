@@ -9,7 +9,7 @@ import { FormField, Input } from '../components/ui/input';
 import { currentMonthInputValue, formatBrazilianAmount, parseBrazilianCents } from '../lib/finance';
 import { PageHeader } from './page-header';
 import { Select, Textarea, RadioGroup, MonthField, MoneyInput } from '../components/ui/form-controls';
-import { useConfirmDialog } from '../components/ui/dialog';
+import { useConfirmDialog } from '../components/ui/confirm-dialog';
 import { Alert } from '../components/ui/alert';
 import { EntryAmount, EntryList, EntryRow } from '../components/finance/entry-row';
 

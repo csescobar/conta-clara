@@ -21,7 +21,7 @@ import { MoneyValue } from '../components/ui/money-value';
 import { Select, DateField, MoneyInput } from '../components/ui/form-controls';
 import { AlertDialog, AlertDialogContent, Dialog, DialogContent, DialogFooter, DialogHeader } from '../components/ui/dialog';
 import { Alert } from '../components/ui/alert';
-import { toast } from '../components/ui/toast';
+import { toast } from '../components/ui/toast-store';
 import { ActionToolbar } from '../components/finance/action-toolbar';
 import { EntryAmount, EntryList, EntryRow } from '../components/finance/entry-row';
 import { MonthNavigator } from '../components/finance/month-navigator';

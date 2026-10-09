@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AuthContext } from '../auth/auth-gate';
-import { Toaster } from '../components/ui/toast';
+import { ToastHost } from '../components/ui/toast-host';
 import { expectNoAccessibilityViolations } from '../test/axe';
 import DesignCatalogPage from './design-catalog';
 import { NewTransactionPage, TransactionsPage } from './entries-pages';
@@ -56,7 +56,7 @@ describe('accessibility (axe)', () => {
     const { container } = render(
       <MemoryRouter>
         <DesignCatalogPage />
-        <Toaster />
+        <ToastHost />
       </MemoryRouter>,
     );
 

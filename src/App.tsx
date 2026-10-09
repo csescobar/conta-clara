@@ -1,7 +1,6 @@
 import { lazy, Suspense, type ComponentType, type ReactNode } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthGate } from './auth/auth-gate';
-import { OneTimeAccessPage } from './auth/one-time-access-page';
 import { DashboardPage } from './pages/dashboard-page';
 import { LoadingState } from './components/ui/feedback';
 
@@ -9,8 +8,8 @@ import { LoadingState } from './components/ui/feedback';
  * Telas carregadas sob demanda: só o painel entra no pacote inicial. Depois da primeira visita o service
  * worker guarda todos os pacotes, então as telas também abrem sem conexão.
  */
-function lazyPage<Module extends Record<string, unknown>>(load: () => Promise<Module>, name: keyof Module) {
-  return lazy(async () => ({ default: (await load())[name] as ComponentType }));
+function lazyPage<Module extends Record<string, unknown>, Props extends object = object>(load: () => Promise<Module>, name: keyof Module) {
+  return lazy(async () => ({ default: (await load())[name] as ComponentType<Props> }));
 }
 
 const TransactionsPage = lazyPage(() => import('./pages/entries-pages'), 'TransactionsPage');
@@ -20,6 +19,10 @@ const InvoicesPage = lazyPage(() => import('./pages/invoices-page'), 'InvoicesPa
 const ActivityPage = lazyPage(() => import('./pages/activity-page'), 'ActivityPage');
 const RecurrencesPage = lazyPage(() => import('./pages/recurrence-pages'), 'RecurrencesPage');
 const RecurrenceFormPage = lazyPage(() => import('./pages/recurrence-pages'), 'RecurrenceFormPage');
+const OneTimeAccessPage = lazyPage<typeof import('./auth/one-time-access-page'), { purpose: 'invite' | 'password-reset' }>(
+  () => import('./auth/one-time-access-page'),
+  'OneTimeAccessPage',
+);
 const SettingsPage = lazyPage(() => import('./pages/settings-page'), 'SettingsPage');
 const SpreadsheetImportPage = lazyPage(() => import('./pages/spreadsheet-import-page'), 'SpreadsheetImportPage');
 
@@ -36,8 +39,22 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/ativar/:token" element={<OneTimeAccessPage purpose="invite" />} />
-        <Route path="/redefinir-senha/:token" element={<OneTimeAccessPage purpose="password-reset" />} />
+        <Route
+          path="/ativar/:token"
+          element={
+            <Page>
+              <OneTimeAccessPage purpose="invite" />
+            </Page>
+          }
+        />
+        <Route
+          path="/redefinir-senha/:token"
+          element={
+            <Page>
+              <OneTimeAccessPage purpose="password-reset" />
+            </Page>
+          }
+        />
         {DesignCatalogPage && (
           <Route
             path="/catalogo"

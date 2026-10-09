@@ -3,8 +3,9 @@ import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { describe, expect, it } from 'vitest';
 import { Button } from './button';
-import { useConfirmDialog } from './dialog';
-import { toast, Toaster } from './toast';
+import { useConfirmDialog } from './confirm-dialog';
+import { toast } from './toast-store';
+import { ToastHost } from './toast-host';
 
 function DeleteButton() {
   const [confirm, confirmDialog] = useConfirmDialog();
@@ -69,7 +70,7 @@ describe('confirmation dialog', () => {
 describe('toast', () => {
   it('announces a completed action and can be dismissed', async () => {
     const user = userEvent.setup();
-    render(<Toaster />);
+    render(<ToastHost />);
 
     act(() => toast('Compra salva.'));
     expect(await screen.findByText('Compra salva.')).toBeInTheDocument();

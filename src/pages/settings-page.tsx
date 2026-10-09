@@ -9,7 +9,7 @@ import { CatalogSettings } from './catalog-settings';
 import { CardSettings } from './card-settings';
 import { BackupSettings } from './backup-settings';
 import { PageHeader } from './page-header';
-import { useConfirmDialog } from '../components/ui/dialog';
+import { useConfirmDialog } from '../components/ui/confirm-dialog';
 import { Alert } from '../components/ui/alert';
 
 export function SettingsPage() {

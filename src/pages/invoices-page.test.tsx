@@ -8,7 +8,7 @@ import { OfflineWorkspaceProvider } from '../offline/offline-context';
 import { loadOfflineWorkspace, saveOfflineInvoices, type OfflineInvoice, type OfflineScope } from '../offline/offline-store';
 import { currentMonthInputValue } from '../lib/finance';
 import { InvoicesPage } from './invoices-page';
-import { Toaster } from '../components/ui/toast';
+import { ToastHost } from '../components/ui/toast-host';
 
 const user = { id: 'invoice-page-user', name: 'Membro', email: 'member@example.test', role: 'member', spaceId: 'invoice-page-space' };
 const scope: OfflineScope = { userId: user.id, spaceId: user.spaceId };
@@ -62,7 +62,7 @@ function renderPage() {
       <AuthContext.Provider value={{ user, csrfToken: 'csrf-invoice-page' }}>
         <OfflineWorkspaceProvider scope={scope}>
           <InvoicesPage />
-          <Toaster />
+          <ToastHost />
         </OfflineWorkspaceProvider>
       </AuthContext.Provider>
     </MemoryRouter>,
@@ -144,7 +144,7 @@ describe('invoices page', () => {
     expect(screen.getByRole('alertdialog', { name: 'Desfazer quitação?' })).toBeInTheDocument();
     await userEventInstance.click(screen.getByRole('button', { name: 'Confirmar estorno' }));
     await waitFor(() => expect(screen.getByRole('button', { name: 'Quitar fatura' })).toBeInTheDocument());
-    expect(screen.getByText('Estorno salvo neste aparelho. Ele será sincronizado quando a conexão voltar.')).toBeInTheDocument();
+    expect(await screen.findByText('Estorno salvo neste aparelho. Ele será sincronizado quando a conexão voltar.')).toBeInTheDocument();
     expect(screen.getByText('Pendente neste aparelho')).toBeInTheDocument();
     const snapshot = await loadOfflineWorkspace(scope);
     expect(snapshot.invoiceOperations).toHaveLength(1);

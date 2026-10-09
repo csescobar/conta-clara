@@ -1,6 +1,6 @@
 import * as AlertDialogPrimitive from '@radix-ui/react-alert-dialog';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { useCallback, useRef, useState, type ComponentPropsWithoutRef, type ReactNode } from 'react';
+import { useRef, type ComponentPropsWithoutRef, type ReactNode } from 'react';
 import { cn } from '../../lib/utils';
 import { Button } from './button';
 
@@ -96,64 +96,4 @@ export function AlertDialogContent({
       </AlertDialogPrimitive.Content>
     </AlertDialogPrimitive.Portal>
   );
-}
-
-export type ConfirmOptions = {
-  title: string;
-  description: string;
-  confirmLabel: string;
-  cancelLabel?: string;
-  destructive?: boolean;
-};
-
-/**
- * Substitui `window.confirm` por um diálogo acessível. Renderize o elemento devolvido na tela e
- * aguarde `confirm(...)`, que resolve `true` só quando a pessoa confirma.
- */
-export function useConfirmDialog(): [(options: ConfirmOptions) => Promise<boolean>, ReactNode] {
-  const [options, setOptions] = useState<ConfirmOptions | null>(null);
-  const resolveRef = useRef<((confirmed: boolean) => void) | null>(null);
-  const returnFocusRef = useRef<HTMLElement | null>(null);
-
-  const settle = useCallback((confirmed: boolean) => {
-    resolveRef.current?.(confirmed);
-    resolveRef.current = null;
-    setOptions(null);
-  }, []);
-
-  const confirm = useCallback((next: ConfirmOptions) => {
-    resolveRef.current?.(false);
-    returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    setOptions(next);
-    return new Promise<boolean>((resolve) => {
-      resolveRef.current = resolve;
-    });
-  }, []);
-
-  const element = (
-    <AlertDialog
-      open={Boolean(options)}
-      onOpenChange={(open) => {
-        if (!open) settle(false);
-      }}
-    >
-      {options && (
-        <AlertDialogContent
-          title={options.title}
-          description={options.description}
-          cancelLabel={options.cancelLabel ?? 'Cancelar'}
-          confirmLabel={options.confirmLabel}
-          destructive={options.destructive}
-          onConfirm={() => settle(true)}
-          onCloseAutoFocus={(event) => {
-            // Sem um Trigger do Radix, o foco voltaria ao corpo da página; devolve ao botão que pediu a confirmação.
-            event.preventDefault();
-            if (returnFocusRef.current?.isConnected) returnFocusRef.current.focus();
-            returnFocusRef.current = null;
-          }}
-        />
-      )}
-    </AlertDialog>
-  );
-  return [confirm, element];
 }

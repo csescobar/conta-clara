@@ -28,7 +28,7 @@ import type { OfflineEntry, OfflineWorkspaceSnapshot } from '../offline/offline-
 import { PageHeader } from './page-header';
 import { MoneyValue } from '../components/ui/money-value';
 import { Select, Textarea, RadioGroup, DateField, MonthField, MoneyInput } from '../components/ui/form-controls';
-import { useConfirmDialog } from '../components/ui/dialog';
+import { useConfirmDialog } from '../components/ui/confirm-dialog';
 import { Alert } from '../components/ui/alert';
 import { ActionToolbar } from '../components/finance/action-toolbar';
 import { EntryAmount, EntryList, EntryRow } from '../components/finance/entry-row';

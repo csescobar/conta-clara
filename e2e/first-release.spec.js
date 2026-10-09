@@ -440,6 +440,13 @@ test('administra um espaço compartilhado, importa e sincroniza uma alteração 
   );
   expect(cachedUrls).toContain('/');
   expect(cachedUrls.some((url) => url.endsWith('.js'))).toBe(true);
+  // As telas carregadas sob demanda (nunca abertas online por este membro) já estão no cache do service worker.
+  for (const chunk of ['entries-pages', 'card-purchases-page', 'invoices-page', 'recurrence-pages', 'settings-page', 'activity-page']) {
+    expect(
+      cachedUrls.some((url) => new RegExp(`/assets/${chunk}-.*\\.js$`).test(url)),
+      `pacote ${chunk} no cache`,
+    ).toBe(true);
+  }
 
   const memberForecastRequest = member.waitForResponse((response) => response.url().includes(`/api/dashboard?month=${forecastMonth}`));
   await member.getByLabel('Mês do painel').fill(forecastMonth);
@@ -454,6 +461,19 @@ test('administra um espaço compartilhado, importa e sincroniza uma alteração 
   await member.getByLabel('Mês do painel').fill(forecastMonth);
   const cachedForecastExpenses = member.getByRole('table').getByRole('row', { name: /Despesas/ });
   await expect(cachedForecastExpenses).toContainText(forecastMonth === '2026-11' ? '25,84' : '22,50');
+  // Sem conexão, todas as telas sob demanda abrem a partir do cache.
+  for (const [link, heading] of [
+    ['Lançamentos', 'Lançamentos'],
+    ['Faturas', 'Faturas'],
+    ['Recorrências', 'Recorrências'],
+    ['Histórico', 'Histórico'],
+    ['Configurações', 'Configurações'],
+  ]) {
+    await member.getByRole('link', { name: link, exact: true }).click();
+    await expect(member.getByRole('heading', { name: heading, level: 1 })).toBeVisible();
+  }
+  await member.getByRole('link', { name: 'Visão geral' }).click();
+  await expect(member.getByRole('heading', { name: 'Visão geral', level: 1 })).toBeVisible();
   await memberContext.setOffline(false);
   await member.evaluate(() => window.dispatchEvent(new Event('online')));
   await expect(member.getByText('Rede conectada · nenhuma alteração pendente.')).toBeVisible({ timeout: 20_000 });

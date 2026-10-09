@@ -12,7 +12,7 @@ import {
   markOfflineLogout,
   rememberOfflineUser,
 } from '../offline/offline-store';
-import { useConfirmDialog } from '../components/ui/dialog';
+import { useConfirmDialog } from '../components/ui/confirm-dialog';
 
 export const AuthContext = createContext<{ user: AuthUser; csrfToken: string } | null>(null);
 
