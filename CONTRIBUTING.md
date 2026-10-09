@@ -18,3 +18,7 @@ Commits devem explicar a mudança e referenciar a issue, por exemplo: `feat: cad
 
 Não há CI remoto: a verificação acontece na sua máquina, sem consumir minutos de serviços externos. `npm run hooks:install` (uma vez por clone) ativa `.githooks/pre-push`, que executa `npm run lint`, `npm run typecheck`, `npm test` e `npm run build` antes de cada `git push`, informa a etapa que falhou e bloqueia o envio. Leva cerca de 40 s; pushes que alteram apenas arquivos `.md` ou `docs/` pulam a verificação. O hook não roda Postgres, Playwright nem Docker: use `npm run verify` antes de concluir uma issue. Em emergência, `git push --no-verify` ignora o hook. Nada o instala automaticamente (não há `postinstall`); para desativar, `git config --unset core.hooksPath`.
 
+## Tipos no servidor
+
+O servidor é JavaScript com verificação gradual de tipos: `npm run typecheck` também executa `tsc -p tsconfig.server.json` (`allowJs`, `strict`), que só examina os arquivos que começam com `// @ts-check`. Hoje cobrem os serviços de cartões, faturas e recorrências, o histórico de alterações, a rota de sincronização e os roteadores de compras e faturas. Ao tocar em um arquivo novo, adicione `// @ts-check`, anote as funções com JSDoc e reutilize os tipos de `server/types.js` (`Queryable`, `Pool`, `OperationResult`, `EntryRow`); `request.auth` já é tipado por `server/express.d.ts`. Entrada não confiável (corpo de requisição) usa `any` apenas na função que a valida e devolve um tipo preciso.
+

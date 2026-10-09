@@ -1,7 +1,9 @@
+// @ts-check
 import express from 'express';
 import { requireAuth } from './auth.js';
 import { selectPurchase } from '../services/card-purchases.js';
 
+/** @param {{ pool: import('../types.js').Pool, secureCookies?: boolean }} options */
 export function createPurchasesRouter({ pool, secureCookies = false }) {
   const router = express.Router();
   router.use((_request, response, next) => {

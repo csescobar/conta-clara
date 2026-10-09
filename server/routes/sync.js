@@ -1,3 +1,4 @@
+// @ts-check
 import express from 'express';
 import { requireAuth, requireCsrf } from './auth.js';
 import { parseEntry, selectEntry, validateReferences } from './entries.js';
@@ -6,16 +7,40 @@ import { recordEntryAudit } from '../services/financial-entry-audit.js';
 import { cancelPurchase, createPurchase, parsePurchaseSnapshot, updatePurchase } from '../services/card-purchases.js';
 import { isInvoiceMonth, lockCardInvoiceKeys, updateInvoicePayment } from '../services/card-invoices.js';
 
+/** @typedef {{ operationId: string }} OperationBase */
+/** @typedef {OperationBase & { entity: 'invoice', cardId: string, invoiceMonth: string, baseVersion: number, kind: 'reverse', payload: null }} InvoiceReverseOperation */
+/** @typedef {OperationBase & { entity: 'invoice', cardId: string, invoiceMonth: string, baseVersion: number, kind: 'pay', payload: { actualCents: number, paidOn: string, paymentMethodId: string | null, replacePaid: boolean } }} InvoicePayOperation */
+/** @typedef {OperationBase & { entity: 'purchase', purchaseId: string, baseVersion: number, kind: 'delete', payload: null }} PurchaseDeleteOperation */
+/** @typedef {OperationBase & { entity: 'purchase', purchaseId: string, baseVersion: null, kind: 'create', payload: import('../services/card-purchases.js').PurchaseSnapshot }} PurchaseCreateOperation */
+/** @typedef {OperationBase & { entity: 'purchase', purchaseId: string, baseVersion: number, kind: 'update', payload: import('../services/card-purchases.js').PurchaseSnapshot }} PurchaseUpdateOperation */
+/** @typedef {OperationBase & { entity: 'card', cardId: string, baseVersion: null, kind: 'create', payload: NonNullable<ReturnType<typeof parseCard>> & { archived: boolean } }} CardCreateOperation */
+/** @typedef {OperationBase & { entity: 'card', cardId: string, baseVersion: number, kind: 'update', payload: NonNullable<ReturnType<typeof parseCard>> & { archived: boolean } }} CardUpdateOperation */
+/** @typedef {OperationBase & { entity?: undefined, entryId: string, baseVersion: number, kind: 'delete', payload: null }} EntryDeleteOperation */
+/** @typedef {OperationBase & { entity?: undefined, entryId: string, baseVersion: null, kind: 'create', payload: NonNullable<ReturnType<typeof parseEntry>> }} EntryCreateOperation */
+/** @typedef {OperationBase & { entity?: undefined, entryId: string, baseVersion: number, kind: 'update', payload: NonNullable<ReturnType<typeof parseEntry>> }} EntryUpdateOperation */
+/** Operação offline já validada; `entity` (ausente para lançamentos) e `kind` discriminam o formato. */
+/** @typedef {InvoiceReverseOperation | InvoicePayOperation | PurchaseDeleteOperation | PurchaseCreateOperation | PurchaseUpdateOperation | CardCreateOperation | CardUpdateOperation | EntryDeleteOperation | EntryCreateOperation | EntryUpdateOperation} SyncOperation */
+
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 const kinds = new Set(['create', 'update', 'delete']);
 
+/**
+ * @param {unknown} value
+ * @returns {value is string}
+ */
 function isIsoDate(value) {
   if (typeof value !== 'string' || !datePattern.test(value)) return false;
   const parsed = new Date(`${value}T00:00:00.000Z`);
   return Number.isFinite(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === value;
 }
 
+/**
+ * Valida e normaliza uma operação enviada pelo cliente offline (entrada não confiável, por isso `any`).
+ * Devolve `null` se a operação for inválida.
+ * @param {any} body
+ * @returns {SyncOperation | null}
+ */
 function parseOperation(body) {
   if (body?.entity === 'invoice') {
     if (
@@ -114,6 +139,11 @@ function parseOperation(body) {
   return { operationId: body.operationId, entryId: body.entryId, kind: body.kind, baseVersion, payload };
 }
 
+/**
+ * @param {import('../types.js').Queryable} client
+ * @param {string} spaceId
+ * @param {string} entryId
+ */
 async function selectSyncRow(client, spaceId, entryId) {
   const result = await client.query(
     `
@@ -125,6 +155,11 @@ async function selectSyncRow(client, spaceId, entryId) {
   return result.rows[0] ?? null;
 }
 
+/**
+ * Guarda o recibo da operação para que reenvios devolvam a mesma resposta (idempotência).
+ * @param {import('../types.js').Queryable} client
+ * @param {{ spaceId: string, userId: string, operation: { operationId: string }, request: unknown, body: unknown }} receipt
+ */
 async function storeReceipt(client, { spaceId, userId, operation, request, body }) {
   await client.query(
     `
@@ -135,6 +170,12 @@ async function storeReceipt(client, { spaceId, userId, operation, request, body 
   );
 }
 
+/**
+ * @param {import('../types.js').Queryable} client
+ * @param {import('express').Request} request
+ * @param {SyncOperation} operation
+ * @returns {Promise<import('../types.js').OperationResult>}
+ */
 async function applyOperation(client, request, operation) {
   const spaceId = request.auth.spaceId;
   const userId = request.auth.id;
@@ -321,16 +362,20 @@ async function applyOperation(client, request, operation) {
 
   if (operation.entity === 'invoice') {
     await lockCardInvoiceKeys(client, spaceId, [{ cardId: operation.cardId, invoiceMonth: operation.invoiceMonth }]);
-    const result = await updateInvoicePayment(client, {
+    const common = {
       spaceId,
       userId,
       actorName: request.auth.name,
       cardId: operation.cardId,
       month: operation.invoiceMonth,
-      action: operation.kind,
       baseVersion: operation.baseVersion,
-      payload: operation.payload,
-    });
+    };
+    const result = await updateInvoicePayment(
+      client,
+      operation.kind === 'pay'
+        ? { ...common, action: 'pay', payload: operation.payload }
+        : { ...common, action: 'reverse', payload: operation.payload },
+    );
     if (result.status !== 200) return result;
     const body = { ...result.body, operationId: operation.operationId };
     await storeReceipt(client, { spaceId, userId, operation, request: normalizedRequest, body });
@@ -466,6 +511,7 @@ async function applyOperation(client, request, operation) {
   return { status: 200, body };
 }
 
+/** @param {{ pool: import('../types.js').Pool, secureCookies?: boolean, csrfSecret: Buffer }} options */
 export function createSyncRouter({ pool, secureCookies = false, csrfSecret }) {
   const router = express.Router();
   router.use((_request, response, next) => {
@@ -476,6 +522,7 @@ export function createSyncRouter({ pool, secureCookies = false, csrfSecret }) {
   router.post('/operations', requireCsrf(csrfSecret), async (request, response, next) => {
     const operation = parseOperation(request.body);
     if (!operation) return response.status(400).json({ error: 'A operação offline é inválida.' });
+    /** @type {import('../types.js').PoolClient | undefined} */
     let client;
     try {
       client = await pool.connect();
@@ -487,7 +534,8 @@ export function createSyncRouter({ pool, secureCookies = false, csrfSecret }) {
       }
       await client.query('COMMIT');
       return response.status(200).json(result.body);
-    } catch (error) {
+    } catch (caught) {
+      const error = /** @type {{ code?: string }} */ (caught);
       if (client) await client.query('ROLLBACK').catch(() => {});
       if (operation.entity === 'card' && error.code === '23505') {
         return response.status(400).json({ error: 'Já existe um cartão ativo com este apelido.' });
@@ -495,7 +543,7 @@ export function createSyncRouter({ pool, secureCookies = false, csrfSecret }) {
       if (operation.entity === 'purchase' && error.code === '23505') {
         return response.status(400).json({ error: 'Uma das parcelas desta compra já foi registrada.' });
       }
-      return next(error);
+      return next(caught);
     } finally {
       client?.release();
     }

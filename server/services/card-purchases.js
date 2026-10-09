@@ -1,3 +1,4 @@
+// @ts-check
 import { randomUUID } from 'node:crypto';
 import { recordEntryAudit } from './financial-entry-audit.js';
 import { ensureCardInvoice, invoiceMonthForDate, invalidatePaidInvoices, lockCardInvoiceKeys, touchCardInvoice } from './card-invoices.js';
@@ -7,24 +8,50 @@ const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 const monthPattern = /^\d{4}-(0[1-9]|1[0-2])-01$/;
 
+/** @typedef {{ id: string, installmentNumber: number, plannedCents: number, invoiceOn: string }} InstallmentSnapshot */
+/** @typedef {{ cardId: string, categoryId: string, description: string, purchaseOn: string, firstInvoiceOn: string, totalCents: number, installmentCount: number }} PurchaseData */
+/** @typedef {{ purchase: PurchaseData, installments: InstallmentSnapshot[] }} PurchaseSnapshot */
+/** Contexto comum das operações: quem altera, em qual espaço. */
+/** @typedef {{ spaceId: string, userId: string, actorName: string }} Actor */
+
+/**
+ * Data civil AAAA-MM-DD existente no calendário.
+ * @param {unknown} value
+ * @returns {value is string}
+ */
 export function isValidDate(value) {
   if (typeof value !== 'string' || !datePattern.test(value)) return false;
   const parsed = new Date(`${value}T00:00:00.000Z`);
   return Number.isFinite(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === value;
 }
 
+/**
+ * @param {string} month AAAA-MM
+ * @param {number} offset
+ */
 function shiftMonth(month, offset) {
   const [year, monthNumber] = month.split('-').map(Number);
   const date = new Date(Date.UTC(year, monthNumber - 1 + offset, 1));
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 
+/**
+ * Dia do ciclo no mês; dias além do fim do mês ajustam para o último dia.
+ * @param {string} month AAAA-MM
+ * @param {number} day
+ */
 function cycleDate(month, day) {
   const [year, monthNumber] = month.split('-').map(Number);
   const lastDay = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
   return `${month}-${String(Math.min(day, lastDay)).padStart(2, '0')}`;
 }
 
+/**
+ * Primeira fatura (AAAA-MM-01) de uma compra, pelo fechamento e vencimento do cartão.
+ * @param {string} purchaseOn AAAA-MM-DD
+ * @param {number} closingDay
+ * @param {number} dueDay
+ */
 export function calculateFirstInvoiceMonth(purchaseOn, closingDay, dueDay) {
   if (
     !isValidDate(purchaseOn) ||
@@ -48,6 +75,12 @@ export function calculateFirstInvoiceMonth(purchaseOn, closingDay, dueDay) {
   return `${dueMonth}-01`;
 }
 
+/**
+ * Divide o total em parcelas inteiras; as primeiras recebem o centavo que sobra.
+ * @param {number} totalCents
+ * @param {number} count
+ * @returns {number[] | null} `null` se o total ou a quantidade forem inválidos
+ */
 export function splitInstallmentAmounts(totalCents, count) {
   if (!Number.isSafeInteger(totalCents) || totalCents <= 0 || !Number.isInteger(count) || count < 1 || count > 120 || totalCents < count)
     return null;
@@ -56,6 +89,12 @@ export function splitInstallmentAmounts(totalCents, count) {
   return Array.from({ length: count }, (_, index) => each + (index < remainder ? 1 : 0));
 }
 
+/**
+ * Valida um snapshot de compra vindo do cliente (entrada não confiável, por isso `any`).
+ * @param {any} payload
+ * @param {{ requireIds?: boolean }} [options]
+ * @returns {PurchaseSnapshot | null}
+ */
 export function parsePurchaseSnapshot(payload, { requireIds = true } = {}) {
   const purchase = payload?.purchase;
   const description = typeof purchase?.description === 'string' ? purchase.description.trim() : '';
@@ -81,8 +120,11 @@ export function parsePurchaseSnapshot(payload, { requireIds = true } = {}) {
   if (firstInvoiceOn.slice(0, 7) < purchaseOn.slice(0, 7)) return null;
   const installments = payload?.installments;
   if (!Array.isArray(installments) || installments.length !== installmentCount) return null;
+  /** @type {Set<number>} */
   const seenNumbers = new Set();
+  /** @type {Set<string>} */
   const seenIds = new Set();
+  /** @type {InstallmentSnapshot[]} */
   const parsedInstallments = [];
   for (const installment of installments) {
     const installmentNumber = installment?.installmentNumber;
@@ -123,6 +165,11 @@ export function parsePurchaseSnapshot(payload, { requireIds = true } = {}) {
   };
 }
 
+/**
+ * @param {import('../types.js').Queryable} client
+ * @param {string} spaceId
+ * @param {string} purchaseId
+ */
 export async function selectPurchase(client, spaceId, purchaseId) {
   const purchaseResult = await client.query(
     `
@@ -159,6 +206,13 @@ export async function selectPurchase(client, spaceId, purchaseId) {
   return { ...purchaseResult.rows[0], installments: installmentResult.rows };
 }
 
+/**
+ * @param {import('../types.js').Queryable} client
+ * @param {string} spaceId
+ * @param {PurchaseData} purchase
+ * @param {{ currentCardId?: string | null, currentCategoryId?: string | null }} [current]
+ * @returns {Promise<{ error: string } | { card: { closing_day: number, due_day: number, archived_at: string | null } }>}
+ */
 async function validateReferences(client, spaceId, purchase, { currentCardId = null, currentCategoryId = null } = {}) {
   const cardResult = await client.query(
     `
@@ -180,18 +234,32 @@ async function validateReferences(client, spaceId, purchase, { currentCardId = n
   return { card: cardResult.rows[0] };
 }
 
+/**
+ * @param {string} invoiceOn AAAA-MM-DD da fatura
+ * @param {number} dueDay
+ */
 function dueDate(invoiceOn, dueDay) {
   return cycleDate(invoiceOn.slice(0, 7), dueDay);
 }
 
+/** @param {unknown} value */
 function dateOnly(value) {
   return value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10);
 }
 
+/**
+ * @param {string} description
+ * @param {number} number
+ * @param {number} count
+ */
 function entryDescription(description, number, count) {
   return `${description} (${number}/${count})`;
 }
 
+/**
+ * @param {import('../types.js').Queryable} client
+ * @param {Actor & { purchaseId: string, purchase: PurchaseData, installment: InstallmentSnapshot, dueDay: number }} input
+ */
 async function insertInstallment(client, { spaceId, userId, actorName, purchaseId, purchase, installment, dueDay }) {
   const dueOn = dueDate(installment.invoiceOn, dueDay);
   const inserted = await client.query(
@@ -222,9 +290,14 @@ async function insertInstallment(client, { spaceId, userId, actorName, purchaseI
   await recordEntryAudit(client, { spaceId, actorUserId: userId, actorName, entry, action: 'created', after: entry });
 }
 
+/**
+ * @param {import('../types.js').Queryable} client
+ * @param {Actor & { purchaseId: string, snapshot: PurchaseSnapshot }} input
+ * @returns {Promise<import('../types.js').OperationResult>}
+ */
 export async function createPurchase(client, { spaceId, userId, actorName, purchaseId, snapshot }) {
   const reference = await validateReferences(client, spaceId, snapshot.purchase);
-  if (reference.error) return { status: 400, body: { error: reference.error } };
+  if ('error' in reference) return { status: 400, body: { error: reference.error } };
   calculateFirstInvoiceMonth(snapshot.purchase.purchaseOn, Number(reference.card.closing_day), Number(reference.card.due_day));
   if (
     snapshot.installments.some(
@@ -284,6 +357,11 @@ export async function createPurchase(client, { spaceId, userId, actorName, purch
   return { status: 200, body: { status: 'applied', purchase: await selectPurchase(client, spaceId, purchaseId) } };
 }
 
+/**
+ * @param {import('../types.js').Queryable} client
+ * @param {Actor & { purchaseId: string, baseVersion: number, snapshot: PurchaseSnapshot }} input
+ * @returns {Promise<import('../types.js').OperationResult>}
+ */
 export async function updatePurchase(client, { spaceId, userId, actorName, purchaseId, baseVersion, snapshot }) {
   const currentResult = await client.query(
     'SELECT card_id, category_id, version, canceled_at FROM card_purchases WHERE id = $1 AND space_id = $2 FOR UPDATE',
@@ -300,9 +378,9 @@ export async function updatePurchase(client, { spaceId, userId, actorName, purch
     currentCardId: current.card_id,
     currentCategoryId: current.category_id,
   });
-  if (reference.error) return { status: 400, body: { error: reference.error } };
+  if ('error' in reference) return { status: 400, body: { error: reference.error } };
   const invoiceLocks = [
-    ...serverPurchase.installments.map((installment) => ({
+    ...serverPurchase.installments.map((/** @type {{ due_on: string }} */ installment) => ({
       cardId: current.card_id,
       invoiceMonth: invoiceMonthForDate(installment.due_on),
     })),
@@ -334,7 +412,12 @@ export async function updatePurchase(client, { spaceId, userId, actorName, purch
   if (desiredSum !== BigInt(snapshot.purchase.totalCents))
     return { status: 400, body: { error: 'A soma das parcelas deve ser igual ao total da compra.' } };
 
+  /** @type {Map<string, { cardId: string, invoiceMonth: string, dueOn: string }>} */
   const changedInvoices = new Map();
+  /**
+   * @param {string} cardId
+   * @param {string} dueOn
+   */
   const markInvoice = (cardId, dueOn) => {
     const invoiceMonth = invoiceMonthForDate(dueOn);
     changedInvoices.set(`${cardId}:${invoiceMonth}`, { cardId, invoiceMonth, dueOn });
@@ -474,6 +557,11 @@ export async function updatePurchase(client, { spaceId, userId, actorName, purch
   return { status: 200, body: { status: 'applied', purchase: await selectPurchase(client, spaceId, purchaseId) } };
 }
 
+/**
+ * @param {import('../types.js').Queryable} client
+ * @param {Actor & { purchaseId: string, baseVersion: number }} input
+ * @returns {Promise<import('../types.js').OperationResult>}
+ */
 export async function cancelPurchase(client, { spaceId, userId, actorName, purchaseId, baseVersion }) {
   const currentResult = await client.query(
     'SELECT card_id, version, canceled_at FROM card_purchases WHERE id = $1 AND space_id = $2 FOR UPDATE',
@@ -488,7 +576,7 @@ export async function cancelPurchase(client, { spaceId, userId, actorName, purch
   await lockCardInvoiceKeys(
     client,
     spaceId,
-    serverPurchase.installments.map((installment) => ({
+    serverPurchase.installments.map((/** @type {{ due_on: string }} */ installment) => ({
       cardId: current.card_id,
       invoiceMonth: invoiceMonthForDate(installment.due_on),
     })),
@@ -515,6 +603,21 @@ export async function cancelPurchase(client, { spaceId, userId, actorName, purch
   return { status: 200, body: { status: 'applied', purchase: await selectPurchase(client, spaceId, purchaseId) } };
 }
 
+/**
+ * Monta o snapshot que o cliente envia para criar uma compra (usado em testes e na criação offline).
+ * @param {{
+ *   cardId: string,
+ *   categoryId: string,
+ *   description: string,
+ *   purchaseOn: string,
+ *   firstInvoiceOn?: string | null,
+ *   totalCents: number,
+ *   installmentCount: number,
+ *   closingDay: number,
+ *   dueDay: number,
+ * }} input
+ * @returns {PurchaseSnapshot | null}
+ */
 export function createPurchasePayload({
   cardId,
   categoryId,

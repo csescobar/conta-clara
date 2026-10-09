@@ -1,8 +1,15 @@
+// @ts-check
 import { recordEntryAudit } from './financial-entry-audit.js';
 
 const monthPattern = /^\d{4}-(0[1-9]|1[0-2])-01$/;
 export const RECURRENCE_HORIZON_MONTHS_AHEAD = 12;
 
+/**
+ * Último mês projetado: a competência atual mais `monthsAhead` meses.
+ * @param {string} currentCompetence AAAA-MM-01
+ * @param {number} [monthsAhead]
+ * @returns {string} AAAA-MM-01
+ */
 export function recurrenceHorizonMonth(currentCompetence, monthsAhead = RECURRENCE_HORIZON_MONTHS_AHEAD) {
   if (!monthPattern.test(currentCompetence)) {
     throw new TypeError('A competência atual precisa estar no formato AAAA-MM-01.');
@@ -14,6 +21,13 @@ export function recurrenceHorizonMonth(currentCompetence, monthsAhead = RECURREN
   return new Date(Date.UTC(year, month - 1 + monthsAhead, 1)).toISOString().slice(0, 10);
 }
 
+/**
+ * Competências (AAAA-MM-01) entre o início da regra e o menor entre o término e `throughMonth`.
+ * @param {string} startCompetenceOn
+ * @param {string | null | undefined} endCompetenceOn
+ * @param {string} throughMonth
+ * @returns {string[]}
+ */
 export function listCompetenceMonths(startCompetenceOn, endCompetenceOn, throughMonth) {
   if (
     ![startCompetenceOn, throughMonth].every((value) => monthPattern.test(value)) ||
@@ -25,6 +39,7 @@ export function listCompetenceMonths(startCompetenceOn, endCompetenceOn, through
   if (startCompetenceOn > lastMonth) return [];
   const [startYear, startMonth] = startCompetenceOn.slice(0, 7).split('-').map(Number);
   const [endYear, endMonth] = lastMonth.slice(0, 7).split('-').map(Number);
+  /** @type {string[]} */
   const months = [];
   for (let year = startYear, month = startMonth; year < endYear || (year === endYear && month <= endMonth); month += 1) {
     if (month === 13) {
@@ -36,6 +51,12 @@ export function listCompetenceMonths(startCompetenceOn, endCompetenceOn, through
   return months;
 }
 
+/**
+ * Vencimento do mês; dias além do último dia do mês ajustam para o último dia.
+ * @param {string} competenceOn AAAA-MM-01
+ * @param {number | null | undefined} dueDay
+ * @returns {string | null} AAAA-MM-DD
+ */
 export function recurrenceDueDate(competenceOn, dueDay) {
   if (dueDay === null || dueDay === undefined) return null;
   const [year, month] = competenceOn.slice(0, 7).split('-').map(Number);
@@ -44,6 +65,7 @@ export function recurrenceDueDate(competenceOn, dueDay) {
   return `${year}-${String(month).padStart(2, '0')}-${String(actualDay).padStart(2, '0')}`;
 }
 
+/** @param {import('../types.js').Queryable} client */
 async function currentRecurrenceHorizon(client) {
   const result = await client.query(
     "SELECT to_char(date_trunc('month', now() AT TIME ZONE 'America/Sao_Paulo'), 'YYYY-MM-DD') AS current_month",
@@ -52,6 +74,12 @@ async function currentRecurrenceHorizon(client) {
   return { currentMonth, horizonMonth: recurrenceHorizonMonth(currentMonth) };
 }
 
+/**
+ * @param {import('../types.js').Queryable} client
+ * @param {string} spaceId
+ * @param {string} entryId
+ * @returns {Promise<import('../types.js').EntryRow>}
+ */
 async function selectOccurrenceForAudit(client, spaceId, entryId) {
   const result = await client.query(
     `
@@ -69,7 +97,12 @@ async function selectOccurrenceForAudit(client, spaceId, entryId) {
   return result.rows[0];
 }
 
-/** Reconciles only future, rule-owned projections inside the rolling forecast horizon. */
+/**
+ * Reconciles only future, rule-owned projections inside the rolling forecast horizon.
+ * @param {import('../types.js').Queryable} client
+ * @param {{ spaceId: string, ruleId: string, actorUserId: string, actorName: string }} context
+ * @returns {Promise<{ updated: number, removed: number, restored: number }>}
+ */
 export async function synchronizeRecurrenceOccurrencesInTransaction(client, { spaceId, ruleId, actorUserId, actorName }) {
   const { currentMonth, horizonMonth } = await currentRecurrenceHorizon(client);
   const ruleResult = await client.query(
@@ -104,6 +137,7 @@ export async function synchronizeRecurrenceOccurrencesInTransaction(client, { sp
     [spaceId, ruleId, currentMonth],
   );
 
+  /** @param {{ recurrence_overridden: boolean, actual_cents: string | null }} entry */
   const eligible = (entry) => !entry.recurrence_overridden && entry.actual_cents === null;
   let updated = 0;
   let removed = 0;
@@ -201,12 +235,18 @@ export async function synchronizeRecurrenceOccurrencesInTransaction(client, { sp
   return { updated, removed, restored };
 }
 
+/**
+ * @param {import('../types.js').Queryable} client
+ * @param {{ spaceId?: string | null, ruleId?: string | null, throughMonth?: string | null, actorUserId?: string | null, actorName?: string | null }} [options]
+ * @returns {Promise<number>} lançamentos gerados
+ */
 async function generateForClient(
   client,
   { spaceId = null, ruleId = null, throughMonth = null, actorUserId = null, actorName = null } = {},
 ) {
   const horizon = throughMonth ? null : await currentRecurrenceHorizon(client);
-  const lastMonth = throughMonth ?? horizon.horizonMonth;
+  // `horizon` só é nulo quando `throughMonth` foi informado, caso em que `??` já devolve `throughMonth`.
+  const lastMonth = throughMonth ?? /** @type {{ horizonMonth: string }} */ (horizon).horizonMonth;
   if (!monthPattern.test(lastMonth)) throw new TypeError('A competência final precisa ser o primeiro dia do mês.');
   const rules = await client.query(
     `
@@ -284,10 +324,18 @@ async function generateForClient(
   return generated;
 }
 
+/**
+ * @param {import('../types.js').Queryable} client
+ * @param {Parameters<typeof generateForClient>[1]} [options]
+ */
 export async function generateRecurrenceOccurrencesInTransaction(client, options = {}) {
   return generateForClient(client, options);
 }
 
+/**
+ * @param {import('../types.js').Pool} pool
+ * @param {Parameters<typeof generateForClient>[1]} [options]
+ */
 export async function generateRecurrenceOccurrences(pool, options = {}) {
   const client = await pool.connect();
   try {

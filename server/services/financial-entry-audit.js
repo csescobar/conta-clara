@@ -1,3 +1,9 @@
+// @ts-check
+
+/**
+ * Campos de um lançamento guardados no histórico de alterações.
+ * @param {import('../types.js').EntryRow} entry
+ */
 export function auditSnapshot(entry) {
   return {
     kind: entry.kind,
@@ -14,7 +20,20 @@ export function auditSnapshot(entry) {
   };
 }
 
+/**
+ * @param {import('../types.js').Queryable} client
+ * @param {{
+ *   spaceId: string,
+ *   actorUserId: string,
+ *   actorName: string,
+ *   entry: import('../types.js').EntryRow,
+ *   action: 'created' | 'updated' | 'confirmed' | 'unconfirmed' | 'deleted',
+ *   before?: import('../types.js').EntryRow | null,
+ *   after?: import('../types.js').EntryRow | null,
+ * }} audit
+ */
 export async function recordEntryAudit(client, { spaceId, actorUserId, actorName, entry, action, before, after }) {
+  /** @type {{ before?: ReturnType<typeof auditSnapshot>, after?: ReturnType<typeof auditSnapshot> }} */
   const details = {};
   if (before) details.before = auditSnapshot(before);
   if (after) details.after = auditSnapshot(after);

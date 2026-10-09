@@ -1,20 +1,40 @@
+// @ts-check
 import { recordEntryAudit } from './financial-entry-audit.js';
 import { selectEntry } from '../routes/entries.js';
 
 const monthPattern = /^\d{4}-(0[1-9]|1[0-2])$/;
 
+/** @typedef {{ cardId: string, invoiceMonth: string }} InvoiceKeyParts */
+
+/**
+ * Competência (AAAA-MM) de uma data.
+ * @param {unknown} value
+ */
 export function invoiceMonthForDate(value) {
   return String(value).slice(0, 7);
 }
 
+/**
+ * @param {unknown} value
+ * @returns {value is string}
+ */
 export function isInvoiceMonth(value) {
   return typeof value === 'string' && monthPattern.test(value);
 }
 
+/**
+ * @param {string} cardId
+ * @param {string} invoiceMonth
+ */
 export function invoiceKey(cardId, invoiceMonth) {
   return `${cardId}:${invoiceMonth}`;
 }
 
+/**
+ * @param {import('../types.js').Queryable} client
+ * @param {string} spaceId
+ * @param {InvoiceKeyParts[]} keys
+ */
 export async function lockCardInvoiceKeys(client, spaceId, keys) {
   const unique = new Map(keys.map((item) => [invoiceKey(item.cardId, item.invoiceMonth), item]));
   for (const item of [...unique.values()].sort((left, right) =>
@@ -27,6 +47,10 @@ export async function lockCardInvoiceKeys(client, spaceId, keys) {
   }
 }
 
+/**
+ * @param {import('../types.js').Queryable} client
+ * @param {{ spaceId: string, cardId: string, invoiceMonth: string, dueOn: string, userId: string }} invoice
+ */
 export async function ensureCardInvoice(client, { spaceId, cardId, invoiceMonth, dueOn, userId }) {
   await client.query(
     `
@@ -39,6 +63,10 @@ export async function ensureCardInvoice(client, { spaceId, cardId, invoiceMonth,
   );
 }
 
+/**
+ * @param {import('../types.js').Queryable} client
+ * @param {{ spaceId: string, cardId: string, invoiceMonth: string, dueOn: string, userId: string }} invoice
+ */
 export async function touchCardInvoice(client, { spaceId, cardId, invoiceMonth, dueOn, userId }) {
   await client.query(
     `
@@ -53,6 +81,12 @@ export async function touchCardInvoice(client, { spaceId, cardId, invoiceMonth, 
   );
 }
 
+/**
+ * Marca como "a revisar" as faturas quitadas afetadas por uma alteração e desfaz a confirmação das parcelas.
+ * @param {import('../types.js').Queryable} client
+ * @param {{ spaceId: string, userId: string, actorName: string, keys: InvoiceKeyParts[] }} change
+ * @returns {Promise<string[]>} chaves das faturas invalidadas
+ */
 export async function invalidatePaidInvoices(client, { spaceId, userId, actorName, keys }) {
   if (!keys.length) return [];
   const cardIds = keys.map((item) => item.cardId);
@@ -70,6 +104,7 @@ export async function invalidatePaidInvoices(client, { spaceId, userId, actorNam
   `,
     [spaceId, cardIds, invoiceMonths],
   );
+  /** @type {string[]} */
   const invalidated = [];
   for (const invoice of result.rows) {
     const installments = await client.query(
@@ -109,6 +144,11 @@ export async function invalidatePaidInvoices(client, { spaceId, userId, actorNam
   return invalidated;
 }
 
+/**
+ * @param {import('../types.js').Queryable} client
+ * @param {string} spaceId
+ * @param {string | null} [month]
+ */
 async function invoiceHeaders(client, spaceId, month = null) {
   const result = await client.query(
     `
@@ -135,6 +175,11 @@ async function invoiceHeaders(client, spaceId, month = null) {
   return result.rows;
 }
 
+/**
+ * @param {import('../types.js').Queryable} client
+ * @param {string} spaceId
+ * @param {Array<{ id: string }>} invoices
+ */
 async function invoiceEntries(client, spaceId, invoices) {
   if (!invoices.length) return new Map();
   const result = await client.query(
@@ -153,6 +198,7 @@ async function invoiceEntries(client, spaceId, invoices) {
   `,
     [spaceId, invoices.map((item) => item.id)],
   );
+  /** @type {Map<string, any[]>} */
   const grouped = new Map();
   for (const row of result.rows) {
     const rows = grouped.get(row.invoice_id) ?? [];
@@ -162,6 +208,10 @@ async function invoiceEntries(client, spaceId, invoices) {
   return grouped;
 }
 
+/**
+ * @param {import('../types.js').Queryable} client
+ * @param {{ spaceId: string, month?: string | null }} filter
+ */
 export async function listCardInvoices(client, { spaceId, month = null }) {
   const headers = await invoiceHeaders(client, spaceId, month);
   const entries = await invoiceEntries(client, spaceId, headers);
@@ -183,10 +233,22 @@ export async function listCardInvoices(client, { spaceId, month = null }) {
   });
 }
 
+/**
+ * @param {import('../types.js').Queryable} client
+ * @param {string} spaceId
+ * @param {string} cardId
+ * @param {string | null} month
+ */
 export async function selectCardInvoice(client, spaceId, cardId, month) {
   return (await listCardInvoices(client, { spaceId, month })).find((invoice) => invoice.card_id === cardId) ?? null;
 }
 
+/**
+ * Divide o valor pago entre as parcelas proporcionalmente ao previsto, sem perder centavos.
+ * @param {Array<{ id: string, planned_cents: string }>} entries
+ * @param {string | number | bigint} actualCents
+ * @param {bigint} plannedTotal
+ */
 function allocateActualCents(entries, actualCents, plannedTotal) {
   const total = BigInt(actualCents);
   const shares = entries.map((entry) => {
@@ -201,6 +263,21 @@ function allocateActualCents(entries, actualCents, plannedTotal) {
   return new Map(shares.map((item) => [item.id, item.cents.toString()]));
 }
 
+/**
+ * @param {import('../types.js').Queryable} client
+ * @param {{
+ *   spaceId: string,
+ *   userId: string,
+ *   actorName: string,
+ *   cardId: string,
+ *   month: string,
+ *   baseVersion: number,
+ * } & (
+ *   | { action: 'pay', payload: { replacePaid?: boolean, paymentMethodId?: string | null, actualCents: string | number, paidOn: string } }
+ *   | { action: 'reverse', payload: null }
+ * )} operation
+ * @returns {Promise<import('../types.js').OperationResult>}
+ */
 export async function updateInvoicePayment(client, { spaceId, userId, actorName, cardId, month, action, baseVersion, payload }) {
   const invoiceResult = await client.query(
     `

@@ -1,7 +1,9 @@
+// @ts-check
 import express from 'express';
 import { requireAuth } from './auth.js';
 import { isInvoiceMonth, listCardInvoices } from '../services/card-invoices.js';
 
+/** @param {{ pool: import('../types.js').Pool, secureCookies?: boolean }} options */
 export function createInvoicesRouter({ pool, secureCookies = false }) {
   const router = express.Router();
   router.use((_request, response, next) => {
