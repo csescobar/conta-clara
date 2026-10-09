@@ -88,7 +88,7 @@ Fases definidas a partir da auditoria de design system e engenharia de 2026-10-0
 - [x] [Criar primitivos de formulário](https://github.com/csescobar/conta-clara/issues/40) — dependências: #38; seletor, texto longo, opções, data, competência e valor em reais compartilhados; datas e competências no formato brasileiro em qualquer navegador (`de4356b`).
 - [x] [Criar primitivos de sobreposição e mensagem](https://github.com/csescobar/conta-clara/issues/41) — dependências: #38; confirmações, quitação e estorno em diálogos Radix acessíveis, alertas inline e toasts para ações concluídas (`049b045`).
 - [x] [Extrair componentes de composição financeira](https://github.com/csescobar/conta-clara/issues/42) — dependências: #39, #40, #41; EntryRow, StatCard, FilterBar, MonthNavigator, ActionToolbar e DataTable nas cinco telas, sem linhas acima de 160 caracteres (`d672ed0`).
-- [ ] [Publicar catálogo vivo e validar acessibilidade automaticamente](https://github.com/csescobar/conta-clara/issues/43) — dependências: #38, #39, #40, #41, #42.
+- [x] [Publicar catálogo vivo e validar acessibilidade automaticamente](https://github.com/csescobar/conta-clara/issues/43) — dependências: #38, #39, #40, #41, #42; catálogo /catalogo só em desenvolvimento, axe em Vitest e Playwright (todas as rotas, celular e desktop) e teste de contraste dos tokens (`116a963`).
 
 ## 10. Experiência e acessibilidade (V4)
 
