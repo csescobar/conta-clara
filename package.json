@@ -13,6 +13,7 @@
     "test": "vitest run",
     "e2e": "playwright test",
     "verify": "npm run typecheck && npm test && npm run build && npm run test:db && npm run e2e && bash scripts/backup-restore-drill.sh",
+    "hooks:install": "git config core.hooksPath .githooks",
     "test:db": "node --env-file-if-exists=.env.test node_modules/vitest/vitest.mjs run --config vitest.db.config.ts",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",

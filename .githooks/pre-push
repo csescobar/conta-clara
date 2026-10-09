@@ -1,0 +1,49 @@
+#!/bin/sh
+# Verificação local antes de publicar: lint, tipos, testes de interface e build.
+# Não roda Postgres, Playwright nem Docker (use `npm run verify` antes de concluir uma issue).
+# Ative com `npm run hooks:install`. Em emergência: `git push --no-verify`.
+
+zero=0000000000000000000000000000000000000000
+
+# Descobre se o envio altera código; envios só de documentação não precisam da verificação.
+needs_check=0
+while read -r _local_ref local_sha _remote_ref remote_sha; do
+  [ "$local_sha" = "$zero" ] && continue # exclusão de branch
+  if [ "$remote_sha" = "$zero" ] || ! git cat-file -e "$remote_sha^{commit}" 2>/dev/null; then
+    needs_check=1
+    break
+  fi
+  if git diff --name-only "$remote_sha" "$local_sha" | grep -qvE '\.md$|^docs/'; then
+    needs_check=1
+    break
+  fi
+done
+
+if [ "$needs_check" = 0 ]; then
+  echo "pre-push: nenhuma alteração de código; verificação ignorada."
+  exit 0
+fi
+
+cd "$(git rev-parse --show-toplevel)" || exit 1
+
+run_step() {
+  label=$1
+  shift
+  printf 'pre-push: %s... ' "$label"
+  started=$(date +%s)
+  if output=$("$@" 2>&1); then
+    echo "ok ($(($(date +%s) - started))s)"
+  else
+    echo "FALHOU"
+    printf '%s\n' "$output" | tail -n 40
+    echo
+    echo "pre-push: etapa \"$label\" falhou; push bloqueado. Corrija e tente de novo (ou use --no-verify em emergência)."
+    exit 1
+  fi
+}
+
+run_step "lint" npm run --silent lint
+run_step "typecheck" npm run --silent typecheck
+run_step "testes de interface" npm test --silent
+run_step "build" npm run --silent build
+echo "pre-push: tudo certo."

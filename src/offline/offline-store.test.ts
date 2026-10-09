@@ -474,9 +474,11 @@ describe('scoped IndexedDB workspace', () => {
     expect(await loadOfflineSnapshot(scopeB, '/api/dashboard?month=2026-10')).toEqual({ planned: { expenseCents: '67890' } });
     expect((await loadOfflineWorkspace(scopeB)).entries).toHaveLength(1);
     expect((await loadOfflineWorkspace(scopeB)).cards).toMatchObject([{ id: 'card-clear-b' }]);
-    expect((await loadRememberedOfflineUser())?.user.id).toBe(scopeB.userId);
+    // Relógio fixo: a janela de sessão é de 7 dias e as datas do cenário não podem depender de quando o teste roda.
+    const withinLease = Date.parse('2026-10-03T00:00:00.000Z');
+    expect((await loadRememberedOfflineUser(withinLease))?.user.id).toBe(scopeB.userId);
     await clearOfflineWorkspace(scopeB);
-    expect(await loadRememberedOfflineUser()).toBeNull();
+    expect(await loadRememberedOfflineUser(withinLease)).toBeNull();
   });
 
   it('allows a cached identity only during the seven-day verified-session window', async () => {
