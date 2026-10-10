@@ -95,7 +95,7 @@ Fases definidas a partir da auditoria de design system e engenharia de 2026-10-0
 - [x] [Adicionar tema escuro](https://github.com/csescobar/conta-clara/issues/44) — dependências: #43; tokens escuros validados por contraste, escolha em Configurações (sistema, claro ou escuro) salva neste aparelho e theme-color por tema (`fed3529`).
 - [x] [Padronizar carregamento, vazio e retorno de ações](https://github.com/csescobar/conta-clara/issues/45) — dependências: #41, #43; esqueletos estáveis e acessíveis, estados vazios com orientação e ação em todas as listas, avisos após ações e desfazer apenas onde a reversão é segura (`eaa0e3e`).
 - [x] [Revisar hierarquia das telas principais](https://github.com/csescobar/conta-clara/issues/46) — dependências: #42; lançamentos agrupados por vencimento, ações secundárias em menu no celular, indicadores compactos e linhas de até três linhas em 360 px (`cc7849f`).
-- [ ] [Cobrir regressão visual e teclado em todas as rotas](https://github.com/csescobar/conta-clara/issues/47) — dependências: #44, #45, #46.
+- [x] [Cobrir regressão visual e teclado em todas as rotas](https://github.com/csescobar/conta-clara/issues/47) — dependências: #44, #45, #46; 60 referências visuais (10 rotas, 3 larguras, 2 temas) com dados determinísticos, roteiro de teclado de 16 testes e documentação de como atualizar (`b8478b8`).
 
 ## 11. Qualidade de engenharia (V4)
 
