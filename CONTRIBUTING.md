@@ -22,3 +22,7 @@ Não há CI remoto: a verificação acontece na sua máquina, sem consumir minut
 
 O servidor é JavaScript com verificação gradual de tipos: `npm run typecheck` também executa `tsc -p tsconfig.server.json` (`allowJs`, `strict`), que só examina os arquivos que começam com `// @ts-check`. Hoje cobrem os serviços de cartões, faturas e recorrências, o histórico de alterações, a rota de sincronização e os roteadores de compras e faturas. Ao tocar em um arquivo novo, adicione `// @ts-check`, anote as funções com JSDoc e reutilize os tipos de `server/types.js` (`Queryable`, `Pool`, `OperationResult`, `EntryRow`); `request.auth` já é tipado por `server/express.d.ts`. Entrada não confiável (corpo de requisição) usa `any` apenas na função que a valida e devolve um tipo preciso.
 
+## Mudanças visuais
+
+Telas e componentes têm referências visuais em `e2e/visual/references`. Ao mudar a aparência de propósito, rode `npm run e2e:visual`, confira as imagens de diferença, regrave com `npm run e2e:visual:update` e inclua as imagens alteradas no commit; os detalhes estão em [docs/design-system.md](docs/design-system.md). Mudança visual não intencional faz `npm run e2e` falhar.
+

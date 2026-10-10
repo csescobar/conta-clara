@@ -143,4 +143,25 @@ Verificações automáticas:
 
 Regras que o axe já exigiu: `CardTitle` usa `h2` por padrão (`as="h3"` sob outro `h2`) e `EmptyState` aceita `as="h2"` logo abaixo do título da página, para manter a ordem dos níveis; tabelas que rolam na horizontal (`DataTable`) viram região rolável focável pelo teclado.
 
+## Regressão visual e roteiro de teclado
+
+`e2e/visual/routes.spec.js` captura as 10 rotas principais (painel, lançamentos, novo lançamento, compras, faturas, recorrências, nova regra, histórico, configurações e importar) em 360, 768 e 1280 px, nos temas claro e escuro: 60 imagens de página inteira, comparadas pelo próprio Playwright (`toHaveScreenshot`), sem serviço externo. A tolerância é de 10 pixels, para uma mudança pequena, como o canto de um botão, falhar; a falha anexa as imagens esperada, recebida e da diferença em `test-results/`.
+
+Para as capturas serem determinísticas:
+
+- O projeto `visual` roda depois do `functional`, limpa a base descartável (somente bases terminadas em `_test`) e recria a conta e os dados fictícios pela API (`e2e/visual/seed.js`).
+- O relógio do navegador é fixado em 15/06/2099 e todos os dados giram em torno de junho de 2099. Para o servidor, que usa a data real, vencimentos de 2099 são sempre “em aberto” e o vencimento de 2000 é sempre “atrasado”.
+- O navegador emula `prefers-reduced-motion: reduce` (os gráficos aparecem sem animação) e o esquema de cores de cada captura.
+- Horários gerados pelo servidor (o histórico) ficam em `<time>` e são mascarados; use `<time>` para qualquer nova data gerada pelo servidor que apareça numa tela.
+
+As referências ficam em `e2e/visual/references/<plataforma>/` e valem para o Chromium do Playwright no Linux (a pasta `linux`); em outro sistema, gere as próprias referências antes de comparar.
+
+Quando uma mudança visual for intencional:
+
+1. Rode `npm run e2e:visual` e confira as imagens de diferença em `test-results/` para ter certeza de que só mudou o esperado.
+2. Rode `npm run e2e:visual:update` para regravar as referências.
+3. Revise as imagens alteradas no `git diff` (somente dados fictícios) e faça o commit junto com a mudança.
+
+`e2e/visual/z-keyboard.spec.js` é o roteiro de teclado, só com Tab, Shift+Tab, Enter, Esc e F8, sem alterar dados: o primeiro Tab leva ao link de pular; em cada rota o Tab alcança toda a navegação e as ações da tela e dá a volta completa sem armadilha de foco nem elemento repetido (inclusive no celular, com a navegação inferior); Shift+Tab percorre a ordem inversa; o diálogo de exclusão prende o foco, fecha com Esc e devolve o foco ao botão; e F8 leva o foco à região de avisos, de onde o Tab chega ao botão Desfazer. Ao incluir uma ação nova em uma tela, acrescente o nome dela à lista da rota nesse arquivo.
+
 Ao adicionar um componente ou estado, inclua-o no catálogo e revise em largura móvel (320 px), desktop e teclado.

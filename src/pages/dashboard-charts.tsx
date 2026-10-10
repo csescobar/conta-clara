@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis, type TooltipContentProps } from 'recharts';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { EmptyState } from '../components/ui/feedback';
@@ -88,6 +88,21 @@ function ChartDataTable({ title, data, mode = 'both' }: { title: string; data: C
   );
 }
 
+/** Respeita a preferência de movimento reduzido: sem ela, as barras entram animadas; com ela, aparecem prontas. */
+function usePrefersReducedMotion() {
+  // `matchMedia` não existe em alguns ambientes (como o jsdom dos testes): sem ele, mantém a animação.
+  const query = () => (typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-reduced-motion: reduce)') : null);
+  return useSyncExternalStore(
+    (notify) => {
+      const mediaQuery = query();
+      mediaQuery?.addEventListener('change', notify);
+      return () => mediaQuery?.removeEventListener('change', notify);
+    },
+    () => query()?.matches ?? false,
+    () => false,
+  );
+}
+
 function ResponsiveFinanceBarChart({
   data,
   title,
@@ -100,6 +115,7 @@ function ResponsiveFinanceBarChart({
   truncateLabels?: boolean;
 }) {
   const categoryLabel = (value: string) => (truncateLabels && value.length > 17 ? `${value.slice(0, 16)}…` : value);
+  const animate = !usePrefersReducedMotion();
   return (
     <div className="h-72 min-w-0 w-full sm:h-80" aria-label={title}>
       <ResponsiveContainer width="100%" height="100%">
@@ -129,9 +145,25 @@ function ResponsiveFinanceBarChart({
             tickLine={false}
           />
           <Tooltip content={(props) => <ChartTooltip {...props} mode={mode} />} cursor={{ fill: 'var(--muted)' }} />
-          {mode !== 'realized' && <Bar dataKey="planned" name="Previsto" fill="var(--primary)" radius={[0, 4, 4, 0]} maxBarSize={18} />}
+          {mode !== 'realized' && (
+            <Bar
+              dataKey="planned"
+              name="Previsto"
+              fill="var(--primary)"
+              radius={[0, 4, 4, 0]}
+              maxBarSize={18}
+              isAnimationActive={animate}
+            />
+          )}
           {mode !== 'planned' && (
-            <Bar dataKey="realized" name="Realizado" fill="var(--chart-realized)" radius={[0, 4, 4, 0]} maxBarSize={18} />
+            <Bar
+              dataKey="realized"
+              name="Realizado"
+              fill="var(--chart-realized)"
+              radius={[0, 4, 4, 0]}
+              maxBarSize={18}
+              isAnimationActive={animate}
+            />
           )}
           {mode === 'both' && <Legend verticalAlign="top" height={28} wrapperStyle={{ fontSize: '12px' }} />}
         </BarChart>

@@ -160,7 +160,9 @@ export function ActivityPage() {
                         <span className="font-semibold">{event.actor_name}</span> {actionWords[event.action]} {kindNames[event.entry_kind]}{' '}
                         <span className="font-semibold">“{event.entry_description}”</span>
                       </p>
-                      <p className="mt-1 text-xs leading-5 text-muted-foreground">{formatBrazilianDateTime(event.occurred_at)}</p>
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                        <time dateTime={event.occurred_at}>{formatBrazilianDateTime(event.occurred_at)}</time>
+                      </p>
                       <p className="mt-2 text-sm leading-6 text-muted-foreground">{snapshotSummary(event)}</p>
                     </div>
                   </li>

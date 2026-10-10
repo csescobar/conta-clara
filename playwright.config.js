@@ -5,7 +5,13 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   timeout: 240_000,
-  expect: { timeout: 10_000 },
+  expect: {
+    timeout: 10_000,
+    // Comparação de imagens do próprio Playwright, sem serviço externo. As referências ficam em e2e/visual/references.
+    // A tolerância é absoluta e pequena (10 pixels): uma razão como 0,2% de uma página inteira deixaria passar mudanças de cantos ou espaçamentos.
+    toHaveScreenshot: { maxDiffPixels: 10, threshold: 0.1, animations: 'disabled', caret: 'hide', scale: 'css' },
+  },
+  snapshotPathTemplate: '{testDir}/visual/references/{platform}/{arg}{ext}',
   reporter: 'list',
   use: {
     baseURL: 'http://127.0.0.1:5173',
@@ -13,6 +19,12 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
+  projects: [
+    { name: 'functional', testIgnore: /visual\// },
+    // O visual roda depois do funcional e começa de uma base limpa e conhecida.
+    { name: 'visual-setup', testMatch: /visual\/reset\.setup\.js/, dependencies: ['functional'] },
+    { name: 'visual', testMatch: /visual\/.*\.spec\.js/, dependencies: ['visual-setup'] },
+  ],
   webServer: [
     {
       command: 'node --env-file-if-exists=.env.test scripts/e2e-api.js',
